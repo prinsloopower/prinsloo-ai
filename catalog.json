@@ -1,0 +1,596 @@
+{
+  "license": "CC-BY-4.0",
+  "author": null,
+  "skills": [
+    {
+      "name": "executive-email",
+      "suite": "business-suite",
+      "group": "Email and messaging",
+      "summary": "Short, decision-first email to a senior leader: the ask in line one, minimal context, a clear deadline.",
+      "use_case": "You need a VP to approve budget or unblock a decision.",
+      "description": "BLUF email to a senior leader, with the ask in the first line and only the context needed to say yes. Use whenever the user wants to email an executive, VP, director, founder or board member for a decision, an approval, an unblock or a short update.",
+      "folder": "skills/executive-email",
+      "skill": "skills/executive-email/SKILL.md"
+    },
+    {
+      "name": "customer-email",
+      "suite": "business-suite",
+      "group": "Email and messaging",
+      "summary": "External email in a consistent customer voice: replies, updates, delays, renewals, apologies.",
+      "use_case": "Answering a frustrated customer or announcing a slipped date.",
+      "description": "Customer-facing email that acknowledges, answers and commits to a next step. Use when the user wants to reply to a customer, respond to a complaint, apologize, or tell customers about a delay, outage, price change or renewal.",
+      "folder": "skills/customer-email",
+      "skill": "skills/customer-email/SKILL.md"
+    },
+    {
+      "name": "difficult-message",
+      "suite": "business-suite",
+      "group": "Email and messaging",
+      "summary": "Two or three strategically different versions of a hard message, each with its tradeoff named.",
+      "use_case": "Declining, pushing back or escalating without damaging the relationship.",
+      "description": "Variants of a hard message, each a different strategy with its tradeoff named. Use when the user has to decline, push back, escalate, deliver bad news, give unwelcome feedback or set a boundary by email or chat and the relationship is at stake.",
+      "folder": "skills/difficult-message",
+      "skill": "skills/difficult-message/SKILL.md"
+    },
+    {
+      "name": "internal-announcement",
+      "suite": "business-suite",
+      "group": "Email and messaging",
+      "summary": "Team or company-wide notice: what is changing, who is affected, what to do, by when.",
+      "use_case": "Rolling out a policy, tool or reorg.",
+      "description": "Inverted-pyramid announcement to a team or the whole company, stating what changes, who is affected and what to do by when. Use when the user wants to announce a policy, tool rollout, reorg, process change, office or schedule change, or leadership news to employees.",
+      "folder": "skills/internal-announcement",
+      "skill": "skills/internal-announcement/SKILL.md"
+    },
+    {
+      "name": "inbox-triage",
+      "suite": "business-suite",
+      "group": "Email and messaging",
+      "summary": "Sorts the unread queue into reply now, reply today, delegate, read later and ignore, with a draft for each reply.",
+      "use_case": "Morning email review.",
+      "description": "Triage of an email queue into reply now, reply today, delegate, read later and ignore, with a draft for each reply. Use whenever the user asks what in their inbox or in a list of emails needs them, wants a morning email review, or is catching up on mail after time away, even when only a few messages are pasted.",
+      "folder": "skills/inbox-triage",
+      "skill": "skills/inbox-triage/SKILL.md"
+    },
+    {
+      "name": "thread-digest",
+      "suite": "business-suite",
+      "group": "Email and messaging",
+      "summary": "Condenses a long thread or batch of emails into decisions, open questions and who owes what.",
+      "use_case": "You are added to a 40-message thread and need to respond.",
+      "description": "Digest of an email or chat thread into decisions, open questions and who owes what. Use whenever the user asks to be caught up on a thread, wants a conversation summarized, or was added to one late, even when the thread is short and pasted inline.",
+      "folder": "skills/thread-digest",
+      "skill": "skills/thread-digest/SKILL.md"
+    },
+    {
+      "name": "follow-up-sweep",
+      "suite": "business-suite",
+      "group": "Email and messaging",
+      "summary": "Finds sent messages with no reply and promises still outstanding, then drafts the nudges.",
+      "use_case": "Friday check on everything that has gone quiet.",
+      "description": "Waiting-for sweep that finds sent messages with no reply and promises still outstanding, then drafts the nudges. Use when the user wants to chase unanswered emails, check what they are waiting on, find commitments they have not delivered, or do an end-of-week follow-up review.",
+      "folder": "skills/follow-up-sweep",
+      "skill": "skills/follow-up-sweep/SKILL.md"
+    },
+    {
+      "name": "meeting-agenda",
+      "suite": "business-suite",
+      "group": "Meetings",
+      "summary": "Timed agenda where every item has an owner and an outcome (decide, discuss, inform), plus pre-reads.",
+      "use_case": "A cross-functional meeting that must end with decisions.",
+      "description": "Timeboxed meeting agenda where every item has an owner and an outcome of decide, discuss or inform. Use when the user wants an agenda written, a meeting planned or restructured, or pre-reads set for a meeting, workshop or offsite session.",
+      "folder": "skills/meeting-agenda",
+      "skill": "skills/meeting-agenda/SKILL.md"
+    },
+    {
+      "name": "meeting-prep",
+      "suite": "business-suite",
+      "group": "Meetings",
+      "summary": "One-page brief: attendees, history, open items, your goal, likely objections.",
+      "use_case": "Ten minutes before a customer or leadership meeting.",
+      "description": "One-page brief for an upcoming meeting, covering who is in the room, the history, open items, the user's goal and likely objections. Use when the user wants to prepare for a customer, leadership, vendor, interview or negotiation meeting, or asks what they should know before a call.",
+      "folder": "skills/meeting-prep",
+      "skill": "skills/meeting-prep/SKILL.md"
+    },
+    {
+      "name": "meeting-notes",
+      "suite": "business-suite",
+      "group": "Meetings",
+      "summary": "Turns a transcript or rough notes into decisions, action items with owners and dates, and a follow-up message.",
+      "use_case": "Right after any meeting.",
+      "description": "Meeting notes that turn a transcript or rough notes into decisions, action items with owners and dates, and a follow-up message. Use when the user shares a transcript, recording summary or scribbled notes and wants minutes, action items, a recap or a follow-up email.",
+      "folder": "skills/meeting-notes",
+      "skill": "skills/meeting-notes/SKILL.md"
+    },
+    {
+      "name": "one-on-one",
+      "suite": "business-suite",
+      "group": "Meetings",
+      "summary": "Running 1:1 document: topics, feedback, blockers, commitments carried over from last time.",
+      "use_case": "A manager's weekly 1:1s.",
+      "description": "Running document for recurring one-on-one meetings, carrying topics, feedback, blockers and commitments from session to session. Use when the user wants to prepare for a 1:1 with a manager or a report, capture what was said in one, or start a 1:1 document.",
+      "folder": "skills/one-on-one",
+      "skill": "skills/one-on-one/SKILL.md"
+    },
+    {
+      "name": "executive-report",
+      "suite": "business-suite",
+      "group": "Reports and documents",
+      "summary": "Bottom-line-first report: recommendation, evidence, risks and the ask, on one page plus appendix.",
+      "use_case": "Monthly or quarterly update to leadership or a board.",
+      "description": "Pyramid-structured report for leadership or a board, giving the recommendation first, then evidence, risks and the ask, on one page plus appendix. Use when the user wants an executive summary, a monthly or quarterly leadership update, a board paper or a report for senior stakeholders.",
+      "folder": "skills/executive-report",
+      "skill": "skills/executive-report/SKILL.md"
+    },
+    {
+      "name": "status-update",
+      "suite": "business-suite",
+      "group": "Reports and documents",
+      "summary": "Weekly project or team status: red, amber or green, progress against plan, blockers, next steps.",
+      "use_case": "The recurring Friday update.",
+      "description": "RAG status update for a project or team, covering progress against plan, blockers, risks and next steps. Use when the user wants a weekly or monthly status report, a project update for stakeholders, or a red-amber-green summary.",
+      "folder": "skills/status-update",
+      "skill": "skills/status-update/SKILL.md"
+    },
+    {
+      "name": "decision-memo",
+      "suite": "business-suite",
+      "group": "Reports and documents",
+      "summary": "Options with costs and risks, a recommendation, then a record of the decision and why.",
+      "use_case": "Choosing between approaches and needing a paper trail.",
+      "description": "Decision memo that lays out options with costs, risks and reversibility, recommends one, and records the decision and its reasoning. Use when the user must choose between approaches, wants a recommendation written up for approval, or needs a decision log or record of why something was decided.",
+      "folder": "skills/decision-memo",
+      "skill": "skills/decision-memo/SKILL.md"
+    },
+    {
+      "name": "business-case",
+      "suite": "business-suite",
+      "group": "Reports and documents",
+      "summary": "Investment proposal: problem, options, cost, benefit, payback, risks.",
+      "use_case": "Requesting headcount, budget or a new tool.",
+      "description": "Business case for an investment, covering the problem, options, costs, benefits, payback and risks. Use when the user wants to justify budget, headcount, a tool purchase or a project, build a cost-benefit or ROI analysis, or write a funding proposal.",
+      "folder": "skills/business-case",
+      "skill": "skills/business-case/SKILL.md"
+    },
+    {
+      "name": "sop-writer",
+      "suite": "business-suite",
+      "group": "Reports and documents",
+      "summary": "Converts a described process into a numbered procedure with roles, inputs, checks and exceptions.",
+      "use_case": "Documenting a process only one person knows.",
+      "description": "SOP writer that turns a described process into a numbered procedure with roles, inputs, checks and exceptions. Use when the user wants a standard operating procedure, runbook, work instruction, process document or checklist written from notes, a walkthrough or a recording transcript.",
+      "folder": "skills/sop-writer",
+      "skill": "skills/sop-writer/SKILL.md"
+    },
+    {
+      "name": "deck-storyline",
+      "suite": "business-suite",
+      "group": "Reports and documents",
+      "summary": "The argument of a presentation as one message per slide, before any slides are built.",
+      "use_case": "Preparing a leadership or customer presentation.",
+      "description": "Ghost deck that sets a presentation's argument as one action title per slide before any slides are built. Use when the user wants to outline, storyboard or structure a presentation, pitch or talk, or has a deck that rambles and needs a clearer story.",
+      "folder": "skills/deck-storyline",
+      "skill": "skills/deck-storyline/SKILL.md"
+    },
+    {
+      "name": "branded-document",
+      "suite": "business-suite",
+      "group": "Reports and documents",
+      "summary": "Applies your organization's template (cover, headings, fonts, logo, footer) and outputs Word or PDF.",
+      "use_case": "Any deliverable that must look official.",
+      "description": "Branded document builder that applies an organization's template, fonts, colors, logo and footer to content and outputs Word or PDF. Use when the user wants a document put on company letterhead, formatted to brand guidelines, matched to an existing template, or made to look official.",
+      "folder": "skills/branded-document",
+      "skill": "skills/branded-document/SKILL.md"
+    },
+    {
+      "name": "competitor-research",
+      "suite": "business-suite",
+      "group": "Research and analysis",
+      "summary": "Sourced competitor profile: positioning, product, pricing, customers, recent moves, strengths and weaknesses.",
+      "use_case": "A new competitor appears in a deal, or a quarterly refresh.",
+      "description": "Sourced competitor profile covering positioning, product, pricing, customers, recent moves, strengths and weaknesses. Use before any web search when the user asks about a competitor or rival company, wants to know who a company showing up in their deals is, or wants a competitive landscape or comparison.",
+      "folder": "skills/competitor-research",
+      "skill": "skills/competitor-research/SKILL.md"
+    },
+    {
+      "name": "battlecard",
+      "suite": "business-suite",
+      "group": "Research and analysis",
+      "summary": "Sales one-pager: where you win, where you lose, objection responses, questions that expose the competitor's weak spots.",
+      "use_case": "Arming reps before a competitive deal.",
+      "description": "Battlecard for sales reps facing a named competitor, with where we win, where we lose, objection responses and questions that expose the rival's weak spots. Use when the user wants a competitive one-pager, sales talk track, objection handling sheet or a kill sheet against a competitor.",
+      "folder": "skills/battlecard",
+      "skill": "skills/battlecard/SKILL.md"
+    },
+    {
+      "name": "market-brief",
+      "suite": "business-suite",
+      "group": "Research and analysis",
+      "summary": "Sourced market overview: size, growth, segments, trends, regulation.",
+      "use_case": "Evaluating a new segment or region.",
+      "description": "Sourced market brief covering size, growth, segments, buyers, competition, trends and regulation. Use before any web search when the user asks how big a market is, wants TAM SAM SOM sizing or an industry overview, or is weighing entry into a segment, region or product category.",
+      "folder": "skills/market-brief",
+      "skill": "skills/market-brief/SKILL.md"
+    },
+    {
+      "name": "account-brief",
+      "suite": "business-suite",
+      "group": "Research and analysis",
+      "summary": "Research on a customer or prospect: business, news, key people, relationship history, likely priorities.",
+      "use_case": "Before a sales call or renewal conversation.",
+      "description": "Account brief on a customer or prospect, covering their business, recent news, key people, history with us and likely priorities. Use when the user wants to research a company before a sales call, renewal, pitch or partnership discussion, or asks for background on an account.",
+      "folder": "skills/account-brief",
+      "skill": "skills/account-brief/SKILL.md"
+    },
+    {
+      "name": "vendor-scorecard",
+      "suite": "business-suite",
+      "group": "Research and analysis",
+      "summary": "Weighted comparison of vendors or tools against your criteria, with a recommendation.",
+      "use_case": "Selecting software or a supplier.",
+      "description": "Weighted scorecard that compares vendors, tools or suppliers against agreed criteria and recommends one. Use when the user is choosing software, selecting a supplier or agency, evaluating proposals or quotes, or wants a structured vendor comparison.",
+      "folder": "skills/vendor-scorecard",
+      "skill": "skills/vendor-scorecard/SKILL.md"
+    },
+    {
+      "name": "data-readout",
+      "suite": "business-suite",
+      "group": "Research and analysis",
+      "summary": "Turns a spreadsheet or export into findings, charts and plain-language takeaways, with caveats.",
+      "use_case": "Monthly numbers arrive as a CSV.",
+      "description": "Data readout that turns a spreadsheet, CSV or export into findings, charts and plain-language takeaways with caveats. Use whenever the user shares tabular data, as a file or as pasted rows, and asks what it says or wants it analyzed, summarized or charted, even when the table is small.",
+      "folder": "skills/data-readout",
+      "skill": "skills/data-readout/SKILL.md"
+    },
+    {
+      "name": "feedback-themes",
+      "suite": "business-suite",
+      "group": "Research and analysis",
+      "summary": "Clusters open-text feedback into themes with counts and representative quotes.",
+      "use_case": "Making sense of 500 survey comments or support tickets.",
+      "description": "Thematic analysis that clusters open-text feedback into themes with counts and verbatim quotes. Use whenever the user has survey comments, support tickets, reviews, interview notes or NPS responses and asks what people are saying, what the main themes are or what the top issues are, even when only a sample is pasted.",
+      "folder": "skills/feedback-themes",
+      "skill": "skills/feedback-themes/SKILL.md"
+    },
+    {
+      "name": "customer-gap-analysis",
+      "suite": "business-suite",
+      "group": "Customers and revenue",
+      "summary": "Compares what a customer needs, bought and uses against what you offer, then ranks the gaps by impact and effort.",
+      "use_case": "Account planning, expansion or churn-risk review.",
+      "description": "Fit-gap analysis that compares what a customer needs, bought and uses against what we offer, then ranks the gaps by impact and effort. Use when the user wants a customer gap analysis, account plan, expansion or upsell opportunities, a churn-risk review, or to see where a customer is underserved.",
+      "folder": "skills/customer-gap-analysis",
+      "skill": "skills/customer-gap-analysis/SKILL.md"
+    },
+    {
+      "name": "qbr-prep",
+      "suite": "business-suite",
+      "group": "Customers and revenue",
+      "summary": "Customer business review: their goals, results delivered, usage, issues, plan for next period.",
+      "use_case": "Quarterly review with a key account.",
+      "description": "QBR preparation for a customer business review, built on the customer's goals, results delivered, usage, issues and the plan for next period. Use when the user is preparing a quarterly or annual business review, an account review or a renewal meeting with a customer.",
+      "folder": "skills/qbr-prep",
+      "skill": "skills/qbr-prep/SKILL.md"
+    },
+    {
+      "name": "proposal-writer",
+      "suite": "business-suite",
+      "group": "Customers and revenue",
+      "summary": "Proposal or statement of work from discovery notes: need, solution, scope, timeline, price, terms.",
+      "use_case": "Responding after a discovery call.",
+      "description": "Proposal or statement of work written from discovery notes, covering the need, solution, scope, timeline, price and terms. Use when the user wants a sales proposal, quote document, SOW, project bid or scope of work for a client.",
+      "folder": "skills/proposal-writer",
+      "skill": "skills/proposal-writer/SKILL.md"
+    },
+    {
+      "name": "rfp-response",
+      "suite": "business-suite",
+      "group": "Customers and revenue",
+      "summary": "Answers an RFP or security questionnaire from your prior answers and documents, flagging every question it could not source.",
+      "use_case": "A 200-question RFP due Friday.",
+      "description": "RFP response drafted from an answer library of prior responses and company documents, with every unsourced question flagged. Use when the user has an RFP, RFI, tender, security questionnaire, vendor assessment or due diligence questionnaire to complete.",
+      "folder": "skills/rfp-response",
+      "skill": "skills/rfp-response/SKILL.md"
+    },
+    {
+      "name": "kpi-builder",
+      "suite": "business-suite",
+      "group": "Goals and people",
+      "summary": "Defines KPIs from a goal: formula, data source, owner, target, cadence, leading or lagging.",
+      "use_case": "Standing up metrics for a new team or initiative.",
+      "description": "KPI definitions built from a goal, each with a formula, data source, owner, target, cadence and counter-metric. Use whenever the user asks what a team, project, role or initiative should be measuring, or wants KPIs, success metrics, a scorecard or a metrics dictionary.",
+      "folder": "skills/kpi-builder",
+      "skill": "skills/kpi-builder/SKILL.md"
+    },
+    {
+      "name": "okr-draft",
+      "suite": "business-suite",
+      "group": "Goals and people",
+      "summary": "Objectives and measurable key results, checked for tasks disguised as results.",
+      "use_case": "Quarterly goal setting.",
+      "description": "OKR draft with objectives and measurable key results, checked for tasks posing as results. Use when the user wants quarterly or annual OKRs written, goals set for a team or individual, or existing OKRs reviewed and tightened.",
+      "folder": "skills/okr-draft",
+      "skill": "skills/okr-draft/SKILL.md"
+    },
+    {
+      "name": "performance-review",
+      "suite": "business-suite",
+      "group": "Goals and people",
+      "summary": "Evidence-based review from notes and accomplishments, with a check for vague or biased language. Covers self-reviews and peer feedback.",
+      "use_case": "Review season.",
+      "description": "Performance review written from evidence, with each strength and growth area tied to a specific example and a check for vague or biased wording. Use when the user is writing a manager review, a self-review or peer feedback, or wants a draft review checked.",
+      "folder": "skills/performance-review",
+      "skill": "skills/performance-review/SKILL.md"
+    },
+    {
+      "name": "job-description",
+      "suite": "business-suite",
+      "group": "Goals and people",
+      "summary": "Posting built around outcomes, must-haves versus nice-to-haves, with an inclusive-language pass.",
+      "use_case": "Opening a new role.",
+      "description": "Job description built around the outcomes of the role, with must-haves separated from nice-to-haves and an inclusive-language pass. Use when the user wants a job posting, job ad, role profile or vacancy description written or improved.",
+      "folder": "skills/job-description",
+      "skill": "skills/job-description/SKILL.md"
+    },
+    {
+      "name": "interview-kit",
+      "suite": "business-suite",
+      "group": "Goals and people",
+      "summary": "Structured questions and a scoring rubric derived from the job description.",
+      "use_case": "Giving every interviewer the same yardstick.",
+      "description": "Structured interview kit with questions and a scoring rubric derived from a job description. Use when the user wants interview questions, an interview plan, a scorecard or evaluation rubric for a role, or a work-sample exercise for candidates.",
+      "folder": "skills/interview-kit",
+      "skill": "skills/interview-kit/SKILL.md"
+    },
+    {
+      "name": "onboarding-plan",
+      "suite": "business-suite",
+      "group": "Goals and people",
+      "summary": "30/60/90-day plan: goals, people to meet, systems, first deliverables.",
+      "use_case": "A new hire starts Monday.",
+      "description": "30-60-90 day onboarding plan covering goals, people to meet, systems and first deliverables. Use when the user has a new hire starting, is starting a new job themselves, or wants an onboarding checklist or first-90-days plan for a role.",
+      "folder": "skills/onboarding-plan",
+      "skill": "skills/onboarding-plan/SKILL.md"
+    },
+    {
+      "name": "project-plan",
+      "suite": "business-suite",
+      "group": "Planning and operations",
+      "summary": "Goals, scope, milestones, owners, dependencies, risks.",
+      "use_case": "Kicking off a project.",
+      "description": "Project plan covering goals, scope, milestones, owners, dependencies and risks. Use when the user is kicking off a project, wants a project charter, work breakdown, timeline or roadmap, or needs a loose set of tasks turned into a plan.",
+      "folder": "skills/project-plan",
+      "skill": "skills/project-plan/SKILL.md"
+    },
+    {
+      "name": "risk-register",
+      "suite": "business-suite",
+      "group": "Planning and operations",
+      "summary": "Lists risks, scores likelihood and impact, assigns an owner and a mitigation.",
+      "use_case": "Project start or a quarterly risk review.",
+      "description": "Risk register that lists risks, scores likelihood and impact, and assigns an owner and a mitigation to each. Use when the user wants project or business risks identified, a risk assessment or pre-mortem, a risk matrix, or an existing register updated.",
+      "folder": "skills/risk-register",
+      "skill": "skills/risk-register/SKILL.md"
+    },
+    {
+      "name": "post-mortem",
+      "suite": "business-suite",
+      "group": "Planning and operations",
+      "summary": "Blameless review: timeline, contributing causes, changes to make, owners.",
+      "use_case": "After an incident, a lost deal or a finished project.",
+      "description": "Blameless post-mortem with a timeline, contributing causes, and actions with owners. Use when the user wants an incident review, root cause analysis, lessons-learned write-up, project retrospective, or a review of a lost deal or failed launch.",
+      "folder": "skills/post-mortem",
+      "skill": "skills/post-mortem/SKILL.md"
+    },
+    {
+      "name": "weekly-plan",
+      "suite": "business-suite",
+      "group": "Planning and operations",
+      "summary": "Builds the week from calendar, open tasks and inbox: priorities, time blocks, what to decline or defer.",
+      "use_case": "Monday morning or Friday afternoon.",
+      "description": "Weekly plan built from calendar, tasks and inbox, setting priorities, time blocks and what to decline or defer. Use whenever the user wants their week planned, has too much on and asks what to do when, wants a task list prioritized against their calendar, or wants a weekly review.",
+      "folder": "skills/weekly-plan",
+      "skill": "skills/weekly-plan/SKILL.md"
+    },
+    {
+      "name": "variance-commentary",
+      "suite": "business-suite",
+      "group": "Planning and operations",
+      "summary": "Explains actual versus budget or forecast: biggest drivers, one-off versus recurring.",
+      "use_case": "Month-end reporting.",
+      "description": "Variance commentary that explains actual results against budget, forecast or prior period by their biggest drivers. Use when the user wants budget-versus-actual analysis, month-end or quarter-end financial commentary, a variance bridge, or an explanation of why the numbers moved.",
+      "folder": "skills/variance-commentary",
+      "skill": "skills/variance-commentary/SKILL.md"
+    },
+    {
+      "name": "folder-cleanup",
+      "suite": "business-suite",
+      "group": "Files and admin",
+      "summary": "Inventories a folder, proposes a structure and naming convention, flags duplicates and stale files, then reorganizes after you approve.",
+      "use_case": "A Downloads or shared drive folder that has become a junk drawer.",
+      "description": "Folder cleanup that inventories a folder, proposes a structure and naming convention, flags duplicates and stale files, then reorganizes after approval. Use when the user wants files organized, a messy Downloads, Desktop, Documents or shared drive folder tidied, duplicates found, or a filing structure designed.",
+      "folder": "skills/folder-cleanup",
+      "skill": "skills/folder-cleanup/SKILL.md"
+    },
+    {
+      "name": "contract-brief",
+      "suite": "business-suite",
+      "group": "Files and admin",
+      "summary": "Summary of a contract: parties, term, money, obligations, key dates, clauses to raise with legal.",
+      "use_case": "Reviewing a vendor agreement before signing.",
+      "description": "Contract brief that summarizes an agreement's parties, term, money, obligations, key dates and the clauses to raise with legal. Use whenever the user shares, pastes or describes a contract, vendor agreement, NDA, lease, MSA or terms of service and asks what they are agreeing to or what it means, wants it summarized or reviewed in plain language, or is about to sign or renew, even when only an excerpt or a single clause is pasted.",
+      "folder": "skills/contract-brief",
+      "skill": "skills/contract-brief/SKILL.md"
+    },
+    {
+      "name": "expense-prep",
+      "suite": "business-suite",
+      "group": "Files and admin",
+      "summary": "Turns receipts and statements into a categorized, totaled table ready for your expense system.",
+      "use_case": "After a business trip.",
+      "description": "Expense preparation that turns receipts and statements into a categorized, totaled table ready for an expense system. Use when the user has receipts, invoices or a card statement to reconcile, an expense report to prepare, or travel costs to total after a trip.",
+      "folder": "skills/expense-prep",
+      "skill": "skills/expense-prep/SKILL.md"
+    },
+    {
+      "name": "task-audit",
+      "suite": "business-suite",
+      "group": "Files and admin",
+      "summary": "Interviews you about recurring work, then recommends what to automate, schedule, template or stop.",
+      "use_case": "Finding the next things worth turning into skills.",
+      "description": "Task audit that interviews the user about recurring work and recommends what to automate, template, schedule, delegate or stop. Use when the user wants to find time savings, identify repetitive tasks worth automating, review how they spend their week, or decide what to build next for their own productivity.",
+      "folder": "skills/task-audit",
+      "skill": "skills/task-audit/SKILL.md"
+    },
+    {
+      "name": "idea-interview",
+      "suite": "creator-suite",
+      "group": "Writing",
+      "summary": "Interviews you one question at a time and captures your answers as loose, unstructured fragments.",
+      "use_case": "You know the topic but have nothing on the page.",
+      "description": "Interview that pulls raw material out of the user's head as fragments, one question at a time, before any structure exists. Use whenever the user has a topic but a blank page, wants to brainstorm or talk through a piece before writing it, or asks to be interviewed for an article, video, talk or newsletter.",
+      "folder": "skills/idea-interview",
+      "skill": "skills/idea-interview/SKILL.md"
+    },
+    {
+      "name": "draft-shaper",
+      "suite": "creator-suite",
+      "group": "Writing",
+      "summary": "Turns raw notes, fragments or a transcript into a structured article, leaving the source file untouched.",
+      "use_case": "A voice memo or notes dump needs to become a post.",
+      "description": "Shapes raw notes, fragments, a transcript or a voice memo into a structured article draft, leaving the source untouched. Use whenever the user has unstructured material and wants it turned into a post, article, essay or newsletter, even when the notes are pasted inline.",
+      "folder": "skills/draft-shaper",
+      "skill": "skills/draft-shaper/SKILL.md"
+    },
+    {
+      "name": "beat-writer",
+      "suite": "creator-suite",
+      "group": "Writing",
+      "summary": "Builds a piece one section at a time: sets what the reader already knows, offers several openings, then lets you pick the direction at each step.",
+      "use_case": "A long article or essay where you want control of the path.",
+      "description": "Writes a piece beat by beat, offering several openings and then a choice of next beat at every step so the author steers the path. Use whenever the user wants to co-write an article, essay, script or story one section at a time, or asks for options at each step instead of a full draft.",
+      "folder": "skills/beat-writer",
+      "skill": "skills/beat-writer/SKILL.md"
+    },
+    {
+      "name": "lesson-series",
+      "suite": "creator-suite",
+      "group": "Writing",
+      "summary": "Plans a multi-part tutorial or course from a learning goal: mission, lessons, reference material and a progress record.",
+      "use_case": "Turning what you know into a course or tutorial series.",
+      "description": "Plans and writes a multi-part tutorial or course from a learning goal, with a mission, sequenced lessons, reference material and a progress record kept across sessions. Use whenever the user wants to build a course, tutorial series, workshop, email course or lesson plan, or to continue one already started.",
+      "folder": "skills/lesson-series",
+      "skill": "skills/lesson-series/SKILL.md"
+    },
+    {
+      "name": "seo-checkup",
+      "suite": "creator-suite",
+      "group": "Writing",
+      "summary": "Audits a site across crawlability, indexing, technical performance, on-page elements and content authority, then ranks the fixes.",
+      "use_case": "Traffic is flat and you want to know why.",
+      "description": "SEO checkup that audits a website across crawlability, indexing, technical performance, on-page elements and content authority, then ranks the fixes. Use whenever the user asks why a site or page gets little search traffic or is not ranking, wants an SEO audit or review, or is about to launch or migrate a site, even when only a URL or one page's source is given.",
+      "folder": "skills/seo-checkup",
+      "skill": "skills/seo-checkup/SKILL.md"
+    },
+    {
+      "name": "explainer-video",
+      "suite": "creator-suite",
+      "group": "Video",
+      "summary": "Plans a teaching narrative and writes a faceless explainer scene by scene: narration, visuals, timing.",
+      "use_case": "Explaining a topic on video with no camera footage.",
+      "description": "Faceless explainer video planned as a teaching narrative and written scene by scene with narration, visuals and timing. Use whenever the user wants to explain a topic on video without appearing on camera, needs a script and storyboard for an explainer, or wants an article or idea turned into a narrated video.",
+      "folder": "skills/explainer-video",
+      "skill": "skills/explainer-video/SKILL.md"
+    },
+    {
+      "name": "talking-head-graphics",
+      "suite": "creator-suite",
+      "group": "Video",
+      "summary": "Plans titles, lower-thirds, data callouts, quotes and picture-in-picture panels, each timed to what is said.",
+      "use_case": "Dressing up a finished talking-head recording.",
+      "description": "Cue sheet of on-screen graphics for a talking-head video, with titles, lower-thirds, callouts, quotes and picture-in-picture panels each timed to what is being said. Use whenever the user has a recorded video, interview, podcast clip or its transcript and wants graphics, overlays, text callouts or b-roll planned for it.",
+      "folder": "skills/talking-head-graphics",
+      "skill": "skills/talking-head-graphics/SKILL.md"
+    },
+    {
+      "name": "caption-maker",
+      "suite": "creator-suite",
+      "group": "Video",
+      "summary": "Produces a caption file from a transcript, in a clean subtitle style or a styled, animated one, and checks it against readability limits.",
+      "use_case": "Any voiceover or explainer going to social platforms.",
+      "description": "Captions built from a transcript as a subtitle file, in a clean standard style or a styled animated one. Use whenever the user wants captions or subtitles for a video, needs an SRT or VTT file made or fixed, or wants word-by-word captions for short-form video.",
+      "folder": "skills/caption-maker",
+      "skill": "skills/caption-maker/SKILL.md"
+    },
+    {
+      "name": "motion-graphic",
+      "suite": "creator-suite",
+      "group": "Video",
+      "summary": "Designs a short animated graphic, under ten seconds, where the motion carries the message, and builds it as a runnable animation.",
+      "use_case": "A logo sting, stat reveal or animated title.",
+      "description": "Short motion graphic, under ten seconds and without narration, designed so the movement carries the message and built as a runnable animation with a timing spec. Use whenever the user wants an animated title, logo sting, stat reveal, lower-third animation, animated chart or looping graphic for a video or post.",
+      "folder": "skills/motion-graphic",
+      "skill": "skills/motion-graphic/SKILL.md"
+    },
+    {
+      "name": "image-prompt",
+      "suite": "creator-suite",
+      "group": "AI media",
+      "summary": "Chooses the kind of image model for the job and writes prompts for generating or editing images.",
+      "use_case": "Thumbnails, post images, product shots.",
+      "description": "Image prompts written for AI image models, with the right kind of model chosen for the job and distinct concept variants for generating or editing. Use whenever the user wants a prompt for an AI image, a thumbnail, post image, illustration or product shot made with an image generator, or an existing image edited with one.",
+      "folder": "skills/image-prompt",
+      "skill": "skills/image-prompt/SKILL.md"
+    },
+    {
+      "name": "video-prompt",
+      "suite": "creator-suite",
+      "group": "AI media",
+      "summary": "Writes shot-by-shot prompts for text-to-video and image-to-video models.",
+      "use_case": "B-roll or short clips you cannot film.",
+      "description": "Shot-by-shot prompts for AI video models, covering text-to-video and image-to-video, with one action and one camera move per shot. Use whenever the user wants a prompt for an AI video generator, needs b-roll or a short clip they cannot film, or wants a scene or script broken into generated shots.",
+      "folder": "skills/video-prompt",
+      "skill": "skills/video-prompt/SKILL.md"
+    },
+    {
+      "name": "avatar-video",
+      "suite": "creator-suite",
+      "group": "AI media",
+      "summary": "Writes the script and voice direction for an AI presenter video.",
+      "use_case": "A talking-head video without recording yourself.",
+      "description": "Script and voice direction for an AI presenter video, written for the ear and split into takes an avatar tool can render. Use whenever the user wants a talking-head video made with an AI avatar or cloned voice, a script for a digital presenter or text-to-speech voiceover, or an article turned into a presenter-led video.",
+      "folder": "skills/avatar-video",
+      "skill": "skills/avatar-video/SKILL.md"
+    },
+    {
+      "name": "brand-kit",
+      "suite": "creator-suite",
+      "group": "Brand",
+      "summary": "Develops a brand identity: logo directions, palette, type and a guidelines board.",
+      "use_case": "Starting a channel, newsletter or product.",
+      "description": "Brand kit that develops an identity from positioning through logo directions, color palette, typography and usage rules, delivered as a guidelines board. Use whenever the user is starting a channel, newsletter, podcast, product or business and wants a brand identity, logo ideas, a color palette, a style guide or brand guidelines.",
+      "folder": "skills/brand-kit",
+      "skill": "skills/brand-kit/SKILL.md"
+    },
+    {
+      "name": "business-opp",
+      "suite": "standalone",
+      "group": "Standalone",
+      "summary": "Screens business-for-sale listings as acquisitions: normalizes the seller's earnings, computes purchase multiple, debt coverage and owner cash after debt, scores each out of 10 and sets a target price.",
+      "use_case": "Deciding which listings on a business-for-sale site deserve a closer look.",
+      "description": "Small-business acquisition analysis that screens business-for-sale listings on SDE multiple, debt service coverage and owner cash after debt, scores each out of 10, rates the risk and sets a purchase-price target. Use whenever the user shares one or more business-for-sale listings, asks whether a business is worth buying or what to pay for it, or wants listings compared and ranked as acquisitions.",
+      "folder": "skills/business-opp",
+      "skill": "skills/business-opp/SKILL.md"
+    },
+    {
+      "name": "humanize",
+      "suite": "standalone",
+      "group": "Standalone",
+      "summary": "Rewrites text that reads as machine-written so it reads as written by a person for a specific reader, adding nothing the author did not supply.",
+      "use_case": "A draft sounds like AI and is going out under your name.",
+      "description": "Rewrites text that reads as machine-written so it reads as written by a person for a specific reader. Use only on an explicit request - the user says \"humanize this\", \"de-AI this\", \"make this sound human\", \"make this sound less like AI / ChatGPT\", says a text \"sounds like AI\" or \"reads as machine-written\" and wants that fixed or assessed, or invokes /humanize. Always asks what the writing is for and applies different defaults for articles and posts, work documents, email, marketing copy, academic and formal writing, fiction, and memoir. Do not use for general editing requests such as \"polish\", \"tighten\", \"improve\", \"fix\", \"proofread\" or \"rewrite\" unless the user also names the AI-sounding problem.",
+      "folder": "skills/humanize",
+      "skill": "skills/humanize/SKILL.md"
+    }
+  ]
+}

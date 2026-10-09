@@ -1,6 +1,6 @@
 ---
-name: humanize-this
-description: Rewrites text that reads as machine-written so it reads as written by a person for a specific reader. Use only on an explicit request - the user says "humanize this", "de-AI this", "make this sound human", "make this sound less like AI / ChatGPT", says a text "sounds like AI" or "reads as machine-written" and wants that fixed or assessed, or invokes /humanize-this. Always asks what the writing is for and applies different defaults for articles and posts, work documents, email, marketing copy, academic and formal writing, fiction, and memoir. Do not use for general editing requests such as "polish", "tighten", "improve", "fix", "proofread" or "rewrite" unless the user also names the AI-sounding problem.
+name: humanize
+description: Rewrites text that reads as machine-written so it reads as written by a person for a specific reader. Use only on an explicit request - the user says "humanize this", "de-AI this", "make this sound human", "make this sound less like AI / ChatGPT", says a text "sounds like AI" or "reads as machine-written" and wants that fixed or assessed, or invokes /humanize. Always asks what the writing is for and applies different defaults for articles and posts, work documents, email, marketing copy, academic and formal writing, fiction, and memoir. Do not use for general editing requests such as "polish", "tighten", "improve", "fix", "proofread" or "rewrite" unless the user also names the AI-sounding problem.
 ---
 
 # Humanize This
