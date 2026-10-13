@@ -1,0 +1,17 @@
+{"iteration": 1, "phase": "discovery", "slice": null, "gate": "fail", "duration_s": 1112, "rework_count": 1, "defects_found": 0, "output_bytes": 10941}
+{"iteration": 1, "phase": "discovery", "slice": null, "gate": "fail", "duration_s": 106, "rework_count": 2, "defects_found": 0, "output_bytes": 14475}
+{"iteration": 1, "phase": "discovery", "slice": null, "gate": "fail", "duration_s": 127, "rework_count": 3, "defects_found": 0, "output_bytes": 18765}
+{"iteration": 1, "phase": "discovery", "slice": null, "gate": "fail", "duration_s": 107, "rework_count": 4, "defects_found": 0, "output_bytes": 20580}
+{"iteration": 1, "phase": "discovery", "slice": null, "gate": "hold", "duration_s": 99, "rework_count": 5, "defects_found": 0, "output_bytes": 22278}
+{"iteration": 1, "phase": "discovery", "slice": null, "gate": "pass", "duration_s": null, "rework_count": 5, "defects_found": 0, "output_bytes": 23022}
+{"iteration": 1, "phase": "journeys", "slice": null, "gate": "fail", "duration_s": 135, "rework_count": 1, "defects_found": 0, "output_bytes": 11384}
+{"iteration": 1, "phase": "journeys", "slice": null, "gate": "fail", "duration_s": 125, "rework_count": 2, "defects_found": 0, "output_bytes": 16459}
+{"iteration": 1, "phase": "journeys", "slice": null, "gate": "hold", "duration_s": 106, "rework_count": 3, "defects_found": 0, "output_bytes": 19297}
+{"iteration": 1, "phase": "journeys", "slice": null, "gate": "pass", "duration_s": null, "rework_count": 3, "defects_found": 0, "output_bytes": 20824}
+{"iteration": 1, "phase": "domain", "slice": null, "gate": "fail", "duration_s": 168, "rework_count": 1, "defects_found": 0, "output_bytes": 18695}
+{"iteration": 1, "phase": "domain", "slice": null, "gate": "fail", "duration_s": 153, "rework_count": 2, "defects_found": 0, "output_bytes": 23719}
+{"iteration": 1, "phase": "domain", "slice": null, "gate": "pass", "duration_s": 125, "rework_count": 2, "defects_found": 0, "output_bytes": 25719}
+{"iteration": 1, "phase": "prd", "slice": null, "gate": "fail", "duration_s": 295, "rework_count": 1, "defects_found": 0, "output_bytes": 9491}
+{"iteration": 1, "phase": "prd", "slice": null, "gate": "hold", "duration_s": 102, "rework_count": 2, "defects_found": 0, "output_bytes": 11560}
+{"iteration": 1, "phase": "prd", "slice": null, "gate": "pass", "duration_s": null, "rework_count": 2, "defects_found": 0, "output_bytes": 11893}
+{"iteration": 1, "phase": "design", "slice": null, "gate": "pass", "duration_s": null, "rework_count": 0, "defects_found": 0, "output_bytes": 0}

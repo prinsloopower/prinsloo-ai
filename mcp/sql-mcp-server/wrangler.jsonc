@@ -1,0 +1,25 @@
+// Cloudflare Deployment (ADR-002). Server settings are vars; secrets are set with `wrangler secret put`.
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "sql-mcp-server",
+  "main": "src/worker.ts",
+  "compatibility_date": "2026-10-01",
+  "compatibility_flags": ["nodejs_compat"],
+  // Audit records go to Workers Logs, the Host log facility on Cloudflare (ADR-013, D-008).
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1
+  },
+  "hyperdrive": [
+    {
+      "binding": "HYPERDRIVE",
+      // Replace with the ID printed by `wrangler hyperdrive create`.
+      "id": "REPLACE_WITH_HYPERDRIVE_ID",
+      // Used by `wrangler dev` only.
+      "localConnectionString": "postgres://postgres:postgres@localhost:55432/sqlmcp"
+    }
+  ],
+  "vars": {
+    "ENGINE": "postgres"
+  }
+}

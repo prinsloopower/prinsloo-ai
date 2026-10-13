@@ -1,0 +1,65 @@
+{
+  "product": "sql-mcp-server",
+  "iteration": 1,
+  "size": "product",
+  "artifacts": {
+    "discovery": {
+      "status": "approved",
+      "rework": 5,
+      "gate": {
+        "result": "pass",
+        "by": "human",
+        "at": "2026-10-10T20:13:54+00:00",
+        "quote": "Confirm all"
+      },
+      "hash": null
+    },
+    "journeys": {
+      "status": "approved",
+      "rework": 3,
+      "gate": {
+        "result": "pass",
+        "by": "human",
+        "at": "2026-10-10T20:44:40+00:00",
+        "quote": "Public, private also supported; Read-only (Recommended)"
+      },
+      "hash": "sha256:5a14429112d3dffa"
+    },
+    "domain": {
+      "status": "approved",
+      "rework": 2,
+      "gate": {
+        "result": "pass",
+        "by": "model",
+        "at": "2026-10-11T02:06:04+00:00"
+      },
+      "hash": "sha256:ebf9b0e28b182cf6"
+    },
+    "prd": {
+      "status": "approved",
+      "rework": 2,
+      "gate": {
+        "result": "pass",
+        "by": "human",
+        "at": "2026-10-11T20:00:21+00:00",
+        "quote": "Approve the PRD. For the decisions, all confirmed except D-027, calls with no sign-in should simply be blocked and not logged."
+      },
+      "hash": "sha256:27ea392bcca1bacb"
+    },
+    "design": {
+      "status": "approved",
+      "hash": "sha256:13397971180d20a4",
+      "gate": {
+        "result": "pass",
+        "by": "human",
+        "at": "2026-10-11T20:08:59+00:00",
+        "quote": "Skip design."
+      }
+    }
+  },
+  "slices": [],
+  "blocked_on": null,
+  "open_questions": [],
+  "phase": "architecture",
+  "phase_started_at": "2026-10-11T20:43:31+00:00"
+}

@@ -1,0 +1,246 @@
+{
+  "phases": [
+    {
+      "id": "discovery",
+      "skill": "discovery",
+      "output": "docs/discovery.md",
+      "depends_on": [],
+      "gate": "human"
+    },
+    {
+      "id": "journeys",
+      "skill": "journey",
+      "output": "docs/journeys.md",
+      "depends_on": [
+        "discovery"
+      ],
+      "gate": "model",
+      "reads_if_present": [
+        "domain"
+      ]
+    },
+    {
+      "id": "domain",
+      "skill": "domain-model",
+      "output": "docs/domain-model.md",
+      "depends_on": [
+        "discovery",
+        "journeys"
+      ],
+      "gate": "model"
+    },
+    {
+      "id": "prd",
+      "skill": "prd",
+      "output": "docs/prd.md",
+      "depends_on": [
+        "discovery",
+        "journeys",
+        "domain"
+      ],
+      "gate": "human"
+    },
+    {
+      "id": "design",
+      "skill": "design",
+      "output": "docs/design",
+      "depends_on": [
+        "journeys",
+        "domain",
+        "prd"
+      ],
+      "gate": "human"
+    },
+    {
+      "id": "architecture",
+      "skill": "architect",
+      "output": "docs/architecture",
+      "depends_on": [
+        "domain",
+        "prd",
+        "journeys",
+        "design"
+      ],
+      "gate": "human"
+    },
+    {
+      "id": "system-spec",
+      "skill": "system-spec",
+      "output": "docs/system-spec",
+      "depends_on": [
+        "domain",
+        "prd",
+        "architecture"
+      ],
+      "gate": "human"
+    },
+    {
+      "id": "slices",
+      "skill": "slice",
+      "output": "docs/slices.md",
+      "depends_on": [
+        "discovery",
+        "journeys",
+        "prd",
+        "system-spec"
+      ],
+      "gate": "human",
+      "adopts": "slices"
+    }
+  ],
+  "slice_phases": [
+    {
+      "id": "slice-spec",
+      "skill": "slice-spec",
+      "output": "docs/slices/{slice}/spec.md",
+      "depends_on": [
+        "system-spec",
+        "slices"
+      ],
+      "gate": "model"
+    },
+    {
+      "id": "build",
+      "skill": "implement",
+      "output": null,
+      "depends_on": [
+        "slice-spec"
+      ],
+      "gate": "tests"
+    },
+    {
+      "id": "review",
+      "skill": "code-review",
+      "output": "docs/slices/{slice}/review.md",
+      "depends_on": [
+        "build"
+      ],
+      "gate": "verdict"
+    },
+    {
+      "id": "deploy",
+      "skill": "deploy",
+      "output": "docs/slices/{slice}/deploy.md",
+      "depends_on": [
+        "review"
+      ],
+      "gate": "smoke"
+    },
+    {
+      "id": "verify",
+      "skill": null,
+      "output": ".sdlc/verification/{slice}.md",
+      "depends_on": [
+        "deploy"
+      ],
+      "gate": "human"
+    }
+  ],
+  "iteration_phases": [
+    {
+      "id": "retro",
+      "skill": "retro",
+      "output": ".sdlc/reflections.md",
+      "depends_on": [],
+      "gate": null
+    }
+  ],
+  "sizes": {
+    "patch": {
+      "gap_policy": "auto_defer",
+      "phases": [
+        "slice-spec",
+        "build",
+        "review",
+        "deploy",
+        "verify"
+      ]
+    },
+    "feature": {
+      "gap_policy": "hold",
+      "phases": [
+        "discovery",
+        "slices",
+        "slice-spec",
+        "build",
+        "review",
+        "deploy",
+        "verify",
+        "retro"
+      ]
+    },
+    "product": {
+      "gap_policy": "hold",
+      "phases": [
+        "discovery",
+        "journeys",
+        "domain",
+        "prd",
+        "design",
+        "architecture",
+        "system-spec",
+        "slices",
+        "slice-spec",
+        "build",
+        "review",
+        "deploy",
+        "verify",
+        "retro"
+      ]
+    }
+  },
+  "gates": {
+    "critique": {
+      "runner": "critique-skill",
+      "blocking": false,
+      "returns": "pass|hold|fail"
+    },
+    "model": {
+      "runner": "critique-skill",
+      "blocking": false,
+      "returns": "pass|hold|fail"
+    },
+    "human": {
+      "runner": "critique-skill",
+      "blocking": true,
+      "returns": "pass|hold|fail",
+      "note": "critique runs first; a pass still needs by: human"
+    },
+    "tests": {
+      "runner": "command",
+      "command": "test",
+      "blocking": false,
+      "returns": "pass on exit 0, fail otherwise"
+    },
+    "smoke": {
+      "runner": "output-command",
+      "line": "Verified by:",
+      "blocking": false,
+      "returns": "pass on exit 0, fail otherwise"
+    },
+    "verdict": {
+      "runner": "output-verdict",
+      "line": "Verdict:",
+      "blocking": false,
+      "returns": "the verdict the phase wrote",
+      "note": "the phase is itself an independent check; its output is the verdict, so nothing gates it again"
+    }
+  },
+  "commands": {
+    "test": "npm test",
+    "test_one": "npx vitest run -t \"{test}\"",
+    "lint": "npm run typecheck"
+  },
+  "on_demand_phases": [
+    {
+      "id": "improve",
+      "skill": "improve",
+      "output": ".sdlc/proposals",
+      "depends_on": [
+        "retro"
+      ],
+      "gate": "human",
+      "when": "recurrence >= 2"
+    }
+  ]
+}
