@@ -182,6 +182,7 @@ Skills that belong to no suite.
 |---|---|---|
 | [`business-opp`](skills/business-opp/SKILL.md) | Screens business-for-sale listings as acquisitions: normalizes the seller's earnings, computes purchase multiple, debt coverage and owner cash after debt, scores each out of 10 and sets a target price. | Deciding which listings on a business-for-sale site deserve a closer look. |
 | [`humanize`](skills/humanize/SKILL.md) | Rewrites text that reads as machine-written so it reads as written by a person for a specific reader, adding nothing the author did not supply. | A draft sounds like AI and is going out under your name. |
+| [`web-to-markdown`](skills/web-to-markdown/SKILL.md) |  Web-to-markdown conversion that scrapes one page or crawls a whole site into clean markdown files an AI can read cheaply. Use whenever the user wants a web page or website scraped, crawled, saved or converted to markdown, or wants a site's content as context or a knowledge base for an AI. |
 
 ## Tell the skills about you (optional)
 
