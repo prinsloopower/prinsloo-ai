@@ -31,4 +31,4 @@ Ready-to-use skills for AI assistants. Each one is a single `SKILL.md` file that
 
 **Standalone**
 
-- [business-opp](skills/business-opp/SKILL.md), [humanize](skills/humanize/SKILL.md)
+- [business-opp](skills/business-opp/SKILL.md), [humanize](skills/humanize/SKILL.md), [`web-to-markdown`](skills/web-to-markdown/SKILL.md)
