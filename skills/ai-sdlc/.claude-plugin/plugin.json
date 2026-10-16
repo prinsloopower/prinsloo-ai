@@ -1,0 +1,8 @@
+{
+  "name": "ai-sdlc",
+  "description": "A gated software development pipeline, discovery through deployment, with mechanical traceability checks and a retro that proposes its own improvements.",
+  "version": "1.0.0",
+  "author": {
+    "name": "Nick"
+  }
+}
