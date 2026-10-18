@@ -55,11 +55,21 @@
         "at": "2026-10-11T20:08:59+00:00",
         "quote": "Skip design."
       }
+    },
+    "architecture": {
+      "status": "approved",
+      "rework": 1,
+      "gate": {
+        "result": "pass",
+        "by": "human",
+        "at": "2026-10-18T00:23:50+00:00",
+        "quote": "Approve the architecture, confirm D-048, and commit."
+      },
+      "hash": "sha256:95cec4cc51e29a47"
     }
   },
   "slices": [],
   "blocked_on": null,
   "open_questions": [],
-  "phase": "architecture",
-  "phase_started_at": "2026-10-11T20:43:31+00:00"
+  "phase": null
 }

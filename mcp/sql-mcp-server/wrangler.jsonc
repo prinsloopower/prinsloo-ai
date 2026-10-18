@@ -14,7 +14,7 @@
     {
       "binding": "HYPERDRIVE",
       // Replace with the ID printed by `wrangler hyperdrive create`.
-      "id": "REPLACE_WITH_HYPERDRIVE_ID",
+      "id": "eb6eadef54d546ae84c12c419a4c2d9f",
       // Used by `wrangler dev` only.
       "localConnectionString": "postgres://postgres:postgres@localhost:55432/sqlmcp"
     }

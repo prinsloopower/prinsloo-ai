@@ -15,3 +15,5 @@
 {"iteration": 1, "phase": "prd", "slice": null, "gate": "hold", "duration_s": 102, "rework_count": 2, "defects_found": 0, "output_bytes": 11560}
 {"iteration": 1, "phase": "prd", "slice": null, "gate": "pass", "duration_s": null, "rework_count": 2, "defects_found": 0, "output_bytes": 11893}
 {"iteration": 1, "phase": "design", "slice": null, "gate": "pass", "duration_s": null, "rework_count": 0, "defects_found": 0, "output_bytes": 0}
+{"iteration": 1, "phase": "architecture", "slice": null, "gate": "hold", "duration_s": 530733, "rework_count": 1, "defects_found": 0, "output_bytes": 28889}
+{"iteration": 1, "phase": "architecture", "slice": null, "gate": "pass", "duration_s": null, "rework_count": 1, "defects_found": 0, "output_bytes": 30262}

@@ -229,7 +229,7 @@ Rationale: product owner: "Postgres on Cloudflare". It is also the first Deploym
 Alternatives rejected: MS SQL Server or AWS/Azure first (not chosen).
 
 ## D-048 — Architecture's answers to six open questions, pending confirmation
-Decided by: model | Date: 2026-10-11 | Phase: architecture
+Decided by: human (confirmed 2026-10-17 at the architecture gate) | Date: 2026-10-11 | Phase: architecture
 Rationale: the architecture ADRs answer six questions, and the human gate should see each one.
 - Q-002: the Agent's `request_text` is accepted as the Request text, and the Security material discloses that it cannot be verified (ADR-011).
 - Q-006: any OpenID Connect provider with discovery is supported, and Entra ID and Google are tested at release (ADR-004).
@@ -239,3 +239,9 @@ Rationale: the architecture ADRs answer six questions, and the human gate should
 - Q-019: the Server brokers sign-in through Client ID Metadata Documents or stateless registration (ADR-004).
 Q-015 and Q-019 stay open until a live connection from Claude and ChatGPT proves them (skeleton.md). Supports R-002, R-003, R-009, R-010, R-016, R-017.
 Alternatives rejected: as listed in each ADR.
+
+## D-049 — The walking skeleton runs against a borrowed Supabase project
+Decided by: human | Date: 2026-10-17 | Phase: architecture
+Rationale: the skeleton needs a PostgreSQL that Hyperdrive can reach, and the product has no Database of its own yet. The product owner chose to restore the paused "AI Golf App" Supabase project (`dwsikgvekndbmowzdcnx`, us-east-2) as a throwaway test Database. Hyperdrive config `eb6eadef54d546ae84c12c419a4c2d9f` points at its session pooler (port 5432), because the direct host is IPv6-only.
+Alternatives rejected: a new dedicated Supabase project (free-tier project limit and possible cost); the active "Gruvd Golf" project (a live app's Database).
+Consequence: the skeleton's Database belongs to another product. Before any slice writes Created objects or runs real Tool calls, the Deployment needs a Database of its own.

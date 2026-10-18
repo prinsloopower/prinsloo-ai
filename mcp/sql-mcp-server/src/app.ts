@@ -1,4 +1,5 @@
-import { Hono } from "hono";
+import { Hono, type Context } from "hono";
+import { handleMcp } from "./mcp.js";
 
 /** What the app needs from the runtime adapter (ADR-001). */
 export interface Deps {
@@ -39,10 +40,17 @@ export function createApp(deps: Deps) {
 
   // Every MCP call is blocked until Sign-in exists (D-017); a call with no Sign-in
   // is not a Tool call and leaves no Audit record (D-044).
-  app.all("/mcp/*", (c) => blockUnauthenticated(c.req.url));
-  app.all("/mcp", (c) => blockUnauthenticated(c.req.url));
+  const mcp = (c: Context) =>
+    signedIn(c.req.raw) ? handleMcp(c.req.raw) : blockUnauthenticated(c.req.url);
+  app.all("/mcp/*", mcp);
+  app.all("/mcp", mcp);
 
   return app;
+}
+
+/** No request is signed in until the Sign-in slice replaces this (ADR-004). */
+function signedIn(_request: Request): boolean {
+  return false;
 }
 
 function blockUnauthenticated(requestUrl: string): Response {

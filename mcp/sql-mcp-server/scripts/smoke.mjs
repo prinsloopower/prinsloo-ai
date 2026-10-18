@@ -35,4 +35,5 @@ const prmBody = await prm.json().catch(() => ({}));
 check("protected-resource metadata names this resource", prmBody.resource === `${base}/mcp`,
   JSON.stringify(prmBody));
 
-process.exit(checks.every((c) => c.ok) ? 0 : 1);
+// exitCode rather than process.exit(): exiting while fetch sockets close trips a libuv assertion on Windows.
+process.exitCode = checks.every((c) => c.ok) ? 0 : 1;

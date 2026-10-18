@@ -25,7 +25,7 @@ Decision: The Server uses `@modelcontextprotocol/sdk` with `WebStandardStreamabl
 Alternatives rejected:
 - Stateful MCP sessions, which are Durable Objects on Cloudflare and sticky sessions on containers. They need per-cloud state, and a session is not a Conversation anyway (Q-014). See ADR-007.
 - The legacy SSE transport, which is deprecated in the MCP specification.
-Consequence: There are no server-initiated messages or resumable streams. That is acceptable, because every tool answers within its own request.
+Consequence: There are no server-initiated messages or resumable streams. That is acceptable, because every tool answers within its own request. Responses are plain JSON rather than SSE (`enableJsonResponse`), for the same reason. The SDK and its schema validators make up most of the Worker bundle: 1,116 KiB raw and 218 KiB gzipped, against 255 KiB without them (skeleton.md).
 
 ## ADR-004 — The Server is its own OAuth 2.1 authorization server, delegating sign-in to the organisation's OpenID Connect provider; it keeps no store
 Traces: R-009, R-017, J-002
