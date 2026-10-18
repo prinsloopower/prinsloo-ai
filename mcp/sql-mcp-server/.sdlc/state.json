@@ -66,10 +66,22 @@
         "quote": "Approve the architecture, confirm D-048, and commit."
       },
       "hash": "sha256:95cec4cc51e29a47"
+    },
+    "system-spec": {
+      "status": "approved",
+      "rework": 1,
+      "gate": {
+        "result": "pass",
+        "by": "human",
+        "at": "2026-10-18T13:13:35+00:00",
+        "quote": "Confirmed"
+      },
+      "hash": "sha256:990f301c3535357a"
     }
   },
   "slices": [],
   "blocked_on": null,
   "open_questions": [],
-  "phase": null
+  "phase": "slices",
+  "phase_started_at": "2026-10-18T13:42:56+00:00"
 }

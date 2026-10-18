@@ -245,3 +245,59 @@ Decided by: human | Date: 2026-10-17 | Phase: architecture
 Rationale: the skeleton needs a PostgreSQL that Hyperdrive can reach, and the product has no Database of its own yet. The product owner chose to restore the paused "AI Golf App" Supabase project (`dwsikgvekndbmowzdcnx`, us-east-2) as a throwaway test Database. Hyperdrive config `eb6eadef54d546ae84c12c419a4c2d9f` points at its session pooler (port 5432), because the direct host is IPv6-only.
 Alternatives rejected: a new dedicated Supabase project (free-tier project limit and possible cost); the active "Gruvd Golf" project (a live app's Database).
 Consequence: the skeleton's Database belongs to another product. Before any slice writes Created objects or runs real Tool calls, the Deployment needs a Database of its own.
+
+## D-050 — Four data-model entities exist only to serve stateless OAuth
+Decided by: human (confirmed 2026-10-18 at the system-spec gate) | Date: 2026-10-18 | Phase: system-spec
+Rationale: Refresh token, Client registration, Authorization request and Authorization code are not domain terms. They are the values an OAuth authorization server needs, made self-contained because ADR-004 allows no store. No product concept is missing from the domain model.
+Alternatives rejected: adding them as domain terms. Staff members, Operators and reviewers never meet them as concepts, and the Security material names them only as OAuth mechanics.
+
+## D-051 — Without a store, some OAuth values cannot be revoked or used just once
+Decided by: human (confirmed 2026-10-18 at the system-spec gate) | Date: 2026-10-18 | Phase: system-spec
+Rationale: follows from ADR-004. An Authorization code can be replayed within its 60 seconds, but only by whoever also holds the PKCE verifier. Refresh tokens are not rotated on use and last at most 30 days, and each use goes back to the Identity provider, which refuses a removed account. Dynamic Client registrations never expire. All three stop working when `SERVER_SECRET` rotates.
+Alternatives rejected: a replay cache or token denylist. Either needs a store per cloud, which ADR-004 rejected.
+
+## D-052 — Audit record retention is the Operator's own policy; answers Q-010
+Decided by: human | Date: 2026-10-18 | Phase: system-spec
+Rationale: product owner's answer at system-spec. The Server sets no retention period and no default. Each Operator applies their organisation's policy in the Host log facility. The AWS and Azure templates require it as a parameter with no default, and on Cloudflare the Security material states Workers Logs' fixed window.
+Alternatives rejected: no minimum but a 90-day template default (it hides the choice); a fixed minimum period everywhere (Cloudflare cannot meet it on the Host without revisiting D-006).
+
+## D-053 — A broken connector URL or invalid tool input ends in a Refusal of its own class
+Decided by: human (confirmed 2026-10-18 at the system-spec gate) | Date: 2026-10-18 | Phase: system-spec
+Rationale: R-010 says every Tool call, run or refused, leaves an Audit record. So a call whose Allow-list segment cannot be decoded, or whose inputs breach a limit, is a Refusal (`invalid_allow_list`, `invalid_input`) and not a bare protocol error that leaves no trace. Telling the Agent the connector URL is invalid lets an Organisation admin find a broken URL from the first call, rather than having every Staff member see nothing.
+Alternatives rejected: treating a broken Allow-list as no Allow-list (D-012). It fails silently, and J-003 cannot tell a typo from an empty list.
+
+## D-054 — SERVER_SECRET, SERVER_SECRET_PREVIOUS, PUBLIC_URL and PORT are deployment configuration, not Server settings
+Decided by: human (confirmed 2026-10-18 at the system-spec gate) | Date: 2026-10-18 | Phase: system-spec
+Rationale: the Operator owns them, as R-017 requires, but none of them changes what a Staff member can see or run, so the domain's Server setting list stays as it is.
+Alternatives rejected: listing them as Server settings. That widens a gated domain term for plumbing.
+
+## D-055 — The Security material follows R-014's four questions and maps to no external framework; answers Q-011
+Decided by: human | Date: 2026-10-18 | Phase: system-spec
+Rationale: product owner's answer at system-spec. No framework is named by any adopting organisation, and a mapping claimed without an assessment invites the wrong kind of trust.
+Alternatives rejected: a cross-reference to SOC 2 / ISO 27001 control areas; a cross-reference to the OWASP LLM and MCP guidance.
+
+## D-056 — The Host platform's own request logs hold connector URLs, Allow-list included
+Decided by: human (confirmed 2026-10-18 at the system-spec gate) | Date: 2026-10-18 | Phase: system-spec
+Rationale: Workers Logs, and load-balancer logs on AWS and Azure, record request URLs outside the Server's control, including for blocked calls that D-044 says leave no Audit record. The Allow-list names Objects but grants nothing (ADR-006). Accepted and disclosed in the Security material.
+Alternatives rejected: moving the Allow-list out of the URL. ADR-006 rejected every other channel.
+
+## D-057 — The Server applies no rate limit this iteration
+Decided by: human (confirmed 2026-10-18 at the system-spec gate) | Date: 2026-10-18 | Phase: system-spec
+Rationale: unauthenticated calls, `/register` and metadata fetches store nothing and reach no Database, so a flood costs compute but exposes nothing. The platform's own protection (Cloudflare, AWS WAF, Azure Front Door) is the Operator's option, and the Deployment kit names it.
+Alternatives rejected: an in-process limiter. It is per isolate or task, so it gives no real bound without a shared store.
+
+## D-058 — The system spec's defaults and limits are model-chosen numbers
+Decided by: human (confirmed 2026-10-18 at the system-spec gate) | Date: 2026-10-18 | Phase: system-spec
+Rationale: the numbers in data-model.md, operations.md and security.md were picked to be testable and none rests on a measurement yet: Row limit default 500 (max 10,000), the 5 s and 3 s fetch time limits, the Allow-list caps, 50 Created objects per Conversation token, the 24-hour Sign-in cap, the 30-day Refresh token, the 10-minute Authorization request, the 60-second Authorization code, 1–5 `redirect_uris` and 100-character `client_name` per Client registration, the monitoring thresholds, and the volume and latency targets. The release test harness and the first Operator Deployments are expected to revise them.
+Alternatives rejected: leaving them to each slice. Every slice would choose differently.
+
+## D-059 — The clean-checkout setup is first run by the Sign-in slice
+Decided by: human (confirmed 2026-10-18 at the system-spec gate) | Date: 2026-10-18 | Phase: system-spec
+Rationale: environments.md gives the clean-checkout sequence, but nobody has run it, and `.dev.vars.example` does not exist yet. The Sign-in slice (PRD sequencing step 2) is the first to need `SERVER_SECRET` and the `IDP_*` variables. Its done-condition therefore includes adding `.dev.vars.example` with every variable from environments.md, secrets blank, and one run of the local sequence from a fresh clone, with any step that fails fixed in environments.md.
+Alternatives rejected: running it now. Half the variables it needs have no code reading them yet, so the run would prove only the skeleton's steps, which the architecture phase already ran.
+
+## D-060 — The AI Golf App Supabase project stays the test Database for the project test Deployment and other tests; answers Q-021
+Decided by: human | Date: 2026-10-18 | Phase: system-spec
+Rationale: product owner's answer to Q-021. The borrowed project from D-049 serves the deployment and every other test that needs a reachable PostgreSQL, including Tool calls, Created objects and the benchmark's sample Database. This lifts D-049's "a Database of its own before real Tool calls" consequence.
+Alternatives rejected: a new dedicated Supabase project; another host; Docker on a reachable machine.
+Consequence: tests write tables and rows into a project named for another product, so test objects should live in their own schema (for example `sqlmcp_test`), which the Boundary for the project test Deployment names. Anything else in that project is outside the Boundary and stays hidden (D-012). If the AI Golf App product is revived, the test schema has to move.
