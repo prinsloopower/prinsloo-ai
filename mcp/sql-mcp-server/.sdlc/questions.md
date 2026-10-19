@@ -2,6 +2,7 @@
 Raised by: discovery | Blocks: architecture
 Running on Cloudflare may limit which databases the server can reach directly, especially MS SQL Server. Concerns R-001 and R-002.
 Answered (conditionally) by the product owner, interview answer 29: see D-020. Architecture still establishes feasibility.
+Answered by the product owner at the slices gate: see D-063. No; PostgreSQL is served from Cloudflare and MS SQL Server from Azure.
 
 ## Q-002 — Is the agent's own account of the question acceptable as the logged natural-language request?
 Raised by: discovery | Blocks: architecture
@@ -97,4 +98,8 @@ Answered at prd: see D-035.
 ## Q-021 — Which Database does the project test Deployment use once Tool calls run?
 Raised by: system-spec | Blocks: slice (PRD sequencing step 2)
 The skeleton borrows another product's Supabase project (D-049). The Sign-in slice is the first to send a Tool call's Statement, and the benchmark needs a sample Database per Engine (D-037). Before then, the project needs a PostgreSQL of its own: a new Supabase project, another host, or Docker on a reachable machine.
+
+## Q-022 — Which Azure subscription and Azure SQL Database do the MS SQL Server slices test against?
+Raised by: slices | Blocks: slice-spec for S-006
+D-065 says the product owner provides them. Until they exist, nothing can deploy to Azure or measure MS SQL Server. The answer is the subscription, the resource group, the Azure SQL Database (server, database and tier), and confirmation that a `sqlmcp_test` schema can be created there.
 Answered by the product owner after the system-spec gate: see D-060.

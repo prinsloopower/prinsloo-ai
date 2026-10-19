@@ -301,3 +301,41 @@ Decided by: human | Date: 2026-10-18 | Phase: system-spec
 Rationale: product owner's answer to Q-021. The borrowed project from D-049 serves the deployment and every other test that needs a reachable PostgreSQL, including Tool calls, Created objects and the benchmark's sample Database. This lifts D-049's "a Database of its own before real Tool calls" consequence.
 Alternatives rejected: a new dedicated Supabase project; another host; Docker on a reachable machine.
 Consequence: tests write tables and rows into a project named for another product, so test objects should live in their own schema (for example `sqlmcp_test`), which the Boundary for the project test Deployment names. Anything else in that project is outside the Boundary and stays hidden (D-012). If the AI Golf App product is revived, the test schema has to move.
+
+## D-061 — Sign-in ships alone; the Audit record arrives with the first Tool call
+Decided by: human (confirmed 2026-10-18 at the slices gate) | Date: 2026-10-18 | Phase: slices
+Rationale: PRD sequencing step 2 pairs Sign-in with the Audit record so that no Tool call ever runs unrecorded. S-001 offers no tools, so it has no Tool call to record. The Audit logger ships in S-002 with the first Tool call, the visibility listing, and step 2's condition still holds. Splitting them lets Sign-in, the riskiest integration (Q-019), go live and be proven from Claude and ChatGPT on its own. Visibility (step 3) also ships before any row is read, in S-002, ahead of reads in S-003.
+Alternatives rejected: one slice for Sign-in, Audit record and visibility, which bundles two live unknowns (Q-019 and Q-015) into one deployment; an Audit logger in S-001 with nothing to log, which can't be shown to work.
+
+## D-062 — The benchmark, each cloud, MS SQL Server and private Deployments are separate slices
+Decided by: human (confirmed 2026-10-18 at the slices gate) | Date: 2026-10-18 | Phase: slices
+Rationale: PRD step 5 is too large to deploy as one piece. Each cloud, the second Engine, and the private variant has its own deployment definition and its own trial (ADR-009), and can be shown to work on its own. The benchmark (S-004) is split from S-003 so the first usable read ships without waiting for the question set. The order is Cloudflare, then AWS, then Azure, because the container image is built once in S-006 and reused in S-007. MS SQL Server waits for the containers, because ADR-008 runs it there first.
+Alternatives rejected: one step-5 slice (nothing deployable until all three clouds work); MS SQL Server before the containers (it has no runtime to run on until S-006).
+Superseded in part by D-063: AWS is deferred, so the cloud order in this rationale no longer applies.
+
+## D-063 — This release supports two pairings: PostgreSQL on Supabase served from Cloudflare, and MS SQL Server served from Azure; AWS is deferred; answers Q-001
+Decided by: human | Date: 2026-10-18 | Phase: slices
+Rationale: product owner's direction at the slices gate. The release supports exactly two pairings:
+- PostgreSQL: the Server runs as a Cloudflare Worker, and the Database is hosted on Supabase, reached through Hyperdrive. Other PostgreSQL hosts are not supported or documented this iteration.
+- MS SQL Server: the Server runs as a container on Azure Container Apps, and the Database is Azure SQL Database or SQL Server reachable from Azure.
+
+Private Deployments are supported on both: Cloudflare behind Access, and Azure behind an internal ingress. This narrows D-041 to these two clouds. MS SQL Server on Cloudflare and PostgreSQL on Azure are not offered, so ADR-008's open `tedious`-on-Workers question is moot, and D-020 never has to be invoked. This answers Q-001.
+Alternatives rejected: all three clouds with both Engines, the PRD's original scope; Azure alone for both Engines; PostgreSQL on Supabase from both Cloudflare and Azure; any PostgreSQL host with Supabase as the tested example.
+Consequence: R-001's AWS part is deferred to a later iteration. The README says AWS is planned. The container image serves MS SQL Server only, and the Worker serves PostgreSQL only, so the Engine adapters carry one driver per runtime. An organisation whose PostgreSQL is not on Supabase, or whose MS SQL Server is not reachable from Azure, is unsupported this iteration. The Deployment kit is a Wrangler config and a Bicep template, each with a public and a private variant. Amends the PRD's scope (Scope and the deployment-time metric), ADR-002, ADR-008, ADR-009 and ADR-013, the overview, the components, the skeleton record and the system spec. Each amended artifact notes the change.
+
+## D-064 — Private Deployments are deferred; this release is public Deployments only
+Decided by: human | Date: 2026-10-18 | Phase: slices
+Rationale: product owner's decision after the D-063 consistency critique. The intended use is a public Deployment that Claude and ChatGPT reach as a connector, the way vendor MCP servers are reached. Claude's and ChatGPT's connectors call from the vendors' own infrastructure, so they cannot reach a Deployment that only the organisation's network can reach. The only clients that could reach one connect from the Staff member's own machine, such as Claude Code or a local Claude Desktop configuration, and ChatGPT offers none. Narrows D-018 and D-041 for this iteration.
+Alternatives rejected: private Deployments for local clients only (Claude Code, local Claude Desktop config), which leaves ChatGPT unsupported; an open question for the slice specs to settle.
+Consequence: the PRD's private trial metric is dropped, and the Deployment kit has a public variant only. An organisation that will not expose any endpoint to the internet is unsupported this iteration, and the Security material says so.
+
+## D-065 — The product owner provides an Azure subscription and an Azure SQL Database for MS SQL Server testing
+Decided by: human | Date: 2026-10-18 | Phase: slices
+Rationale: product owner's answer at the D-063 consistency critique. The MS SQL Server slices need an Azure subscription to deploy to and an Azure SQL Database to test against, including the benchmark's sample Database. As with D-060, test objects live in a `sqlmcp_test` schema, which is the only schema in that Deployment's Boundary. Integration tests also run against MS SQL Server 2022 in Docker (ADR-010).
+Alternatives rejected: Docker only, deciding the Azure environment when S-006 is specified.
+Consequence: S-006 cannot deploy until the subscription and database exist (Q-022).
+
+## D-066 — The MS SQL Server Deployment is split into two slices
+Decided by: human | Date: 2026-10-18 | Phase: slices
+Rationale: product owner's answer at the D-063 consistency critique. A single slice would carry the first container image, the Node runtime adapter, Bicep and Key Vault, Sign-in on Node, MS SQL Server visibility, the T-SQL Query check and T-SQL Redaction all together. The first of the two slices delivers sign-in and the table listing on Azure. The second adds answering questions. Each can be deployed and shown to work on its own.
+Alternatives rejected: one slice accepted as large and irreducible, with verification staged by task.

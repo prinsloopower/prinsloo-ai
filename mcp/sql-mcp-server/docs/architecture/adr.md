@@ -9,15 +9,17 @@ Alternatives rejected:
 - Express. It is tied to Node's HTTP server, so it would not run on Workers.
 Consequence: Every dependency must run on both Workers and Node, which rules out drivers or parsers built on native Node add-ons. The engine adapters and the query check carry most of that cost (ADR-005, ADR-008).
 
-## ADR-002 — Cloudflare runs a Worker; AWS and Azure run the same code as one container image
+## ADR-002 — Cloudflare runs a Worker for PostgreSQL; Azure runs the same code as a container image for MS SQL Server
 Traces: R-001, R-013, J-001
-This builds on D-018, D-041 in the decisions register.
-Decision: Cloudflare Deployments are Workers. AWS Deployments run the container image on ECS Fargate, and Azure Deployments run it on Azure Container Apps. Both of those are managed container services with no cluster to operate. A public Deployment sits behind each platform's HTTPS endpoint. A private one uses an internal load balancer or ingress inside the organisation's network. On Cloudflare that means a Worker behind Cloudflare Access.
+This builds on D-018, D-041, D-063 in the decisions register.
+Decision: PostgreSQL Deployments are Cloudflare Workers. MS SQL Server Deployments run the container image on Azure Container Apps, a managed container service with no cluster to operate (D-063). A Deployment sits behind each platform's public HTTPS endpoint. Private Deployments are deferred (D-064). When they return, they would be a Worker behind Cloudflare Access, or a Container App with internal ingress. AWS is deferred, and the image is built so that ECS Fargate can run it later without changes.
 Alternatives rejected:
-- AWS Lambda and Azure Functions. Their invocation model and connection handling differ on each cloud, and they need a database proxy to avoid connection exhaustion. That is two more setups to fit into an hour.
+- Azure Functions. Its invocation model and connection handling need a database proxy to avoid connection exhaustion, which is one more setup to fit into an hour.
 - Kubernetes. It needs a cluster the Operator may not have, and it does not fit inside the one hour.
 - Containers on Cloudflare as well. That would give up Workers' free HTTPS endpoint and Hyperdrive pooling, for uniformity nobody needs.
-Consequence: There are two build artifacts to test and release, a Worker bundle and an image. Private Deployments on Cloudflare depend on Cloudflare Access, and nothing has tested them yet (skeleton.md).
+- AWS ECS Fargate this iteration. Deferred by the product owner (D-063).
+Consequence: There are two build artifacts to test and release, a Worker bundle and an image, and each serves one Engine.
+Amended 2026-10-18 by D-063 and D-064: AWS removed, each runtime tied to one Engine, and private Deployments deferred.
 
 ## ADR-003 — MCP over Streamable HTTP, stateless, using the official SDK's web-standard transport
 Traces: R-004, R-009, J-004
@@ -36,7 +38,7 @@ At `/authorize` it sends the Staff member to the Identity provider as a confiden
 
 Alternatives rejected:
 - Acting only as a resource server that validates the provider's tokens directly. Entra ID and most enterprise providers offer neither dynamic registration nor Client ID Metadata Documents, so Claude and ChatGPT could not complete sign-in against them (Q-019).
-- Cloudflare's `workers-oauth-provider`. It needs Workers KV, so AWS and Azure would need a second implementation.
+- Cloudflare's `workers-oauth-provider`. It needs Workers KV, so Azure would need a second implementation.
 - Storing grants in the Database. That writes into the customer's Database, which the Database account may not be allowed to do, and which a Security reviewer would question.
 
 Consequence: The Server carries hand-written OAuth endpoints, the most security-sensitive code in the product. It needs its own test suite and its own section of the Security material. There is no revocation short of expiry, which matches D-024. If the one deployment secret rotates, every Staff member has to sign in again.
@@ -82,24 +84,28 @@ Alternatives rejected:
 - A server-side registry of Created objects. It needs a store (ADR-004), and it still could not tell Conversations apart.
 Consequence: Visibility now depends on the Agent passing the token back. An Agent that drops it loses its Created objects in the middle of a Conversation, which is J-006's recreate exit. A Staff member who pastes a token into another Conversation makes those Created objects visible there. That is their own choice, and colleagues cannot use it. The Security material says both.
 
-## ADR-008 — PostgreSQL through `pg` (with Hyperdrive on Cloudflare); MS SQL Server through `mssql` on containers only for now
+## ADR-008 — PostgreSQL on Supabase through `pg` and Hyperdrive; MS SQL Server through `mssql` from the Azure container
 Traces: R-001, R-002
-This builds on D-020 in the decisions register.
-Decision: PostgreSQL is reached with `pg`. On Workers the connection goes through a Hyperdrive binding, which pools connections and keeps them warm across invocations. In containers, `pg` keeps its own pool. MS SQL Server is reached with `mssql` (`tedious`) from the container image.
+This builds on D-020, D-063 in the decisions register.
+Decision: PostgreSQL is reached with `pg` from the Worker, through a Hyperdrive binding that points at the Supabase session pooler (port 5432). Hyperdrive pools connections and keeps them warm across invocations. MS SQL Server is reached with `mssql` (`tedious`) from the container image on Azure. Each runtime carries only its own Engine's driver (D-063).
 
-Whether `tedious` runs on Workers is unproven. Its TLS-inside-TDS handshake needs Node `tls` over a custom stream, which Workers' Node compatibility may not provide, and Hyperdrive does not support MS SQL Server. This is the open part of Q-001. One spike settles it in the slice that adds the other cloud and Engine pairings (PRD sequencing step 5), and if it fails, D-020 drops the pairing.
+Whether `tedious` runs on Workers no longer matters, because MS SQL Server is not served from Cloudflare (D-063 answers Q-001).
 Alternatives rejected:
 - `postgres` (postgres.js). It is equally capable, but `pg` is the driver Hyperdrive documents first and the one most Operators already know.
 - Connecting to PostgreSQL directly from Workers without Hyperdrive. Every invocation would open a new TLS connection, which costs latency and exhausts connections on small databases.
-Consequence: The two engines behave differently enough that every Typed tool and the Query check carry tests for both. For now, Cloudflare Deployments support PostgreSQL only.
+- MS SQL Server on Workers through `tedious`. It is unproven, Hyperdrive does not support it, and D-063 takes it out of scope.
+
+Consequence: The two engines behave differently enough that every Typed tool and the Query check carry tests for both. Supabase's pooler and its default roles bound what the Deployment kit can say about Database accounts for PostgreSQL.
+Amended 2026-10-18 by D-063: PostgreSQL is Supabase-only, and MS SQL Server runs from Azure only.
 
 ## ADR-009 — Each cloud deploys with its own native tooling
 Traces: R-001, R-013, J-001
-Decision: Cloudflare uses Wrangler, AWS uses a CloudFormation template, and Azure uses a Bicep template. Each comes in a public and a private variant, and each takes the Server settings as parameters.
+Decision: Cloudflare uses Wrangler, and Azure uses a Bicep template. Each deploys a public Deployment (D-064), and each takes the Server settings as parameters. A CloudFormation template waits for AWS (D-063).
 Alternatives rejected:
-- Terraform across all three clouds. It is one more tool to install and learn inside the hour, and Cloudflare Workers deploy more simply with Wrangler.
+- Terraform across both clouds. It is one more tool to install and learn inside the hour, and Cloudflare Workers deploy more simply with Wrangler.
 - Click-through console instructions. They cannot be tested, and they drift with every console redesign.
-Consequence: There are three deployment definitions to keep in step. The deployment trial (PRD metric) is what catches drift.
+Consequence: There are two deployment definitions to keep in step. The deployment trial (PRD metric) is what catches drift.
+Amended 2026-10-18 by D-063: CloudFormation deferred with AWS.
 
 ## ADR-010 — Vitest, with real engines in Docker for integration tests
 Traces: R-002, R-003, R-004
@@ -128,8 +134,8 @@ Consequence: More Deployments to run, and more connectors for the Organisation a
 ## ADR-013 — Audit records are JSON lines on standard output, kept by the Host log facility's own retention
 Traces: R-010, R-011, J-008
 This builds on D-006, D-008 in the decisions register.
-Decision: The Audit logger writes one JSON object per Tool call to standard output, and on Workers through `console.log`. Workers Logs, CloudWatch Logs or Azure Monitor keep it, depending on the runtime. The Wrangler config enables Workers Logs with full sampling.
+Decision: The Audit logger writes one JSON object per Tool call to standard output, and on Workers through `console.log`. Workers Logs or Azure Monitor keeps it, depending on the runtime. The Wrangler config enables Workers Logs with full sampling.
 Alternatives rejected:
 - Writing Audit records to the Database. That writes into the customer's Database and can fail with the very grant problems it is meant to record.
 - Logpush or other export. That moves records off the Host (D-006).
-Consequence: Retention is whatever the Host log facility offers. On Cloudflare that is a fixed few days (about 7 on paid plans), with no option to keep records longer on the Host. That bears directly on Q-010, and the Security material must state it. On AWS and Azure the Operator sets the retention.
+Consequence: Retention is whatever the Host log facility offers. On Cloudflare that is a fixed few days (about 7 on paid plans), with no option to keep records longer on the Host. That bears directly on Q-010, and the Security material must state it. On Azure the Operator sets the retention.

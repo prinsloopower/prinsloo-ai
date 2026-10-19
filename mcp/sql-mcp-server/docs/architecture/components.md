@@ -56,7 +56,7 @@ Talks to: the Host log facility only.
 ## Deployment kit
 Traces: R-001, R-013, J-001
 This builds on D-018, D-041 in the decisions register.
-Contains a Wrangler config, a CloudFormation template and a Bicep template, each with a public and a private variant, plus the docs that the one-hour deployment trial follows (ADR-009). A setting that is not set falls back to the defaults in D-007, D-012 and D-019.
+Contains a Wrangler config and a Bicep template, each for a public Deployment (D-063, D-064), plus the docs that the one-hour deployment trial follows (ADR-009). A setting that is not set falls back to the defaults in D-007, D-012 and D-019.
 Talks to: nothing at run time.
 
 ## Security material

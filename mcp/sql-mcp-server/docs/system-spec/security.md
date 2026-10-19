@@ -73,11 +73,11 @@ Every other function is refused, including `nextval`, `pg_sleep`, `set_config`, 
 
 **Redaction rule.** SQL is redacted by the Engine's parser: every literal becomes `?`, and identifiers and keywords stay. On PostgreSQL this uses `libpg-query`'s normalise. On MS SQL Server it uses the `node-sql-parser` AST. SQL that does not parse is logged as `<unparsed: N chars>` and nothing more. Typed tool input values become `"<redacted>"`, keys stay, and Object names stay because they are identifiers. `request_text` is never redacted (R-011).
 
-**Outside the Server's control.** The Host platform keeps its own request logs. Workers Logs records each invocation's URL, so the connector URL, Allow-list segment included, appears there even for blocked calls that leave no Audit record (D-056).
+**Outside the Server's control.** The Host platform keeps its own request logs. Workers Logs and Azure Container Apps' ingress and console logs record each request's URL, so the connector URL, Allow-list segment included, appears there even for blocked calls that leave no Audit record (D-056).
 
 ## Secrets
 
-- They live only in the platform's secret store: Wrangler secrets, AWS Secrets Manager or Azure Key Vault. They never go in `wrangler.jsonc`, the templates' defaults or the repository. `.dev.vars` is gitignored.
+- They live only in the platform's secret store: Wrangler secrets or Azure Key Vault. They never go in `wrangler.jsonc`, the templates' defaults or the repository. `.dev.vars` is gitignored.
 - **Rotating `SERVER_SECRET`.** The Operator sets the new value as `SERVER_SECRET` and the old one as `SERVER_SECRET_PREVIOUS`, then redeploys. Tokens of every kind still verify, and new ones are issued under the new key. After 30 days, the Refresh token lifetime, the Operator removes `SERVER_SECRET_PREVIOUS`. At that point, dynamic Client registrations and Conversation tokens issued before the rotation stop working: AI tools re-register by themselves, and Created objects drop out of older Conversations. The Security material says so.
 - **A leaked `SERVER_SECRET`.** The Operator rotates without setting `SERVER_SECRET_PREVIOUS`. Every Staff member signs in again, and every Conversation token is void.
 - `IDP_CLIENT_SECRET` and the Database password rotate at their source, followed by a redeploy. No token depends on them.

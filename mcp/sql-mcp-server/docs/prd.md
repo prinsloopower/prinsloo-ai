@@ -4,14 +4,15 @@
 Both problems in the discovery document are addressed together. Answer 7 makes a
 Security reviewer's sign-off and correct answers for Staff members joint conditions
 of a first release, so neither ships without the other. The response is one Server
-release that an Operator can deploy on any supported cloud and Engine. It carries
+release that an Operator can deploy on either supported pairing (D-063). It carries
 every Permission tier, with schema changes cut down to creating tables, and every
 slice adds to the Security material.
 
 ## Scope
 In: R-001, R-002, R-003, R-004, R-005, R-006, R-007, R-008, R-009, R-010, R-011, R-012, R-013, R-014, R-015, R-017
-In: public and private Deployments alike (D-018), on every supported cloud (D-041).
-Out (conditional): one cloud and Engine pairing, under D-020.
+In: two cloud and Engine pairings: PostgreSQL hosted on Supabase, served from Cloudflare; MS SQL Server served from Azure (D-063).
+In: public Deployments on both pairings. Out: private Deployments, deferred (D-064, narrowing D-018 and D-041).
+Out: AWS, PostgreSQL hosts other than Supabase, PostgreSQL on Azure, and MS SQL Server on Cloudflare (D-063). R-001's AWS part waits for a later iteration.
 Out (conditional): R-016 moves to the next iteration if architecture finds no reliable way for the Server to tell Conversations apart (Q-014, D-039). Until architecture rules, it is planned, as sequencing step 7.
 In: Claude and ChatGPT as the supported AI tools (D-043).
 Out: Copilot and every other AI tool, deferred to a later iteration. The README says support is planned (D-043).
@@ -28,7 +29,7 @@ Out: any control over results reaching the AI provider. The Security material di
 - Answer correctness ≥ 90% on the benchmark question set, for each Engine, measured by the benchmark run report each release produces (D-037, answers Q-003 and Q-012). Covers J-004.
 - Benchmark questions still refused after three Agent-written queries ≤ 5%, from the same benchmark run report (D-042). Covers J-004.
 - Hidden object names in anything the Agent receives = 0, across the release's visibility test run. This covers tool descriptions, results, Refusals and Database errors, at every Permission tier and both Engines, and the source is that test run's report. Covers J-003, J-004, J-005.
-- Deployment time ≤ 60 minutes with no outside help. This applies to every supported cloud and Engine pairing as a public Deployment, and to one private Deployment on each cloud. Measured from timed run-throughs by an engineer new to the project, working from the docs alone and recorded in the release's deployment trial log. Covers J-001.
+- Deployment time ≤ 60 minutes with no outside help. This applies to both supported pairings as a public Deployment (D-063, D-064). Measured from timed run-throughs by an engineer new to the project, working from the docs alone and recorded in the release's deployment trial log. Covers J-001.
 - Calls run without Sign-in = 0. Every call made with no Sign-in, both before sign-in is configured and after, is blocked with a reply that the connection is not authenticated, and leaves no Audit record (D-044). Source: the release's sign-in test run. Covers J-001, J-002.
 - Sign-in completes for each supported Identity provider (Q-006) from both Claude and ChatGPT (D-043). Source: the sign-in test run report. Covers J-002.
 - Allow-list changes that need a redeploy before they take effect = 0. Source: the visibility test run, which changes the Allow-list between Tool calls on one running Deployment. Covers J-003.
@@ -44,7 +45,7 @@ No metric is set against the cost of the Analyst queue, because no figure exists
 2. **Sign-in (J-002), with the Audit record, before any Tool call runs a Statement.** R-009 rules out the reverse order, and R-010 means no signed-in Tool call goes unrecorded.
 3. **Visibility (Boundary, Allow-list, D-012) before the first read reaches a Staff member.** Reads shipped before visibility would expose the schema that the second problem in discovery is about. Hidden-object handling in Refusals and Database errors (D-005) ships with it, not after.
 4. **Agent-written queries with the Query check, Row limit and Cut-short result (J-004).** This is the first slice a Staff member can use, and the benchmark measures it.
-5. **The other cloud and Engine pairings, and private Deployments, read-only.** These come before any write, so the deployment trial (R-013) and a reviewer walkthrough can run on a product that can only read. That is the configuration a reviewer is most likely to approve first (J-007 exits).
+5. **The MS SQL Server pairing on Azure, read-only (D-063). Private Deployments are deferred (D-064).** These come before any write, so the deployment trial (R-013) and a reviewer walkthrough can run on a product that can only read. That is the configuration a reviewer is most likely to approve first (J-007 exits).
 6. **Write, then delete, Typed tools and their Permission tiers (J-005, J-009).** Each tier ships only with its tier test matrix, because R-008 cannot be shown without it.
 7. **Full tier: creating a table and its Conversation visibility (J-006).** This goes last because it depends on how the Server tells Conversations apart (Q-014, architecture). If architecture finds no reliable way, this slice moves to the next iteration (D-039).
 
@@ -62,7 +63,6 @@ Redaction (R-011) and the audit fields grow with each slice that adds a kind of 
 
 ## Open
 Which phase settles each question is recorded in the questions register. Listed here is what in this PRD waits on it.
-- Q-001: the conditional Out line on cloud and Engine pairings.
 - Q-006: the Identity providers the sign-in metric is measured against.
 - Q-007: a metric for the cost of the Analyst queue, once a figure exists.
 - Q-014: sequencing step 7 and the conditional Out line on R-016.
@@ -102,5 +102,7 @@ Hold resolved by the product owner, 2026-10-11:
 - Give-up count → three, now D-042, which the metric cites.
 - AI tools → Claude and ChatGPT both required, with Copilot and others deferred and named as planned in the README (D-043). Scope and the sign-in metric now reflect this, and the Open section notes that Q-015 and Q-019 can reopen it.
 - Nit → the Open section now says only what in this PRD waits on each question.
+
+Amendment, 2026-10-18, directed by the product owner at the slices gate (D-063). Two pairings replace "every supported cloud": PostgreSQL on Supabase from Cloudflare, and MS SQL Server from Azure. AWS is out, and Q-001 is answered. The Scope lines, the deployment-time metric and the Open list were revised to match. Later the same day, private Deployments were deferred (D-064), and sequencing step 5 was revised to match.
 
 Human gate, 2026-10-11: the product owner approved the PRD and confirmed the model decisions, except D-027. Unsigned calls are now blocked and not logged (D-044). The sign-in and audit metrics and sequencing steps 1–2 were revised to match. The correctness target of 90% is confirmed (D-045).

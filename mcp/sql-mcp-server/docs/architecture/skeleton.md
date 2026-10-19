@@ -25,6 +25,5 @@ A TLS-intercepting proxy on the client machine can corrupt the chunked 401 respo
 - **Sign-in against a real Identity provider (ADR-004).** Neither Claude nor ChatGPT has connected. Whether both can complete sign-in through the broker (Q-019) is still assumed from their published documentation.
 - **The Allow-list in the connector URL path surviving Claude's and ChatGPT's organisation connector settings (ADR-006, Q-015).** This is assumed, not tested.
 - **The Query check (ADR-005).** In particular, `libpg-query`'s WebAssembly running inside the Worker size limit is assumed, not measured.
-- **MS SQL Server on Workers (ADR-008, Q-001).** This is untouched. D-020 governs the outcome.
-- **The container image on AWS and Azure (ADR-002, ADR-009),** and private Deployments on any cloud (D-041).
+- **The container image on Azure with MS SQL Server (ADR-002, ADR-009, D-063).**
 - **A Database the product owns (D-049).**

@@ -1,7 +1,7 @@
 # Architecture overview — sql-mcp-server
 
 ## Shape
-One TypeScript codebase built twice. Cloudflare runs it as a Worker. AWS and Azure run the same code as a container image (ADR-001, ADR-002). Behind a thin runtime adapter, everything is written against web-standard Request, Response and crypto APIs, so the parts that enforce R-003, R-004, R-009 and R-010 are identical on every cloud.
+One TypeScript codebase built twice. Cloudflare runs it as a Worker for PostgreSQL on Supabase. Azure runs the same code as a container image for MS SQL Server (ADR-001, ADR-002, D-063). Behind a thin runtime adapter, everything is written against web-standard Request, Response and crypto APIs, so the parts that enforce R-003, R-004, R-009 and R-010 are identical on every cloud.
 
 A Deployment is one process with no state store of its own (ADR-004, ADR-006, ADR-007). The Deployment keeps no record of who signed in, which client registered, which Allow-list applies or which Created objects exist. Each of these travels with the request as a signed or encrypted value, or is carried in the URL the Organisation admin configured. As a result, a Deployment needs only three things: its Server settings, one signing secret and a network path to the Database.
 
@@ -17,15 +17,15 @@ AI tool --HTTPS--> Runtime adapter --> Sign-in broker --> MCP endpoint --> Visib
 ```
 
 ## Stack
-- Language and runtime: TypeScript on Cloudflare Workers, and on Node 24 in a container (ADR-001).
+- Language and runtime: TypeScript on Cloudflare Workers, and on Node 24 in a container on Azure Container Apps (ADR-001, ADR-002).
 - HTTP routing: Hono, which runs unchanged on both runtimes (ADR-001).
 - MCP protocol: `@modelcontextprotocol/sdk` with its web-standard Streamable HTTP transport, in stateless mode (ADR-003).
 - Sign-in: the Server is its own OAuth 2.1 authorization server, and it delegates the actual sign-in to the organisation's OpenID Connect provider (ADR-004). Built on `jose` and `oauth4webapi`.
-- PostgreSQL access: `pg`, reached through Hyperdrive on Cloudflare and directly from containers (ADR-008).
-- MS SQL Server access: `mssql`/`tedious`, from containers only, until Q-001 is settled (ADR-008, D-020).
+- PostgreSQL access: `pg` from the Worker, through Hyperdrive to Supabase (ADR-008, D-063).
+- MS SQL Server access: `mssql`/`tedious` from the container on Azure (ADR-008, D-063).
 - Query check: the engine's own parser and planner, behind a conservative structural check (ADR-005).
 - Tests: Vitest, with integration tests against PostgreSQL and MS SQL Server running in Docker (ADR-010).
-- Deployment tooling: each cloud's own tooling. That is Wrangler on Cloudflare, CloudFormation on AWS and Bicep on Azure (ADR-009).
+- Deployment tooling: each cloud's own tooling. That is Wrangler on Cloudflare and Bicep on Azure (ADR-009).
 
 ## Boundaries
 - **Trusted:** Server settings and the deployment secret, which are set by the Operator; the Identity provider's ID tokens, once verified against its published keys; the Database's catalog.
@@ -40,5 +40,5 @@ AI tool --HTTPS--> Runtime adapter --> Sign-in broker --> MCP endpoint --> Visib
 | Client metadata URL (a Client ID Metadata Document, ADR-004) | nothing; the URL and the document are chosen by the client, so they are untrusted input | Registration fails and the AI tool is told why; nothing is cached. The fetch is HTTPS only, to public addresses only, with no redirects, a size cap and a time limit, so a hostile URL cannot reach the Host's network or hold a sign-in open. The limits are set in the system spec | nothing per environment; the rules are the same everywhere |
 | Database (PostgreSQL / MS SQL Server) | enforce its own grants (D-004); report the objects a plan reads (ADR-005) | Tool calls end in a Database error; `/healthz` reports the Database down; nothing is retried automatically. Connecting has a time limit, set in the system spec; slow queries are D-003's concern | the Operator: connection string (a secret), or the Hyperdrive binding on Cloudflare |
 | Hyperdrive (Cloudflare only) | pool and route connections to PostgreSQL | same as Database unavailable | Wrangler config: binding name and Hyperdrive ID |
-| Host log facility (Workers Logs, CloudWatch Logs, Azure Monitor) | keep Audit records on the Host | the runtime's own buffering; if the facility drops a line, nothing in the Server can tell, and the Security material says so | runtime defaults; on Cloudflare, `observability.enabled` in the Wrangler config |
+| Host log facility (Workers Logs, Azure Monitor) | keep Audit records on the Host | the runtime's own buffering; if the facility drops a line, nothing in the Server can tell, and the Security material says so | runtime defaults; on Cloudflare, `observability.enabled` in the Wrangler config |
 | AI tool (Claude, ChatGPT, D-043) | nothing; every input is untrusted | not the Server's concern | the Organisation admin: the connector URL carrying the Allow-list (ADR-006) |

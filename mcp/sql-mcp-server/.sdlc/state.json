@@ -41,19 +41,19 @@
       "gate": {
         "result": "pass",
         "by": "human",
-        "at": "2026-10-11T20:00:21+00:00",
-        "quote": "Approve the PRD. For the decisions, all confirmed except D-027, calls with no sign-in should simply be blocked and not logged."
+        "at": "2026-10-19T00:30:52+00:00",
+        "quote": "Approve the amended PRD, architecture, system spec and slices, confirm D-061 and D-062, and commit."
       },
       "hash": "sha256:27ea392bcca1bacb"
     },
     "design": {
       "status": "approved",
-      "hash": "sha256:13397971180d20a4",
+      "hash": "sha256:2bc3afbe9d2c7c6f",
       "gate": {
         "result": "pass",
         "by": "human",
-        "at": "2026-10-11T20:08:59+00:00",
-        "quote": "Skip design."
+        "at": "2026-10-19T00:30:53+00:00",
+        "quote": "Approve the amended PRD, architecture, system spec and slices, confirm D-061 and D-062, and commit."
       }
     },
     "architecture": {
@@ -62,10 +62,10 @@
       "gate": {
         "result": "pass",
         "by": "human",
-        "at": "2026-10-18T00:23:50+00:00",
-        "quote": "Approve the architecture, confirm D-048, and commit."
+        "at": "2026-10-19T00:30:53+00:00",
+        "quote": "Approve the amended PRD, architecture, system spec and slices, confirm D-061 and D-062, and commit."
       },
-      "hash": "sha256:95cec4cc51e29a47"
+      "hash": "sha256:03b269680120e707"
     },
     "system-spec": {
       "status": "approved",
@@ -73,15 +73,25 @@
       "gate": {
         "result": "pass",
         "by": "human",
-        "at": "2026-10-18T13:13:35+00:00",
-        "quote": "Confirmed"
+        "at": "2026-10-19T00:30:53+00:00",
+        "quote": "Approve the amended PRD, architecture, system spec and slices, confirm D-061 and D-062, and commit."
       },
-      "hash": "sha256:990f301c3535357a"
+      "hash": "sha256:e5d013431f62e6d8"
+    },
+    "slices": {
+      "status": "approved",
+      "rework": 1,
+      "gate": {
+        "result": "pass",
+        "by": "human",
+        "at": "2026-10-19T00:30:53+00:00",
+        "quote": "Approve the amended PRD, architecture, system spec and slices, confirm D-061 and D-062, and commit."
+      },
+      "hash": "sha256:b9a9e56e05be1312"
     }
   },
   "slices": [],
   "blocked_on": null,
   "open_questions": [],
-  "phase": "slices",
-  "phase_started_at": "2026-10-18T13:42:56+00:00"
+  "phase": null
 }
