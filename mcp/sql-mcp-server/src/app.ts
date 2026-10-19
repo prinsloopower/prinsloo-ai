@@ -1,9 +1,9 @@
 import { Hono, type Context } from "hono";
-import { readConfig, type Env } from "./config.js";
+import { readConfig, type RuntimeVariables } from "./config.js";
 import { handleMcp } from "./mcp.js";
 import { op } from "./oplog.js";
 import { page, SignInBroker, type Staff } from "./signin/broker.js";
-import { IdentityProvider } from "./signin/idp.js";
+import { IdentityProvider } from "./signin/identity-provider.js";
 import { Tokens } from "./signin/tokens.js";
 import type { Fetch } from "./signin/util.js";
 
@@ -12,7 +12,7 @@ export interface Deps {
   /** Runs a health-check Server statement against the Database. */
   ping(): Promise<void>;
   /** The runtime's variables and secrets (environments.md). */
-  env?: Env;
+  env?: RuntimeVariables;
   fetch?: Fetch;
   now?: () => number;
   /** Answers a signed-in MCP request; the SDK handler unless a test swaps it. */
@@ -56,7 +56,7 @@ export function createApp(deps: Deps) {
   const broker = new SignInBroker({
     config,
     tokens: () => (tokens ??= Tokens.create(config.secret, config.previousSecret)),
-    idp: config.idp ? new IdentityProvider(config.idp, fetchFn, now) : undefined,
+    provider: config.identityProvider ? new IdentityProvider(config.identityProvider, fetchFn, now) : undefined,
     fetch: fetchFn,
     now,
   });
@@ -73,8 +73,8 @@ export function createApp(deps: Deps) {
 
   broker.mount(app);
 
-  // Every MCP call is blocked until Sign-in exists (D-017); a call with no Sign-in
-  // is not a Tool call and leaves no Audit record (D-044).
+  // Every MCP call is blocked until Sign-in is configured (D-017) and then until the caller has signed in;
+  // a call with no Sign-in is not a Tool call and leaves no Audit record (D-044).
   const mcp = async (c: Context) => {
     const metadata = `${broker.origin(c.req.url)}${PRM_PREFIX}${new URL(c.req.url).pathname}`;
     if (!broker.configured) return blockUnauthenticated(metadata, false);

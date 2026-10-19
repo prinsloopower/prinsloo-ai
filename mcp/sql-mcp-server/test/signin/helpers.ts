@@ -124,7 +124,13 @@ export class FakeIdp {
     const body = req.method === "POST" ? new URLSearchParams(await req.clone().text()) : new URLSearchParams();
     if (key === `${this.issuer}/token`) this.lastTokenBody = body;
     const route = this.routes.get(key);
-    return route ? route(req, body) : new Response("not found", { status: 404 });
+    const res = route ? await route(req, body) : new Response("not found", { status: 404 });
+    // Like a real fetch: follow a redirect unless the caller asked for "manual".
+    const location = res.headers.get("location");
+    if (res.status >= 300 && res.status < 400 && location && init?.redirect !== "manual") {
+      return this.fetch(new URL(location, req.url).href, { ...init, method: "GET", body: undefined });
+    }
+    return res;
   };
 
   callsTo(path: string) {

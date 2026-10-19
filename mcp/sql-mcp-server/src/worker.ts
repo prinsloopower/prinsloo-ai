@@ -1,5 +1,5 @@
 import { createApp } from "./app.js";
-import type { Env as Settings } from "./config.js";
+import type { RuntimeVariables } from "./config.js";
 import { pingPostgres } from "./engine/postgres.js";
 
 /** Cloudflare runtime adapter (ADR-001, ADR-002). */
@@ -15,7 +15,7 @@ export default {
   fetch(request: Request, env: Env, ctx: ExecutionContext): Response | Promise<Response> {
     app ??= createApp({
       ping: () => pingPostgres(env.HYPERDRIVE.connectionString),
-      env: env as unknown as Settings,
+      env: env as unknown as RuntimeVariables,
     });
     return app.fetch(request, env, ctx);
   },

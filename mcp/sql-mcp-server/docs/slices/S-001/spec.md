@@ -12,7 +12,8 @@ The Server has no designed screens (D-046). During Sign-in, the Staff member's b
 - "This sign-in started more than 10 minutes ago. Start again from your AI tool";
 - "This sign-in was started in a different browser. Start again from your AI tool";
 - "The Identity provider refused the sign-in: <its error code>";
-- "The sign-in could not be verified. Start again from your AI tool": status 400, shown for an ID token that fails any check and for a `state` that cannot be decrypted or read. It never says which check failed.
+- "The sign-in could not be verified. Start again from your AI tool": status 400, shown for an ID token that fails any check and for a `state` that cannot be decrypted or read. It never says which check failed;
+- "The sign-in failed on the Server. Start again from your AI tool": status 500, for a fault in the Server itself rather than in what was presented. It writes a `signin_error` line and never the error's text (code review, D-070).
 
 ## Interface
 All paths are on the Deployment's origin. Each takes and returns what ADR-004 and data-model.md define, and nothing else.
@@ -29,7 +30,8 @@ GET  /authorize        → 302 to the Identity provider, with the Authorization 
                          302 to the client's redirect_uri with error=invalid_request for every other refusal;
                          503 while Sign-in is not configured
 GET  /oauth/callback   → 302 to the client's redirect_uri with `code` and the client's `state`; the plain-text pages above on failure
-POST /token            → 200 {access_token, token_type: "Bearer", expires_in, refresh_token?}; 400 invalid_grant / invalid_client / invalid_request
+POST /token            → 200 {access_token, token_type: "Bearer", expires_in, refresh_token?}; 400 invalid_grant / invalid_request / unsupported_grant_type;
+                         401 invalid_client; 503 temporarily_unavailable when the provider does not answer a refresh; 500 server_error
 ANY  /mcp, /mcp/*      → a valid Sign-in reaches the MCP handler, which lists no tools; anything else gets 401 + WWW-Authenticate (error="invalid_token" when a token was presented)
 ```
 
@@ -66,11 +68,18 @@ No stores. It issues and checks Sign-in, Refresh token, Client registration, Aut
 - The redirect's `scope` is `IDP_SCOPES` when set. Unset, it is `openid profile email offline_access`, or `openid profile email` for Google.
 - An unknown or altered `client_id`, an unfetchable metadata document, or a missing or unregistered `redirect_uri` gets the 400 not-valid page and no redirect. Every other `/authorize` refusal redirects to the registered `redirect_uri` with `error=invalid_request` and the client's `state`.
 - `/oauth/callback` refuses a missing or mismatched cookie, and an Authorization request older than 10 minutes. It refuses an ID token with `alg` `none`, `HS256` or `RS384`, or any other algorithm than RS256, PS256 or ES256. It refuses each of a wrong `iss`, a wrong `aud`, a past `exp` and a wrong `nonce` separately, and a `state` altered by one byte. Each of these shows the could-not-be-verified page. An `error` returned by the Identity provider shows the provider-refused page with that code.
-- A failed Client ID Metadata Document fetch writes one `cimd_fetch_failed` line, naming the host and the reason and never the URL's path or query.
+- A failed Client ID Metadata Document fetch writes one `cimd_fetch_failed` line, naming the host and the reason and never the URL's path or query. A fetch that gets no answer at all gives the reason `network`.
+- A metadata document URL whose host is `localhost.` or ends in `.localhost.` is refused unfetched, like one without the dot. A document URL that redirects is not followed, even to a valid document.
+- An Identity provider that sends headers and then stalls the body is cut off at 5 s, like one that sends nothing. A provider that answers with something other than OpenID Connect's documents writes `idp_invalid_response`, not `idp_unreachable`.
+- A Server fault during the callback or a refresh shows the server-error page (500) and writes `signin_error`. It is never shown as a failed verification.
+- A Client ID Metadata Document client completes the code exchange and reaches `/mcp`. Once its document is gone, its refresh is refused with `invalid_client`.
 - Discovery and keys are fetched once per 10 minutes. An ID token whose `kid` is not in the cached keys causes one refetch, and a second unknown `kid` within the same minute does not.
 - An Identity provider call that has not answered after 5 s ends the sign-in with the page naming `IDP_ISSUER`.
 - `/token` refuses a code older than 60 s, a wrong `code_verifier`, and a `client_id`, `redirect_uri` or `resource` different from the one the code was issued for.
 - `/token` refuses a Refresh token presented by a different `client_id`, for a different `resource`, or carrying an `iss` other than `IDP_ISSUER`.
+- When the provider rotates its refresh token, the renewed Refresh token keeps the presented one's expiry. Renewals made every 10 days still end 30 days after the first Sign-in (D-071).
+- A Sign-in issued before a `SERVER_SECRET` rotation still reaches `/mcp` while the old secret is `SERVER_SECRET_PREVIOUS`, and is refused once it is removed.
+- No log line carries the Server's Authorization code or the provider's ID token.
 - An issued Sign-in's `exp` is the ID token's `exp`, or `iat` + 24 h if that is sooner.
 - No Refresh token comes back from `/token` unless the Identity provider sent one. A Refresh token presented 30 days and one second after issue is refused, and so is one presented after a shorter expiry the provider stated.
 - A refresh goes back to the Identity provider, and a refusal there yields `invalid_grant` and no new Sign-in. The provider's response must carry an ID token, verified exactly as at `/oauth/callback` (except `nonce`) and with the same `sub` as the Refresh token. The new Sign-in's `exp`, `sub` and `name` come from that ID token. A response with no ID token, or one that fails verification or names a different `sub`, yields `invalid_grant`. When the provider returns a new refresh token, the new Refresh token carries it.
@@ -104,19 +113,19 @@ Verified by: as_metadata_lists_endpoints_and_s256, prm_names_origin_only_when_co
 Verified by: token_roundtrip_each_kind, tampered_token_rejected, foreign_secret_token_rejected, unknown_version_rejected, previous_secret_verifies_but_never_issues
 
 ### T-004 — AI tools can register, statelessly or by metadata document, and bad registrations are refused
-Verified by: register_issues_signed_client_id, register_rejects_bad_redirect_uris, register_rejects_long_client_name, cimd_rejects_unsafe_url_without_fetching, cimd_rejects_redirect_oversize_or_slow, cimd_rejects_non_json, cimd_rejects_client_id_mismatch, cimd_fetch_failed_op_line_names_host_only
+Verified by: register_issues_signed_client_id, register_rejects_bad_redirect_uris, register_rejects_long_client_name, cimd_rejects_unsafe_url_without_fetching, cimd_rejects_redirect_oversize_or_slow, cimd_rejects_non_json, cimd_rejects_client_id_mismatch, cimd_fetch_failed_op_line_names_host_only, cimd_rejects_localhost_with_trailing_dot, cimd_does_not_follow_redirects, cimd_network_failure_logged_as_network
 
 ### T-005 — /authorize accepts only a correct request and hands the Staff member to the Identity provider
 Verified by: authorize_unsafe_errors_show_page_not_redirect, authorize_sends_idp_scopes_or_default, authorize_rejects_non_code_response_type, authorize_rejects_plain_or_missing_pkce, authorize_rejects_unregistered_redirect_uri, authorize_rejects_foreign_resource, authorize_redirects_to_idp_with_state_and_cookie, auth_cookie_attributes, authorize_requests_offline_from_google
 
 ### T-006 — /oauth/callback accepts only the browser and sign-in that started, with a verified ID token
-Verified by: callback_rejects_cookie_mismatch, callback_rejects_expired_request, callback_rejects_wrong_iss, callback_rejects_wrong_aud, callback_rejects_expired_id_token, callback_rejects_wrong_nonce, callback_rejects_disallowed_id_token_alg, callback_rejects_tampered_state, callback_shows_provider_refusal, callback_idp_timeout_names_provider, idp_unreachable_op_line_written, jwks_cached_and_refetch_limited, callback_redirects_with_code_and_client_state
+Verified by: callback_rejects_cookie_mismatch, callback_rejects_expired_request, callback_rejects_wrong_iss, callback_rejects_wrong_aud, callback_rejects_expired_id_token, callback_rejects_wrong_nonce, callback_rejects_disallowed_id_token_alg, callback_rejects_tampered_state, callback_shows_provider_refusal, callback_idp_timeout_names_provider, idp_unreachable_op_line_written, jwks_cached_and_refetch_limited, callback_redirects_with_code_and_client_state, idp_body_stall_times_out, idp_invalid_response_op_line_written, unexpected_signin_error_is_logged_not_hidden
 
 ### T-007 — /token turns a code or Refresh token into a Sign-in bounded by the ID token
-Verified by: token_requires_matching_verifier, token_rejects_expired_code, token_rejects_mismatched_client_redirect_or_resource, signin_exp_capped_at_24h, refresh_rejects_other_client_resource_or_issuer, refresh_token_only_when_idp_issues_one, refresh_token_exp_30_days_or_provider, refresh_renews_through_idp, refresh_requires_verified_id_token_same_sub, refresh_carries_rotated_idp_refresh_token, refresh_rejected_when_idp_refuses
+Verified by: token_requires_matching_verifier, token_rejects_expired_code, token_rejects_mismatched_client_redirect_or_resource, signin_exp_capped_at_24h, refresh_rejects_other_client_resource_or_issuer, refresh_token_only_when_idp_issues_one, refresh_token_exp_30_days_or_provider, refresh_renews_through_idp, refresh_requires_verified_id_token_same_sub, refresh_carries_rotated_idp_refresh_token, refresh_rejected_when_idp_refuses, refresh_rotation_keeps_original_expiry, cimd_client_completes_token_exchange
 
 ### T-008 — /mcp lets in only a valid Sign-in for this resource, passes on who it is, and blocked calls leave nothing behind
-Verified by: mcp_accepts_valid_signin_with_no_tools, mcp_handler_receives_staff_identity, mcp_accepts_within_skew, mcp_rejects_expired_beyond_skew, mcp_rejects_wrong_issuer, mcp_rejects_wrong_audience, invalid_token_challenge_names_error, blocked_call_writes_no_log_line, op_lines_never_contain_secrets
+Verified by: mcp_accepts_valid_signin_with_no_tools, mcp_handler_receives_staff_identity, mcp_accepts_within_skew, mcp_rejects_expired_beyond_skew, mcp_rejects_wrong_issuer, mcp_rejects_wrong_audience, invalid_token_challenge_names_error, blocked_call_writes_no_log_line, op_lines_never_contain_secrets, signin_issued_before_rotation_still_reaches_mcp, no_log_line_carries_code_or_id_token
 
 ### T-009 — The whole Sign-in runs end to end against a stand-in Identity provider
 Verified by: signin_flow_end_to_end

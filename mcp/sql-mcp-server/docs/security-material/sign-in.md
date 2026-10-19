@@ -15,7 +15,7 @@ The Server is its own OAuth 2.1 authorization server, and it hands the actual si
 1. The AI tool (Claude or ChatGPT) calls the connector URL, gets a 401, and reads the Server's protected-resource and authorization-server metadata.
 2. The AI tool registers, either by presenting a Client ID Metadata Document URL or through stateless dynamic registration. It then sends the Staff member's browser to the Server's `/authorize` with a PKCE S256 challenge. Plain PKCE is refused.
 3. The Server sends the browser on to your Identity provider as a confidential OpenID Connect client, with its own PKCE challenge and a nonce. It also sets a short-lived cookie that ties the sign-in to that browser.
-4. On the way back, the Server checks the cookie and verifies the ID token. The signature must be RS256, PS256 or ES256 against the provider's published keys, and the issuer, audience, expiry and nonce must all match. Only then does it give the AI tool a one-time code.
+4. On the way back, the Server checks the cookie and verifies the ID token. The signature must be RS256, PS256 or ES256 against the provider's published keys, and the issuer, audience, expiry and nonce must all match. Only then does it give the AI tool a short-lived code. The code is valid for 60 seconds and useless without the AI tool's PKCE verifier; see "Accepted" below.
 5. The AI tool exchanges the code, with its PKCE verifier, for a **Sign-in** (an access token) bound to the exact connector URL it asked for.
 
 Every MCP request then carries that Sign-in. The Server accepts it only if it decrypts under the Deployment's key, comes from the configured Identity provider, is bound to the connector URL being called, and has not expired, with 60 seconds of allowance for clock differences.
@@ -25,7 +25,7 @@ Every MCP request then carries that Sign-in. The Server accepts it only if it de
 | Value | Lifetime | What ends it early |
 |---|---|---|
 | Sign-in (access token) | Until the ID token's expiry, and never more than 24 hours | Rotating `SERVER_SECRET` without keeping the previous one |
-| Refresh token | 30 days, or the provider's stated refresh lifetime if shorter. Each use goes back to the Identity provider, which refuses a removed or disabled account | As above |
+| Refresh token | 30 days from the first Sign-in, or the provider's stated refresh lifetime if shorter. Renewing never extends it, even when the provider issues a new refresh token (D-071). Each use goes back to the Identity provider, which refuses a removed or disabled account | As above |
 | Client registration | Does not expire | Rotating `SERVER_SECRET` past it. AI tools then re-register by themselves |
 | Authorization request (during sign-in) | 10 minutes | — |
 | Authorization code | 60 seconds | — |

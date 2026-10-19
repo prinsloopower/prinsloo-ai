@@ -1,9 +1,9 @@
 import { base64url } from "jose";
 
 /** The runtime's environment: Wrangler vars and secrets, or process.env on a container (environments.md). */
-export type Env = Record<string, unknown>;
+export type RuntimeVariables = Record<string, unknown>;
 
-export interface IdpSettings {
+export interface IdentityProviderSettings {
   issuer: string;
   clientId: string;
   clientSecret: string;
@@ -14,7 +14,7 @@ export interface Config {
   secret: string;
   previousSecret?: string;
   /** Unset until all three IDP_* variables are; Sign-in stays off until then (D-017). */
-  idp?: IdpSettings;
+  identityProvider?: IdentityProviderSettings;
   publicUrl?: string;
 }
 
@@ -22,7 +22,7 @@ export type ConfigResult = { ok: true; config: Config } | { ok: false; variable:
 
 export const GOOGLE_ISSUER = "https://accounts.google.com";
 
-function value(env: Env, name: string): string | undefined {
+function value(env: RuntimeVariables, name: string): string | undefined {
   const v = env[name];
   return typeof v === "string" && v.trim() !== "" ? v.trim() : undefined;
 }
@@ -44,7 +44,7 @@ function isUrl(v: string, protocols: string[]): boolean {
 }
 
 /** Reads the variables Sign-in needs; on failure names the variable, never its value. */
-export function readConfig(env: Env): ConfigResult {
+export function readConfig(env: RuntimeVariables): ConfigResult {
   const secret = value(env, "SERVER_SECRET");
   if (!secret || !isSecret(secret)) return { ok: false, variable: "SERVER_SECRET" };
   const previousSecret = value(env, "SERVER_SECRET_PREVIOUS");
@@ -56,7 +56,7 @@ export function readConfig(env: Env): ConfigResult {
   if (issuer && !isUrl(issuer, ["https:"])) return { ok: false, variable: "IDP_ISSUER" };
   const clientId = value(env, "IDP_CLIENT_ID");
   const clientSecret = value(env, "IDP_CLIENT_SECRET");
-  const idp =
+  const identityProvider =
     issuer && clientId && clientSecret
       ? {
           issuer,
@@ -67,5 +67,5 @@ export function readConfig(env: Env): ConfigResult {
         }
       : undefined;
 
-  return { ok: true, config: { secret, previousSecret, idp, publicUrl: publicUrl?.replace(/\/+$/, "") } };
+  return { ok: true, config: { secret, previousSecret, identityProvider, publicUrl: publicUrl?.replace(/\/+$/, "") } };
 }

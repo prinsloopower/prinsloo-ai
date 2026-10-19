@@ -101,7 +101,8 @@
         "R-017"
       ],
       "rework": {
-        "slice-spec": 3
+        "slice-spec": 3,
+        "review": 1
       },
       "gates": {
         "slice-spec": {
@@ -114,12 +115,16 @@
           "result": "pass",
           "by": "script",
           "at": "2026-10-19T12:17:45+00:00"
+        },
+        "review": {
+          "result": "hold",
+          "by": "model",
+          "at": "2026-10-19T12:29:28+00:00"
         }
       }
     }
   ],
-  "blocked_on": null,
+  "blocked_on": "review: code review: 0 blockers, 13 gaps, 12 nits; Q-025 (rotated refresh token lifetime)",
   "open_questions": [],
-  "phase": "review",
-  "phase_started_at": "2026-10-19T12:17:45+00:00"
+  "phase": "review"
 }

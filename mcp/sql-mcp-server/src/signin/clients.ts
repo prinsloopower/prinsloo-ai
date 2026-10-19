@@ -43,7 +43,8 @@ function documentUrl(clientId: string): URL | null {
   }
   if (u.protocol !== "https:" || u.port !== "") return null;
   if (u.pathname === "/" || clientId.includes("?") || clientId.includes("#") || u.username || u.password) return null;
-  const host = u.hostname;
+  // A trailing dot names the same host ("localhost." is localhost).
+  const host = u.hostname.replace(/\.$/, "");
   if (host === "localhost" || host.endsWith(".localhost")) return null;
   if (/^\d{1,3}(\.\d{1,3}){3}$/.test(host) || host.startsWith("[")) return null;
   return u;
@@ -82,7 +83,8 @@ async function fromDocument(clientId: string, fetchFn: Fetch): Promise<Client | 
       return { clientId, redirectUris, name };
     });
   } catch (e) {
-    return fail(e instanceof TimedOut ? "timeout" : "status");
+    // "status" is kept for a host that answered with an error; no answer at all is "network".
+    return fail(e instanceof TimedOut ? "timeout" : "network");
   }
 }
 

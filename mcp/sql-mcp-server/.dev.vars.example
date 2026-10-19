@@ -18,7 +18,11 @@ IDP_SCOPES=
 # Optional. The external origin, when a proxy sits in front; wrangler dev uses the request's origin.
 PUBLIC_URL=
 
-# Server settings later slices read (environments.md). ENGINE is set in wrangler.jsonc.
+# Not here, on purpose: ENGINE (a var in wrangler.jsonc), HYPERDRIVE (a binding in wrangler.jsonc,
+# whose localConnectionString points wrangler dev at the Docker PostgreSQL), and DATABASE_URL and
+# PORT (used by the Azure container only).
+
+# Server settings later slices read (environments.md).
 PERMISSION_TIER=read-only
 ROW_LIMIT=500
 REDACTION=on

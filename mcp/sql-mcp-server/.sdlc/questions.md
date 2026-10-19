@@ -111,3 +111,8 @@ ADR-004 tests Entra ID and Google at release. The product owner has an Entra acc
 ## Q-024 — Should the workerd test allow for a cold first boot?
 Raised by: build (S-001) | Blocks: nothing; affects first-run results
 In a fresh clone, `test/mcp.test.ts`'s workerd test failed once, because workerd's first boot took about 12 s against Vitest's default 5 s per test. It then passed twice. The test belongs to the architecture phase's skeleton, so S-001 left it alone. A per-test timeout of 30 s would remove the flake.
+
+## Q-025 — Does a renewed Refresh token keep the original 30-day limit?
+Raised by: code-review (S-001) | Blocks: nothing; affects how long a stolen Refresh token can be renewed
+The data model says the Refresh token is not rotated on use, and D-051 says it lasts at most 30 days. The S-001 spec has a renewal carry a rotated provider refresh token in a new Refresh token, but does not say what that token's `exp` is. The build gives it a fresh 30 days. With Entra ID, which rotates on every refresh, that makes the chain unbounded, and earlier Refresh tokens stay valid in parallel. The alternative is for the new token to inherit the presented token's `exp`.
+Answered by the product owner: see D-071. It inherits.

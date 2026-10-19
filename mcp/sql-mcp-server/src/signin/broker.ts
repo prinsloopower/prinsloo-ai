@@ -1,9 +1,10 @@
 import type { Hono } from "hono";
 import { GOOGLE_ISSUER, type Config } from "../config.js";
 import { lookupClient, registerClient } from "./clients.js";
-import { IdentityProvider, IdpRefused, IdpUnreachable } from "./idp.js";
+import { IdentityProvider, IdentityProviderRefused, IdentityProviderUnreachable, IdTokenInvalid } from "./identity-provider.js";
+import { op } from "../oplog.js";
 import type { Tokens, TokenPayload } from "./tokens.js";
-import { cookieValue, randomToken, s256, type Fetch } from "./util.js";
+import { cookieValue, randomToken, s256, SKEW_S, type Fetch } from "./util.js";
 
 /** Who a signed-in request comes from, as the Sign-in broker hands it to the MCP endpoint (R-009). */
 export interface Staff {
@@ -17,17 +18,17 @@ const REQUEST_S = 10 * 60;
 const CODE_S = 60;
 const SIGNIN_MAX_S = 24 * 60 * 60;
 const REFRESH_S = 30 * 24 * 60 * 60;
-const SKEW_S = 60;
 
 /** The plain-text pages a Staff member's browser can land on during Sign-in (S-001 Screens). */
 export const PAGES = {
   notConfigured: "Sign-in is not configured on this Deployment",
   notValid: "This AI tool's sign-in request is not valid",
-  idpDown: (issuer: string) => `The Identity provider at ${issuer} did not answer`,
+  providerDown: (issuer: string) => `The Identity provider at ${issuer} did not answer`,
   expired: "This sign-in started more than 10 minutes ago. Start again from your AI tool",
   otherBrowser: "This sign-in was started in a different browser. Start again from your AI tool",
   refused: (code: string) => `The Identity provider refused the sign-in: ${code}`,
   notVerified: "The sign-in could not be verified. Start again from your AI tool",
+  serverError: "The sign-in failed on the Server. Start again from your AI tool",
 };
 
 export function page(text: string, status: number, headers: Record<string, string> = {}): Response {
@@ -41,7 +42,7 @@ function errorCode(raw: string): string {
 export interface BrokerDeps {
   config: Config;
   tokens: () => Promise<Tokens>;
-  idp?: IdentityProvider;
+  provider?: IdentityProvider;
   fetch: Fetch;
   now: () => number;
 }
@@ -59,7 +60,7 @@ export class SignInBroker {
   }
 
   get configured(): boolean {
-    return this.deps.idp !== undefined;
+    return this.deps.provider !== undefined;
   }
 
   private ownResource(resource: string, origin: string): boolean {
@@ -77,9 +78,9 @@ export class SignInBroker {
     const header = request.headers.get("authorization");
     if (!header) return { error: "missing" };
     const presented = /^Bearer\s+(\S+)$/i.exec(header.trim())?.[1];
-    if (!presented || !this.deps.idp) return { error: "invalid" };
+    if (!presented || !this.deps.provider) return { error: "invalid" };
     const p = await (await this.deps.tokens()).open("signin", presented);
-    if (!p || p.iss !== this.deps.idp.issuer) return { error: "invalid" };
+    if (!p || p.iss !== this.deps.provider.issuer) return { error: "invalid" };
     if (p.aud !== `${this.origin(request.url)}${new URL(request.url).pathname}`) return { error: "invalid" };
     if (typeof p.exp !== "number" || this.nowS > p.exp + SKEW_S) return { error: "invalid" };
     return { staff: { sub: String(p.sub), name: String(p.name), iss: String(p.iss) } };
@@ -113,8 +114,8 @@ export class SignInBroker {
   }
 
   private async authorize(requestUrl: string): Promise<Response> {
-    const idp = this.deps.idp;
-    if (!idp) return page(PAGES.notConfigured, 503);
+    const provider = this.deps.provider;
+    if (!provider) return page(PAGES.notConfigured, 503);
     const q = new URL(requestUrl).searchParams;
     const origin = this.origin(requestUrl);
     const tokens = await this.deps.tokens();
@@ -140,13 +141,13 @@ export class SignInBroker {
 
     let endpoint: string;
     try {
-      endpoint = (await idp.config()).authorization_endpoint;
+      endpoint = (await provider.discovery()).authorization_endpoint;
     } catch {
-      return page(PAGES.idpDown(idp.issuer), 502);
+      return page(PAGES.providerDown(provider.issuer), 502);
     }
     const cookie = randomToken();
     const nonce = randomToken(16);
-    const idpVerifier = randomToken();
+    const providerVerifier = randomToken();
     const state = await tokens.issue("authreq", {
       v: 1,
       client_id: clientId,
@@ -154,21 +155,21 @@ export class SignInBroker {
       client_state: clientState,
       code_challenge: challenge,
       resource,
-      idp_verifier: idpVerifier,
+      idp_verifier: providerVerifier,
       nonce,
       cookie_hash: await s256(cookie),
       exp: this.nowS + REQUEST_S,
     });
     const to = new URL(endpoint);
     to.searchParams.set("response_type", "code");
-    to.searchParams.set("client_id", idp.clientId);
+    to.searchParams.set("client_id", provider.clientId);
     to.searchParams.set("redirect_uri", `${origin}/oauth/callback`);
-    to.searchParams.set("scope", idp.scopes);
+    to.searchParams.set("scope", provider.scopes);
     to.searchParams.set("state", state);
     to.searchParams.set("nonce", nonce);
-    to.searchParams.set("code_challenge", await s256(idpVerifier));
+    to.searchParams.set("code_challenge", await s256(providerVerifier));
     to.searchParams.set("code_challenge_method", "S256");
-    if (idp.issuer === GOOGLE_ISSUER) {
+    if (provider.issuer === GOOGLE_ISSUER) {
       to.searchParams.set("access_type", "offline");
       to.searchParams.set("prompt", "consent");
     }
@@ -183,8 +184,8 @@ export class SignInBroker {
   }
 
   private async callback(requestUrl: string, cookieHeader: string | undefined): Promise<Response> {
-    const idp = this.deps.idp;
-    if (!idp) return page(PAGES.notConfigured, 503);
+    const provider = this.deps.provider;
+    if (!provider) return page(PAGES.notConfigured, 503);
     const q = new URL(requestUrl).searchParams;
     const tokens = await this.deps.tokens();
 
@@ -199,28 +200,32 @@ export class SignInBroker {
     if (!code) return page(PAGES.notVerified, 400);
 
     let claims;
-    let provider;
+    let answer;
     try {
-      provider = await idp.exchangeCode(code, String(req.idp_verifier), `${this.origin(requestUrl)}/oauth/callback`);
-      claims = await idp.verifyIdToken(provider.idToken, { nonce: String(req.nonce) });
+      answer = await provider.exchangeCode(code, String(req.idp_verifier), `${this.origin(requestUrl)}/oauth/callback`);
+      claims = await provider.verifyIdToken(answer.idToken, { nonce: String(req.nonce) });
     } catch (e) {
-      if (e instanceof IdpRefused) return page(PAGES.refused(errorCode(e.code)), 400);
-      if (e instanceof IdpUnreachable) return page(PAGES.idpDown(idp.issuer), 502);
-      return page(PAGES.notVerified, 400);
+      if (e instanceof IdentityProviderRefused) return page(PAGES.refused(errorCode(e.code)), 400);
+      if (e instanceof IdentityProviderUnreachable) return page(PAGES.providerDown(provider.issuer), 502);
+      if (e instanceof IdTokenInvalid) return page(PAGES.notVerified, 400);
+      // Anything else is a fault in the Server, not a forged sign-in: say so, and leave a trace (D-068).
+      op("signin_error", { endpoint: "callback" });
+      return page(PAGES.serverError, 500);
     }
 
     const authCode = await tokens.issue("code", {
       v: 1,
       sub: claims.sub,
       name: claims.name,
-      iss: idp.issuer,
+      iss: provider.issuer,
       client_id: req.client_id,
       redirect_uri: req.redirect_uri,
       resource: req.resource,
       code_challenge: req.code_challenge,
       id_exp: claims.exp,
-      ...(provider.refreshToken ? { idp_refresh: provider.refreshToken } : {}),
-      ...(provider.refreshExpiresIn ? { idp_refresh_exp: this.nowS + provider.refreshExpiresIn } : {}),
+      ...(answer.refreshToken ? { idp_refresh: answer.refreshToken } : {}),
+      // The provider's own refresh lifetime, when it states one, caps the Refresh token (D-070).
+      ...(answer.refreshExpiresIn ? { idp_refresh_exp: this.nowS + answer.refreshExpiresIn } : {}),
       exp: this.nowS + CODE_S,
     });
     const back = new URL(String(req.redirect_uri));
@@ -238,8 +243,8 @@ export class SignInBroker {
 
   private async token(form: URLSearchParams): Promise<Response> {
     const fail = (error: string, status = 400) => Response.json({ error }, { status, headers: { "cache-control": "no-store" } });
-    const idp = this.deps.idp;
-    if (!idp) return fail("invalid_request");
+    const provider = this.deps.provider;
+    if (!provider) return fail("invalid_request");
     const tokens = await this.deps.tokens();
     const clientId = form.get("client_id") ?? "";
     if (!(await lookupClient(clientId, tokens, this.deps.fetch))) return fail("invalid_client", 401);
@@ -248,75 +253,88 @@ export class SignInBroker {
     if (form.get("grant_type") === "authorization_code") {
       const code = await tokens.open("code", form.get("code") ?? "");
       if (!code || typeof code.exp !== "number" || this.nowS > code.exp) return fail("invalid_grant");
-      if (code.client_id !== clientId || code.redirect_uri !== form.get("redirect_uri") || code.iss !== idp.issuer) return fail("invalid_grant");
+      if (code.client_id !== clientId || code.redirect_uri !== form.get("redirect_uri") || code.iss !== provider.issuer) return fail("invalid_grant");
       if (resource !== null && resource !== code.resource) return fail("invalid_grant");
       const verifier = form.get("code_verifier");
       if (!verifier || (await s256(verifier)) !== code.code_challenge) return fail("invalid_grant");
-      return this.issue(tokens, code, String(code.name), Number(code.id_exp), undefined);
+      const providerLimit = typeof code.idp_refresh_exp === "number" ? code.idp_refresh_exp : Infinity;
+      return this.issue(tokens, code, String(code.name), Number(code.id_exp), { notAfter: Math.min(this.nowS + REFRESH_S, providerLimit) });
     }
 
     if (form.get("grant_type") === "refresh_token") {
-      const refresh = await tokens.open("refresh", form.get("refresh_token") ?? "");
+      const presented = form.get("refresh_token") ?? "";
+      const refresh = await tokens.open("refresh", presented);
       if (!refresh || typeof refresh.exp !== "number" || this.nowS > refresh.exp) return fail("invalid_grant");
-      if (refresh.client_id !== clientId || refresh.iss !== idp.issuer) return fail("invalid_grant");
+      if (refresh.client_id !== clientId || refresh.iss !== provider.issuer) return fail("invalid_grant");
       if (resource !== null && resource !== refresh.aud) return fail("invalid_grant");
-      let provider;
+      let answer;
       let claims;
       try {
-        provider = await idp.refresh(String(refresh.idp_refresh));
-        claims = await idp.verifyIdToken(provider.idToken);
+        answer = await provider.refresh(String(refresh.idp_refresh));
+        claims = await provider.verifyIdToken(answer.idToken);
       } catch (e) {
-        return e instanceof IdpUnreachable ? fail("temporarily_unavailable", 503) : fail("invalid_grant");
+        if (e instanceof IdentityProviderUnreachable) return fail("temporarily_unavailable", 503);
+        if (e instanceof IdentityProviderRefused || e instanceof IdTokenInvalid) return fail("invalid_grant");
+        op("signin_error", { endpoint: "token" });
+        return fail("server_error", 500);
       }
       if (claims.sub !== refresh.sub) return fail("invalid_grant");
-      const rotated = provider.refreshToken && provider.refreshToken !== refresh.idp_refresh ? provider : undefined;
+      if (!answer.refreshToken || answer.refreshToken === refresh.idp_refresh) {
+        return this.issue(tokens, { sub: refresh.sub, client_id: clientId, resource: refresh.aud }, claims.name, claims.exp, { keep: presented });
+      }
+      // The provider rotated its refresh token: carry the new one, but never past the
+      // presented token's own expiry, so a chain of renewals ends 30 days after Sign-in (Q-025, D-071).
+      const providerLimit = answer.refreshExpiresIn ? this.nowS + answer.refreshExpiresIn : Infinity;
       return this.issue(
         tokens,
-        { sub: refresh.sub, client_id: clientId, resource: refresh.aud, ...(rotated ? { idp_refresh: rotated.refreshToken } : {}) },
+        { sub: refresh.sub, client_id: clientId, resource: refresh.aud, idp_refresh: answer.refreshToken },
         claims.name,
         claims.exp,
-        rotated ? undefined : form.get("refresh_token")!,
-        rotated?.refreshExpiresIn ? this.nowS + rotated.refreshExpiresIn : undefined,
+        { notAfter: Math.min(refresh.exp, providerLimit) },
       );
     }
 
     return fail("unsupported_grant_type");
   }
 
-  /** A Sign-in ending at the ID token's expiry and never later than 24 hours (D-024), plus a Refresh token when the provider gave one. */
+  /**
+   * A Sign-in ending at the ID token's expiry and never later than 24 hours (D-024), plus a
+   * Refresh token: the presented one kept, or a new one ending at `notAfter` when the grant
+   * carries a provider refresh token.
+   */
   private async issue(
     tokens: Tokens,
     grant: TokenPayload,
     name: string,
     idExp: number,
-    keepRefresh: string | undefined,
-    refreshExp?: number,
+    refresh: { keep: string } | { notAfter: number },
   ): Promise<Response> {
-    const idp = this.deps.idp!;
+    const provider = this.deps.provider!;
     const iat = this.nowS;
     const exp = Math.min(idExp, iat + SIGNIN_MAX_S);
     const accessToken = await tokens.issue("signin", {
       v: 1,
       sub: grant.sub,
       name,
-      iss: idp.issuer,
+      iss: provider.issuer,
       aud: grant.resource,
       client_id: grant.client_id,
       iat,
       exp,
     });
-    let refreshToken = keepRefresh;
-    if (!refreshToken && typeof grant.idp_refresh === "string") {
-      const providerExp = refreshExp ?? (typeof grant.idp_refresh_exp === "number" ? grant.idp_refresh_exp : undefined);
+    let refreshToken: string | undefined;
+    if ("keep" in refresh) {
+      refreshToken = refresh.keep;
+    } else if (typeof grant.idp_refresh === "string") {
       refreshToken = await tokens.issue("refresh", {
         v: 1,
         sub: grant.sub,
-        iss: idp.issuer,
+        iss: provider.issuer,
         aud: grant.resource,
         client_id: grant.client_id,
         idp_refresh: grant.idp_refresh,
         iat,
-        exp: Math.min(iat + REFRESH_S, providerExp ?? Infinity),
+        exp: refresh.notAfter,
       });
     }
     return Response.json(
