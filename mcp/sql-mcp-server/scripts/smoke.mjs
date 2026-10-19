@@ -35,5 +35,13 @@ const prmBody = await prm.json().catch(() => ({}));
 check("protected-resource metadata names this resource", prmBody.resource === `${base}/mcp`,
   JSON.stringify(prmBody));
 
+const as = await fetch(`${base}/.well-known/oauth-authorization-server`);
+const asBody = await as.json().catch(() => ({}));
+check("authorization-server metadata offers S256 and the sign-in endpoints",
+  asBody.issuer === base && asBody.authorization_endpoint === `${base}/authorize`
+    && asBody.token_endpoint === `${base}/token` && asBody.registration_endpoint === `${base}/register`
+    && JSON.stringify(asBody.code_challenge_methods_supported) === '["S256"]',
+  JSON.stringify(asBody));
+
 // exitCode rather than process.exit(): exiting while fetch sockets close trips a libuv assertion on Windows.
 process.exitCode = checks.every((c) => c.ok) ? 0 : 1;

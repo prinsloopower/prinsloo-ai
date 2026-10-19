@@ -98,8 +98,12 @@ Answered at prd: see D-035.
 ## Q-021 — Which Database does the project test Deployment use once Tool calls run?
 Raised by: system-spec | Blocks: slice (PRD sequencing step 2)
 The skeleton borrows another product's Supabase project (D-049). The Sign-in slice is the first to send a Tool call's Statement, and the benchmark needs a sample Database per Engine (D-037). Before then, the project needs a PostgreSQL of its own: a new Supabase project, another host, or Docker on a reachable machine.
+Answered by the product owner after the system-spec gate: see D-060.
 
 ## Q-022 — Which Azure subscription and Azure SQL Database do the MS SQL Server slices test against?
 Raised by: slices | Blocks: slice-spec for S-006
 D-065 says the product owner provides them. Until they exist, nothing can deploy to Azure or measure MS SQL Server. The answer is the subscription, the resource group, the Azure SQL Database (server, database and tier), and confirmation that a `sqlmcp_test` schema can be created there.
-Answered by the product owner after the system-spec gate: see D-060.
+
+## Q-023 — Who creates the Google OAuth client for the Sign-in test run, and when?
+Raised by: slice-spec (S-001) | Blocks: S-001 verification (T-011)
+ADR-004 tests Entra ID and Google at release. The product owner has an Entra account. No Google OAuth client exists yet. It needs to be a web application client with redirect URI `https://sql-mcp-server.prinsloopower.workers.dev/oauth/callback`.

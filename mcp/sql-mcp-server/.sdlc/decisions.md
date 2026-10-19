@@ -339,3 +339,32 @@ Consequence: S-006 cannot deploy until the subscription and database exist (Q-02
 Decided by: human | Date: 2026-10-18 | Phase: slices
 Rationale: product owner's answer at the D-063 consistency critique. A single slice would carry the first container image, the Node runtime adapter, Bicep and Key Vault, Sign-in on Node, MS SQL Server visibility, the T-SQL Query check and T-SQL Redaction all together. The first of the two slices delivers sign-in and the table listing on Azure. The second adds answering questions. Each can be deployed and shown to work on its own.
 Alternatives rejected: one slice accepted as large and irreducible, with verification staged by task.
+
+## D-067 — The Security material lives in docs/security-material/, one file per section
+Decided by: human | Date: 2026-10-18 | Phase: slice-spec (S-001)
+Rationale: D-014 has each slice write its own part of the Security material, and the components define the material without giving it a home. One Markdown file per section, starting with `sign-in.md`, lets each slice add its own file without editing another's. S-009's reviewer walkthrough reads the folder as a whole.
+Alternatives rejected: a single SECURITY.md at the repository root, which every slice would edit and conflict over; a documentation site, which is one more thing to deploy before a reviewer can read anything.
+
+## D-068 — Operational log lines share one envelope
+Decided by: human | Date: 2026-10-19 | Phase: slice-spec (S-001)
+Rationale: operations.md alerts on operational events, so every slice and both runtimes must write them alike. Each line is one JSON object on standard output, with `"type":"op"`, an `event` in snake_case, `ts` in RFC 3339 UTC, and then only that event's own fields. The fields name things (a variable, an issuer, a host, an endpoint, a reason) and never carry values, tokens or URLs with paths or queries (security.md). A slice that adds an event documents its shape in its own spec. Events so far: `startup`, `config_invalid` (`variable`), `idp_unreachable` (`issuer`, `endpoint`, `ms`), and `cimd_fetch_failed` (`host`, `reason`).
+Alternatives rejected: free-text log lines, which the alerts cannot match reliably; deciding the shape per slice, which lets S-002 and S-006 drift from S-001.
+
+## D-069 — With Google as the Identity provider, the Server asks for offline access by request parameter
+Decided by: human | Date: 2026-10-19 | Phase: slice-spec (S-001)
+Rationale: Google issues refresh tokens only when the authorization request carries `access_type=offline`, with `prompt=consent` to get one on every sign-in. It ignores the `offline_access` scope that environments.md defaults to. Without these parameters a Google Sign-in could never be renewed (D-024). The parameters are sent only when `IDP_ISSUER` is `https://accounts.google.com`.
+Alternatives rejected: an Operator setting for extra authorization parameters, which is one more variable for a single provider's quirk; sending the parameters to every provider, which some reject.
+
+## D-070 — Small choices made while building S-001
+Decided by: model | Date: 2026-10-19 | Phase: build (S-001)
+Rationale: the spec left these open, and each follows from it without changing behaviour a Staff member sees:
+- Each token carries its kind in the JOSE protected header (`typ: sqlmcp-<kind>`), so an Authorization code, a Refresh token or an Authorization request can never be presented as a Sign-in. data-model.md's payload fields are unchanged.
+- `/authorize` requires `resource`. Without it a Sign-in would have no audience to bind to, so its absence is refused like any other bad request, with `error=invalid_request`.
+- `cimd_fetch_failed` has one more `reason` than D-068 listed: `invalid_document`, for a document that is not JSON or has no usable `redirect_uris`.
+- `/token` answers `invalid_client` (401) for an unknown client_id, and `temporarily_unavailable` (503) when the Identity provider does not answer a refresh.
+- The Worker creates the app once per isolate instead of per request, so the Identity provider's discovery and keys are actually cached as security.md requires.
+- Only `jose` is used for OAuth and JOSE. The overview's `oauth4webapi` was not needed: the broker makes three plain requests to the provider.
+- A Client registration also carries a random `jti`. Without it, two registrations with the same redirect URIs and name in the same second would get byte-identical client_ids.
+- With no Tool registered yet, `tools/list` answers an empty list rather than "method not found", so Claude and ChatGPT show the connector as connected. S-002 replaces this handler with its first Tool.
+- Recording failures: `mcp_401_when_idp_unset` and `blocked_call_writes_no_log_line` guard behaviour the walking skeleton already had, so they passed on first run. They were recorded failing against a deliberate break of the skeleton (401 → 403, plus a log line on block), which was then reverted. Four tests were edited after their first record: three only to wait for fake timers to be armed, and one for a type error. Each was re-recorded failing against a deliberate break (the 5 s limit raised to 7 s, `HttpOnly` dropped), then the code was restored.
+Alternatives rejected: storing the kind as a payload field (it would sit beside the data-model fields as if it were one); defaulting a missing `resource` to `/mcp` (it would sign a Staff member in to the Allow-list-less URL without their AI tool asking for it).

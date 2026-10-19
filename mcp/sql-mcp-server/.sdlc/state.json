@@ -90,8 +90,36 @@
       "hash": "sha256:b9a9e56e05be1312"
     }
   },
-  "slices": [],
+  "slices": [
+    {
+      "id": "S-001",
+      "title": "Signing in from Claude and ChatGPT",
+      "status": "built",
+      "traces": [
+        "J-002",
+        "R-009",
+        "R-017"
+      ],
+      "rework": {
+        "slice-spec": 3
+      },
+      "gates": {
+        "slice-spec": {
+          "result": "pass",
+          "by": "human",
+          "at": "2026-10-19T11:53:20+00:00",
+          "quote": "Apply, then pass (Recommended)"
+        },
+        "build": {
+          "result": "pass",
+          "by": "script",
+          "at": "2026-10-19T12:17:45+00:00"
+        }
+      }
+    }
+  ],
   "blocked_on": null,
   "open_questions": [],
-  "phase": null
+  "phase": "review",
+  "phase_started_at": "2026-10-19T12:17:45+00:00"
 }
