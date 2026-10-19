@@ -124,6 +124,14 @@ Verified by: signin_flow_end_to_end
 ### T-010 — A new contributor can go from a fresh clone to a running local Server (D-059)
 Verified by: manual — `.dev.vars.example` lists every variable in environments.md, with secrets blank. One run of the local sequence in environments.md from a fresh clone is recorded in this spec, and any step that failed is fixed in environments.md.
 
+Run 2026-10-19, from a fresh clone of commit 05ed77a, on Windows 10 with Node 24 and Docker Desktop. Every documented step worked as written:
+- `npm ci`, then `npm run db:up`.
+- `npm test`: 72/73 on the first run, then 73/73 on two reruns. The one first-run failure was `test/mcp.test.ts`'s workerd test, which came from the architecture phase. On a cold checkout, workerd's first boot took about 12 s, beyond Vitest's default 5 s per test.
+- `.dev.vars` copied from `.dev.vars.example`, with `SERVER_SECRET` filled.
+- `npm run dev`, then `npm run smoke -- http://127.0.0.1:8799`: 6/6 checks passed, including `healthz` reaching the Docker PostgreSQL.
+
+No step needed fixing in environments.md. The cold-start timeout is recorded as Q-024.
+
 ### T-011 — Claude and ChatGPT sign in to the deployed Server through Entra ID and Google
 Verified by: npm run smoke -- https://sql-mcp-server.prinsloopower.workers.dev, manual — the smoke test also checks the authorization-server metadata. The product owner adds the connector in Claude and in ChatGPT, completes Sign-in with Entra ID, and sees it connected. They repeat it with Google from at least one of the two. The outcome for each, with the date, is recorded in this spec and answers Q-019.
 

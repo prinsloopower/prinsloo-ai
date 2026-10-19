@@ -107,3 +107,7 @@ D-065 says the product owner provides them. Until they exist, nothing can deploy
 ## Q-023 — Who creates the Google OAuth client for the Sign-in test run, and when?
 Raised by: slice-spec (S-001) | Blocks: S-001 verification (T-011)
 ADR-004 tests Entra ID and Google at release. The product owner has an Entra account. No Google OAuth client exists yet. It needs to be a web application client with redirect URI `https://sql-mcp-server.prinsloopower.workers.dev/oauth/callback`.
+
+## Q-024 — Should the workerd test allow for a cold first boot?
+Raised by: build (S-001) | Blocks: nothing; affects first-run results
+In a fresh clone, `test/mcp.test.ts`'s workerd test failed once, because workerd's first boot took about 12 s against Vitest's default 5 s per test. It then passed twice. The test belongs to the architecture phase's skeleton, so S-001 left it alone. A per-test timeout of 30 s would remove the flake.
