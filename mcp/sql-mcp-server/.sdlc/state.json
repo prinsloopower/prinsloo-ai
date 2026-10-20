@@ -94,7 +94,7 @@
     {
       "id": "S-001",
       "title": "Signing in from Claude and ChatGPT",
-      "status": "reviewed",
+      "status": "deployed",
       "traces": [
         "J-002",
         "R-009",
@@ -118,12 +118,16 @@
           "by": "human",
           "at": "2026-10-20T00:37:30+00:00",
           "quote": "Approve the amended system spec, slices and S-001 spec, close the review, and commit."
+        },
+        "deploy": {
+          "result": "pass",
+          "by": "script",
+          "at": "2026-10-20T02:34:08+00:00"
         }
       }
     }
   ],
   "blocked_on": null,
   "open_questions": [],
-  "phase": "deploy",
-  "phase_started_at": "2026-10-20T00:37:30+00:00"
+  "phase": null
 }
