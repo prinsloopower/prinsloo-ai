@@ -116,3 +116,11 @@ In a fresh clone, `test/mcp.test.ts`'s workerd test failed once, because workerd
 Raised by: code-review (S-001) | Blocks: nothing; affects how long a stolen Refresh token can be renewed
 The data model says the Refresh token is not rotated on use, and D-051 says it lasts at most 30 days. The S-001 spec has a renewal carry a rotated provider refresh token in a new Refresh token, but does not say what that token's `exp` is. The build gives it a fresh 30 days. With Entra ID, which rotates on every refresh, that makes the chain unbounded, and earlier Refresh tokens stay valid in parallel. The alternative is for the new token to inherit the presented token's `exp`.
 Answered by the product owner: see D-071. It inherits.
+
+## Q-026 — security.md's redirect URI rule needs the loopback-port exception
+Raised by: verify (S-001) | Blocks: nothing; to apply at the next system-spec revision
+security.md says `/authorize` accepts only "a `redirect_uri` exactly equal to one the Client registration lists". D-072 adds RFC 8252's exception: a plain-http loopback URI may carry any port. The rule should say so, so that S-006's Node adapter and later reviews do not take the exact-match wording as current. The system spec was left unedited for now, because editing it re-gates the slices, and that clears the declared slice from the pipeline state.
+
+## Q-027 — Should the Allow-list travel in a request header after all?
+Raised by: verify (S-001) | Blocks: slice-spec for S-002
+ADR-006 put the Allow-list in the connector URL path because "neither Claude's nor ChatGPT's organisation connector settings accept custom headers". Claude's connector settings now offer up to four request headers, sent with every request and stored securely. A header would keep the Allow-list out of URLs and out of the platform's request logs (D-056). It also might not change the OAuth resource identifier when the list changes, which would avoid reconnecting. Before S-002 is specified, check whether ChatGPT offers the same and whether the Organisation admin can lock the header so Staff members cannot edit it (D-011, D-040), then keep or revise ADR-006.

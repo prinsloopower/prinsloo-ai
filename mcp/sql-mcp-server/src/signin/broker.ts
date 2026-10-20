@@ -1,6 +1,6 @@
 import type { Hono } from "hono";
 import { GOOGLE_ISSUER, type Config } from "../config.js";
-import { lookupClient, registerClient } from "./clients.js";
+import { lookupClient, redirectAllowed, registerClient } from "./clients.js";
 import { IdentityProvider, IdentityProviderRefused, IdentityProviderUnavailable, IdTokenInvalid } from "./identity-provider.js";
 import { op } from "../oplog.js";
 import type { Tokens, TokenPayload } from "./tokens.js";
@@ -124,7 +124,7 @@ export class SignInBroker {
     const clientId = q.get("client_id") ?? "";
     const client = await lookupClient(clientId, tokens, this.deps.fetch);
     const redirectUri = q.get("redirect_uri");
-    if (!client || !redirectUri || !client.redirectUris.includes(redirectUri)) return page(PAGES.notValid, 400);
+    if (!client || !redirectUri || !redirectAllowed(client.redirectUris, redirectUri)) return page(PAGES.notValid, 400);
 
     const clientState = q.get("state") ?? "";
     const refuse = () => {

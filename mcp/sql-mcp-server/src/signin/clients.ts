@@ -33,6 +33,33 @@ export function validRedirectUris(value: unknown): string[] | null {
   return value as string[];
 }
 
+const LOOPBACK_HOSTS = ["127.0.0.1", "[::1]", "localhost"];
+
+/**
+ * Whether a requested redirect URI is one the client registered. Exact, except that a plain-http
+ * loopback URI may carry any port: native AI tools listen on a random free port each time
+ * (RFC 8252 section 7.3, D-072). A loopback address only ever reaches the Staff member's own machine.
+ */
+export function redirectAllowed(registered: string[], requested: string): boolean {
+  if (registered.includes(requested)) return true;
+  let req: URL;
+  try {
+    req = new URL(requested);
+  } catch {
+    return false;
+  }
+  if (req.protocol !== "http:" || !LOOPBACK_HOSTS.includes(req.hostname) || req.username || req.password || req.hash) return false;
+  const withoutPort = (u: URL) => `${u.protocol}//${u.hostname}${u.pathname}${u.search}`;
+  return registered.some((r) => {
+    try {
+      const reg = new URL(r);
+      return reg.protocol === "http:" && LOOPBACK_HOSTS.includes(reg.hostname) && withoutPort(reg) === withoutPort(req);
+    } catch {
+      return false;
+    }
+  });
+}
+
 /** A client_id that is a URL is a metadata document; it may be fetched only if it is safe to (security.md). */
 function documentUrl(clientId: string): URL | null {
   let u: URL;
