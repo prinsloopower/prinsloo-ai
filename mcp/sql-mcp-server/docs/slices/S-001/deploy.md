@@ -13,6 +13,11 @@ Try it:
 - **ChatGPT**: Settings → Connectors (with developer mode on) → Create. Use the same URL with authentication set to OAuth. Then connect and sign in the same way. It should show as connected with no actions.
 - **Expected failures:** an account outside the tenant is refused by Entra, never by the Server. Calling the URL without signing in gets only the not-authenticated reply.
 
+## Redeploy after verification, 2026-10-20
+Verification found that ChatGPT's desktop client ("Codex", by Client ID Metadata Document) returns on a random loopback port. Exact redirect matching refused it, so the build was fixed under D-072 (commit b68bf8d), and a focused security review passed it. The fix was redeployed as version `8f666e42-0a9b-4bbb-83a4-e39828464114`, and both smoke checks passed again: 6/6 and 7/7. Rollback to the first S-001 version: `npx wrangler rollback 63bb5fd7-9b95-44cf-b018-811643236450`. No data is affected.
+
+Review nits left open: `[::1]` gets the loopback-port exemption, but registration still refuses `[::1]` redirect URIs, so that branch cannot be reached yet. No test checks the loopback host list on its own.
+
 ## Not covered by the smoke check
 - **A real sign-in completing.** The script cannot type a Microsoft password, so the callback, the exchange with Entra's token endpoint, the ID token verified against Entra's published keys, and the Sign-in reaching `/mcp` are proven only against the stand-in provider in the test suite. T-011, the live run from Claude and ChatGPT, is what proves them on the deployed system, and it answers Q-019.
 - **Refresh against Entra:** whether Entra rotates refresh tokens as D-071 assumes, and whether its refresh response carries an ID token, as the Server requires. If Entra omitted the ID token on refresh, every renewal would fail with `invalid_grant`, and Staff members would have to sign in again when the Sign-in expires. Watch for this on the first renewal, about an hour after sign-in.
