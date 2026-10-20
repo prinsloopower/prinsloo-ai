@@ -20,6 +20,10 @@
     }
   ],
   "vars": {
-    "ENGINE": "postgres"
+    "ENGINE": "postgres",
+    // The project test Deployment's Identity provider: the product owner's Entra ID tenant (S-001).
+    // IDP_CLIENT_SECRET and SERVER_SECRET are Wrangler secrets, never vars.
+    "IDP_ISSUER": "https://login.microsoftonline.com/9416b60e-03b2-44ee-84ff-5d25e16cf730/v2.0",
+    "IDP_CLIENT_ID": "24fa586e-d5e5-48d4-84a1-eab2a18db9bb"
   }
 }
