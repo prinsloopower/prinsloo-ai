@@ -1,7 +1,7 @@
 import type { Hono } from "hono";
 import { GOOGLE_ISSUER, type Config } from "../config.js";
 import { lookupClient, registerClient } from "./clients.js";
-import { IdentityProvider, IdentityProviderRefused, IdentityProviderUnreachable, IdTokenInvalid } from "./identity-provider.js";
+import { IdentityProvider, IdentityProviderRefused, IdentityProviderUnavailable, IdTokenInvalid } from "./identity-provider.js";
 import { op } from "../oplog.js";
 import type { Tokens, TokenPayload } from "./tokens.js";
 import { cookieValue, randomToken, s256, SKEW_S, type Fetch } from "./util.js";
@@ -206,7 +206,7 @@ export class SignInBroker {
       claims = await provider.verifyIdToken(answer.idToken, { nonce: String(req.nonce) });
     } catch (e) {
       if (e instanceof IdentityProviderRefused) return page(PAGES.refused(errorCode(e.code)), 400);
-      if (e instanceof IdentityProviderUnreachable) return page(PAGES.providerDown(provider.issuer), 502);
+      if (e instanceof IdentityProviderUnavailable) return page(PAGES.providerDown(provider.issuer), 502);
       if (e instanceof IdTokenInvalid) return page(PAGES.notVerified, 400);
       // Anything else is a fault in the Server, not a forged sign-in: say so, and leave a trace (D-068).
       op("signin_error", { endpoint: "callback" });
@@ -273,7 +273,7 @@ export class SignInBroker {
         answer = await provider.refresh(String(refresh.idp_refresh));
         claims = await provider.verifyIdToken(answer.idToken);
       } catch (e) {
-        if (e instanceof IdentityProviderUnreachable) return fail("temporarily_unavailable", 503);
+        if (e instanceof IdentityProviderUnavailable) return fail("temporarily_unavailable", 503);
         if (e instanceof IdentityProviderRefused || e instanceof IdTokenInvalid) return fail("invalid_grant");
         op("signin_error", { endpoint: "token" });
         return fail("server_error", 500);

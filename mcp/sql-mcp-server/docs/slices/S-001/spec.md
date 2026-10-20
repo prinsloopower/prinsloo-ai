@@ -43,8 +43,13 @@ This slice is the first to emit lines of `"type":"op"` (security.md, operations.
 ```
 {"type":"op","event":"config_invalid","variable":"SERVER_SECRET","ts":"…"}
 {"type":"op","event":"idp_unreachable","issuer":"<IDP_ISSUER>","endpoint":"discovery|jwks|token","ms":5000,"ts":"…"}
-{"type":"op","event":"cimd_fetch_failed","host":"<client_id host>","reason":"redirect|size|timeout|status|content_type|client_id_mismatch","ts":"…"}
+{"type":"op","event":"idp_invalid_response","issuer":"<IDP_ISSUER>","endpoint":"discovery|jwks|token","ts":"…"}
+{"type":"op","event":"cimd_fetch_failed","host":"<client_id host>","reason":"redirect|size|timeout|network|status|content_type|invalid_document|client_id_mismatch","ts":"…"}
+{"type":"op","event":"signin_error","endpoint":"callback|token","ts":"…"}
+{"type":"op","event":"server_fault","path":"<request path>","ts":"…"}
 ```
+
+`idp_unreachable` means the provider gave no answer in time. `idp_invalid_response` means it answered with something unusable: a 5xx, a malformed document, or a token error carrying no OAuth error code. In both cases a refresh answers 503 `temporarily_unavailable`, so an AI tool keeps its Refresh token through a provider outage. `signin_error` and `server_fault` mean a fault in the Server itself. Neither ever carries the error's text.
 
 ## Security material
 This slice writes `docs/security-material/sign-in.md` (D-067). For a Security reviewer, it says who can call the Server and how that is checked. It names every token the Server issues, its lifetime and what voids it, and the threats accepted in D-051. It discloses that blocked calls leave no Audit record but do appear in the platform's request logs (D-056).
@@ -71,7 +76,8 @@ No stores. It issues and checks Sign-in, Refresh token, Client registration, Aut
 - A failed Client ID Metadata Document fetch writes one `cimd_fetch_failed` line, naming the host and the reason and never the URL's path or query. A fetch that gets no answer at all gives the reason `network`.
 - A metadata document URL whose host is `localhost.` or ends in `.localhost.` is refused unfetched, like one without the dot. A document URL that redirects is not followed, even to a valid document.
 - An Identity provider that sends headers and then stalls the body is cut off at 5 s, like one that sends nothing. A provider that answers with something other than OpenID Connect's documents writes `idp_invalid_response`, not `idp_unreachable`.
-- A Server fault during the callback or a refresh shows the server-error page (500) and writes `signin_error`. It is never shown as a failed verification.
+- A Server fault during the callback or a refresh shows the server-error page (500), or answers `server_error` at `/token`, and writes `signin_error`. It is never shown as a failed verification. A fault anywhere else answers 500 and writes `server_fault` with the path, never the error's message or stack.
+- A 5xx from the provider's token endpoint shows the provider-did-not-answer page during sign-in, and gives 503 `temporarily_unavailable` on a refresh, with an `idp_invalid_response` line. It is never `invalid_grant`.
 - A Client ID Metadata Document client completes the code exchange and reaches `/mcp`. Once its document is gone, its refresh is refused with `invalid_client`.
 - Discovery and keys are fetched once per 10 minutes. An ID token whose `kid` is not in the cached keys causes one refetch, and a second unknown `kid` within the same minute does not.
 - An Identity provider call that has not answered after 5 s ends the sign-in with the page naming `IDP_ISSUER`.
@@ -119,10 +125,10 @@ Verified by: register_issues_signed_client_id, register_rejects_bad_redirect_uri
 Verified by: authorize_unsafe_errors_show_page_not_redirect, authorize_sends_idp_scopes_or_default, authorize_rejects_non_code_response_type, authorize_rejects_plain_or_missing_pkce, authorize_rejects_unregistered_redirect_uri, authorize_rejects_foreign_resource, authorize_redirects_to_idp_with_state_and_cookie, auth_cookie_attributes, authorize_requests_offline_from_google
 
 ### T-006 — /oauth/callback accepts only the browser and sign-in that started, with a verified ID token
-Verified by: callback_rejects_cookie_mismatch, callback_rejects_expired_request, callback_rejects_wrong_iss, callback_rejects_wrong_aud, callback_rejects_expired_id_token, callback_rejects_wrong_nonce, callback_rejects_disallowed_id_token_alg, callback_rejects_tampered_state, callback_shows_provider_refusal, callback_idp_timeout_names_provider, idp_unreachable_op_line_written, jwks_cached_and_refetch_limited, callback_redirects_with_code_and_client_state, idp_body_stall_times_out, idp_invalid_response_op_line_written, unexpected_signin_error_is_logged_not_hidden
+Verified by: callback_rejects_cookie_mismatch, callback_rejects_expired_request, callback_rejects_wrong_iss, callback_rejects_wrong_aud, callback_rejects_expired_id_token, callback_rejects_wrong_nonce, callback_rejects_disallowed_id_token_alg, callback_rejects_tampered_state, callback_shows_provider_refusal, callback_idp_timeout_names_provider, idp_unreachable_op_line_written, jwks_cached_and_refetch_limited, callback_redirects_with_code_and_client_state, idp_body_stall_times_out, idp_invalid_response_op_line_written, unexpected_signin_error_is_logged_not_hidden, uncaught_fault_logged_without_stack
 
 ### T-007 — /token turns a code or Refresh token into a Sign-in bounded by the ID token
-Verified by: token_requires_matching_verifier, token_rejects_expired_code, token_rejects_mismatched_client_redirect_or_resource, signin_exp_capped_at_24h, refresh_rejects_other_client_resource_or_issuer, refresh_token_only_when_idp_issues_one, refresh_token_exp_30_days_or_provider, refresh_renews_through_idp, refresh_requires_verified_id_token_same_sub, refresh_carries_rotated_idp_refresh_token, refresh_rejected_when_idp_refuses, refresh_rotation_keeps_original_expiry, cimd_client_completes_token_exchange
+Verified by: token_requires_matching_verifier, token_rejects_expired_code, token_rejects_mismatched_client_redirect_or_resource, signin_exp_capped_at_24h, refresh_rejects_other_client_resource_or_issuer, refresh_token_only_when_idp_issues_one, refresh_token_exp_30_days_or_provider, refresh_renews_through_idp, refresh_requires_verified_id_token_same_sub, refresh_carries_rotated_idp_refresh_token, refresh_rejected_when_idp_refuses, refresh_rotation_keeps_original_expiry, cimd_client_completes_token_exchange, token_endpoint_outage_is_temporary, refresh_server_fault_is_logged
 
 ### T-008 — /mcp lets in only a valid Sign-in for this resource, passes on who it is, and blocked calls leave nothing behind
 Verified by: mcp_accepts_valid_signin_with_no_tools, mcp_handler_receives_staff_identity, mcp_accepts_within_skew, mcp_rejects_expired_beyond_skew, mcp_rejects_wrong_issuer, mcp_rejects_wrong_audience, invalid_token_challenge_names_error, blocked_call_writes_no_log_line, op_lines_never_contain_secrets, signin_issued_before_rotation_still_reaches_mcp, no_log_line_carries_code_or_id_token

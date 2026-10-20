@@ -13,14 +13,14 @@ const ALGORITHMS = ["RS256", "PS256", "ES256"];
 
 type Endpoint = "discovery" | "jwks" | "token";
 
-/** The provider did not answer in time, or could not be reached at all. */
-export class IdentityProviderUnreachable extends Error {
+/** The provider did not answer in time, could not be reached, or answered with something unusable. */
+export class IdentityProviderUnavailable extends Error {
   constructor(readonly endpoint: Endpoint) {
-    super(`Identity provider ${endpoint} did not answer`);
+    super(`Identity provider ${endpoint} unavailable`);
   }
 }
 
-/** The provider answered with an OAuth error. */
+/** The provider refused the request with an OAuth error (a 4xx carrying an error code). */
 export class IdentityProviderRefused extends Error {
   constructor(readonly code: string) {
     super(`Identity provider refused: ${code}`);
@@ -49,6 +49,7 @@ export interface ProviderTokens {
 
 interface Answer {
   ok: boolean;
+  status: number;
   json: Record<string, unknown> | null;
 }
 
@@ -82,18 +83,18 @@ export class IdentityProvider {
       return await within(CALL_MS, async (signal) => {
         const res = await this.fetchFn(url, { ...init, signal });
         const json = (await res.json().catch(() => null)) as Record<string, unknown> | null;
-        return { ok: res.ok, json };
+        return { ok: res.ok, status: res.status, json };
       });
     } catch {
       op("idp_unreachable", { issuer: this.settings.issuer, endpoint, ms: CALL_MS });
-      throw new IdentityProviderUnreachable(endpoint);
+      throw new IdentityProviderUnavailable(endpoint);
     }
   }
 
   /** The provider answered, but not with what OpenID Connect promises. */
-  private invalid(endpoint: Endpoint): IdentityProviderUnreachable {
+  private invalid(endpoint: Endpoint): IdentityProviderUnavailable {
     op("idp_invalid_response", { issuer: this.settings.issuer, endpoint });
-    return new IdentityProviderUnreachable(endpoint);
+    return new IdentityProviderUnavailable(endpoint);
   }
 
   async discovery(): Promise<Discovery> {
@@ -167,13 +168,18 @@ export class IdentityProvider {
   private async tokenRequest(form: Record<string, string>): Promise<ProviderTokens> {
     const { token_endpoint } = await this.discovery();
     const body = new URLSearchParams({ ...form, client_id: this.settings.clientId, client_secret: this.settings.clientSecret });
-    const { ok, json } = await this.call("token", token_endpoint, {
+    const { ok, status, json } = await this.call("token", token_endpoint, {
       method: "POST",
       headers: { "content-type": "application/x-www-form-urlencoded", accept: "application/json" },
       body: body.toString(),
     });
     const answer = json ?? {};
-    if (!ok) throw new IdentityProviderRefused(typeof answer.error === "string" ? answer.error : "unknown_error");
+    if (!ok) {
+      // A refusal names its OAuth error; anything else (a 5xx, an HTML error page) is an outage,
+      // and must not end a Staff member's Sign-in as if the provider had refused them.
+      if (status < 500 && typeof answer.error === "string") throw new IdentityProviderRefused(answer.error);
+      throw this.invalid("token");
+    }
     return {
       idToken: typeof answer.id_token === "string" ? answer.id_token : undefined,
       refreshToken: typeof answer.refresh_token === "string" ? answer.refresh_token : undefined,

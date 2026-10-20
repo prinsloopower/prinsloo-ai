@@ -39,7 +39,8 @@ The Deployment kit sets these up where the platform can, and documents them wher
 |---|---|---|
 | `/healthz` | the platform's health check: Container Apps probe every 30 s; on Cloudflare, an external monitor the Operator chooses | 3 failures in a row (90 s) |
 | Database errors | Audit records with `outcome.kind = "database_error"` and `reason_class` `connection` or `timeout` | more than 10 within 5 minutes |
-| Identity provider failures | operational lines with event `idp_unreachable` | more than 5 within 5 minutes |
+| Identity provider failures | operational lines with event `idp_unreachable` or `idp_invalid_response` (D-070) | more than 5 within 5 minutes |
+| Server faults | operational lines with event `signin_error` or `server_fault` (D-070) | any |
 | configuration errors | operational lines with event `config_invalid` | any |
 | 5xx responses | the platform's request metrics | more than 1% of requests over 15 minutes, with at least 20 requests |
 

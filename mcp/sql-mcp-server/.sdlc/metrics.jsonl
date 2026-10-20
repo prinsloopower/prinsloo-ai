@@ -31,3 +31,9 @@
 {"iteration": 1, "phase": "slice-spec", "slice": "S-001", "gate": "pass", "duration_s": null, "rework_count": 3, "defects_found": 0, "output_bytes": 20356}
 {"iteration": 1, "phase": "build", "slice": "S-001", "gate": "pass", "duration_s": 65, "rework_count": 0, "defects_found": 0, "output_bytes": 0}
 {"iteration": 1, "phase": "review", "slice": "S-001", "gate": "hold", "duration_s": 703, "rework_count": 1, "defects_found": 0, "output_bytes": 9915}
+{"iteration": 1, "phase": "review", "slice": "S-001", "gate": "hold", "duration_s": null, "rework_count": 2, "defects_found": 0, "output_bytes": 8467}
+{"iteration": 1, "phase": "system-spec", "slice": null, "gate": "pass", "duration_s": null, "rework_count": 1, "defects_found": 0, "output_bytes": 38576}
+{"iteration": 1, "phase": "slices", "slice": null, "gate": "pass", "duration_s": null, "rework_count": 1, "defects_found": 0, "output_bytes": 9808}
+{"iteration": 1, "phase": "slice-spec", "slice": "S-001", "gate": "pass", "duration_s": null, "rework_count": 0, "defects_found": 0, "output_bytes": 24311}
+{"iteration": 1, "phase": "build", "slice": "S-001", "gate": "pass", "duration_s": null, "rework_count": 0, "defects_found": 0, "output_bytes": 0}
+{"iteration": 1, "phase": "review", "slice": "S-001", "gate": "pass", "duration_s": null, "rework_count": 0, "defects_found": 0, "output_bytes": 8467}

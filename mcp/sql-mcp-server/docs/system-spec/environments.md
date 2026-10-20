@@ -14,7 +14,7 @@ The project test Deployment and every other test needing a reachable PostgreSQL 
 
 ## Variables
 
-The Server settings are `ENGINE`, `DATABASE_URL`/`HYPERDRIVE`, `IDP_*`, `PERMISSION_TIER`, `REDACTION`, `ROW_LIMIT` and `BOUNDARY`. The rest are deployment configuration that the Operator also owns but that decides no behaviour a Staff member sees (D-054). All of them are read at the start of each request on Workers and at process start on containers. An invalid value makes every MCP request answer 503 "Deployment misconfigured: <variable>", and `/healthz` reports `config: invalid` with the variable's name, never its value.
+The Server settings are `ENGINE`, `DATABASE_URL`/`HYPERDRIVE`, `IDP_*`, `PERMISSION_TIER`, `REDACTION`, `ROW_LIMIT` and `BOUNDARY`. The rest are deployment configuration that the Operator also owns but that decides no behaviour a Staff member sees (D-054). All of them are read once per Worker isolate, on its first request, and at process start on containers (D-070). An invalid value makes every MCP request answer 503 "Deployment misconfigured: <variable>", and `/healthz` reports `config: invalid` with the variable's name, never its value.
 
 | variable | purpose | example | secret | source |
 |---|---|---|---|---|

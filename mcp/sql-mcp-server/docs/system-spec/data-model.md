@@ -38,7 +38,7 @@ A JWE that lets an AI tool renew Sign-in without the Staff member signing in aga
 | iat | integer | |
 | exp | integer | 30 days after `iat`, or the Identity provider's refresh expiry if earlier and stated |
 
-Retention: valid until `exp`. Not rotated on use, because without a store a rotated-out token cannot be refused (D-051).
+Retention: valid until `exp`. A renewal returns the same Refresh token, or, when the provider rotates its own, a new one with the same `exp` (D-071), so a chain of renewals ends 30 days after Sign-in. Earlier Refresh tokens stay valid until their `exp`, because without a store they cannot be refused (D-051).
 Migration: new.
 
 ## Client registration

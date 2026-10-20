@@ -27,6 +27,12 @@ const PRM_PREFIX = "/.well-known/oauth-protected-resource";
 
 export function createApp(deps: Deps) {
   const app = new Hono();
+  // An uncaught fault answers 500 and leaves one operational line naming the path, never the
+  // error's message or stack, which can carry tokens or Object names (security.md, D-068).
+  app.onError((_err, c) => {
+    op("server_fault", { path: new URL(c.req.url).pathname });
+    return page("The Server could not complete this request", 500);
+  });
   const result = readConfig(deps.env ?? {});
   if (!result.ok) op("config_invalid", { variable: result.variable });
 

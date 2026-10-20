@@ -73,8 +73,8 @@
       "gate": {
         "result": "pass",
         "by": "human",
-        "at": "2026-10-19T00:30:53+00:00",
-        "quote": "Approve the amended PRD, architecture, system spec and slices, confirm D-061 and D-062, and commit."
+        "at": "2026-10-20T00:36:52+00:00",
+        "quote": "Approve the amended system spec, slices and S-001 spec, close the review, and commit."
       },
       "hash": "sha256:e5d013431f62e6d8"
     },
@@ -84,47 +84,46 @@
       "gate": {
         "result": "pass",
         "by": "human",
-        "at": "2026-10-19T00:30:53+00:00",
-        "quote": "Approve the amended PRD, architecture, system spec and slices, confirm D-061 and D-062, and commit."
+        "at": "2026-10-20T00:36:52+00:00",
+        "quote": "Approve the amended system spec, slices and S-001 spec, close the review, and commit."
       },
-      "hash": "sha256:b9a9e56e05be1312"
+      "hash": "sha256:84da05e50f851134"
     }
   },
   "slices": [
     {
       "id": "S-001",
       "title": "Signing in from Claude and ChatGPT",
-      "status": "built",
+      "status": "reviewed",
       "traces": [
         "J-002",
         "R-009",
         "R-017"
       ],
-      "rework": {
-        "slice-spec": 3,
-        "review": 1
-      },
+      "rework": {},
       "gates": {
         "slice-spec": {
           "result": "pass",
           "by": "human",
-          "at": "2026-10-19T11:53:20+00:00",
-          "quote": "Apply, then pass (Recommended)"
+          "at": "2026-10-20T00:37:14+00:00",
+          "quote": "Approve the amended system spec, slices and S-001 spec, close the review, and commit."
         },
         "build": {
           "result": "pass",
           "by": "script",
-          "at": "2026-10-19T12:17:45+00:00"
+          "at": "2026-10-20T00:37:30+00:00"
         },
         "review": {
-          "result": "hold",
-          "by": "model",
-          "at": "2026-10-19T12:29:28+00:00"
+          "result": "pass",
+          "by": "human",
+          "at": "2026-10-20T00:37:30+00:00",
+          "quote": "Approve the amended system spec, slices and S-001 spec, close the review, and commit."
         }
       }
     }
   ],
-  "blocked_on": "review: code review: 0 blockers, 13 gaps, 12 nits; Q-025 (rotated refresh token lifetime)",
+  "blocked_on": null,
   "open_questions": [],
-  "phase": "review"
+  "phase": "deploy",
+  "phase_started_at": "2026-10-20T00:37:30+00:00"
 }

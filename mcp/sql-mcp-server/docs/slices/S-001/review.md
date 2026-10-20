@@ -1,157 +1,106 @@
 # Review — S-001
 
-Reviewed: commit e8fd168 (diff from 2fa9112) against the slice spec.
-Tests: `npm test` → 12 files, 73 passed, 0 failed. `npm run typecheck` → clean.
+Reviewed: commit 0febdeb (rework; slice diff 2fa9112..0febdeb) against the slice spec. This is a re-review after the hold recorded at the end.
+Tests: `npm test` → first run 82 passed, 1 failed; second run 13 files, 83 passed, 0 failed. The failure was test/mcp.test.ts:51, the architecture skeleton's workerd cold-boot timeout, already raised as Q-024 and not slice code. `npm run typecheck` → clean.
 
-Each axis ran in its own fresh subagent, and neither saw the other's findings. The reviewer checked the cited lines; the trailing-dot `localhost.` host was confirmed with Node's URL parser.
+Each axis ran in its own fresh subagent, and neither saw the other's findings. The reviewer checked every cited line against the code as it now stands, and also made an independent pass of its own over the rework diff.
 
-**What holds.** The Delivers path is complete in code:
-1. the AI tool gets 401 and the protected-resource metadata;
-2. it reads the authorization-server metadata;
-3. it registers through `/register` or a metadata document;
-4. `/authorize` sends the browser to the Identity provider;
-5. `/oauth/callback` and then `/token` issue the Sign-in;
-6. `/mcp` passes the Staff identity to the handler, and `tools/list` comes back empty.
+**What the rework fixed.**
+- Refresh tokens: a renewal the provider rotates keeps min(presented `exp`, provider lifetime) (src/signin/broker.ts:293), as D-071 decides. `refresh_rotation_keeps_original_expiry` renews at 10, 20 and 29 days and is refused at 30 d + 1 s.
+- Provider body: the provider's body is read inside the 5 s limit (src/signin/identity-provider.ts:82).
+- `localhost.`: it is now refused (src/signin/clients.ts:47). `localhost..` still parses, but it does not resolve (checked with Node's DNS lookup).
+- Test fake: it follows redirects unless the caller asks for `manual`, so the no-redirect test now has teeth.
+- Server faults during the callback: they show a 500 page and log `signin_error` without the error's text.
+- Naming: the "IdP" alias has gone from src.
+- Secrets: no new log line carries a secret.
 
-Every one of the eight Screens pages exists and is tested. The security mechanics check out:
-- PKCE accepts S256 only.
-- `redirect_uri` must match exactly.
-- The resource must sit under this origin's `/mcp`, and `aud` must equal the URL being called.
-- The `__Host-` cookie has the right attributes, and only its hash is kept in the encrypted `state`.
-- The ID token is checked for alg allow-list, keys, `iss`, `aud`, `exp` with 60 s skew, `nonce` and `sub`.
-- Each token's kind is typed in its JOSE header, and `v` and the previous secret are handled.
-- Refresh tokens are bound to client, resource and issuer.
-- The metadata-document URL is checked before any fetch, with manual redirect, 16 KiB, 3 s, JSON only and an exact `client_id`.
-- No op line carries a secret, and nothing outside the slice's scope was changed.
+## Previous findings
 
-## gap — a renewed Refresh token restarts its 30 days
-Where: src/signin/broker.ts:272
+| # | Previous finding | Now |
+|---|---|---|
+| G1 | Renewed Refresh token restarts 30 days | resolved (D-071; broker.ts:293; test) |
+| G2 | 5 s limit does not cover body | resolved (identity-provider.ts:82; `idp_body_stall_times_out`) |
+| G3 | `localhost.` passes | resolved (clients.ts:47; test) |
+| G4 | Redirect test cannot detect following | resolved (test/signin/helpers.ts:130; `cimd_does_not_follow_redirects`) |
+| G5 | Rotation proven only at unit level | resolved (`signin_issued_before_rotation_still_reaches_mcp`) |
+| G6 | Metadata-document client never taken through /token | resolved (`cimd_client_completes_token_exchange`) |
+| G7 | Secrets-in-logs test omits code and ID token | resolved (`no_log_line_carries_code_or_id_token`) |
+| G8 | Status-code decisions taken silently | accepted on record (D-070); spec Interface updated |
+| G9 | Security material calls the code one-time | resolved (docs/security-material/sign-in.md:18) |
+| G10 | `idp_refresh_exp` not in data-model.md | accepted on record (D-070) |
+| G11 | Catch-all hides errors as refusals | resolved at the callback (broker.ts:212). The refresh half is untested (gap below) |
+| G12 | Network failures logged as `status` | resolved (clients.ts:86) |
+| G13 | "IdP" alias in source names | resolved in src. `h.idp` is accepted (D-070). `FakeIdp` remains (nit below) |
+| N1 | `invalid_client` 401 vs spec 400 | resolved (spec Interface) |
+| N2 | Keys fetched twice | resolved (identity-provider.ts:120) |
+| N3 | Second sign-in voids first | accepted on record (D-070) |
+| N4 | T-011 live outcome not recorded | not resolved (nit below; expected before deploy) |
+| N5 | 60 s skew defined twice | resolved (src/signin/util.ts:6) |
+| N6 | `config()` returns discovery | resolved (`discovery()`) |
+| N7 | Three types named `Env` | resolved (`RuntimeVariables`) |
+| N8 | `/mcp` two error shapes | accepted on record (D-070) |
+| N9 | environments.md per-request wording | accepted on record (D-070, to be corrected at the next system-spec revision) |
+| N10 | `.dev.vars.example` omissions | resolved |
+| N11 | `idp_unreachable` for a provider that answered | resolved (`idp_invalid_response`) |
+| N12 | Stale comment | resolved (src/app.ts:61) |
+
+## gap — a provider that answers with an error no longer raises the alert
+Where: src/signin/identity-provider.ts:95
+Axis: both
+A discovery or keys answer that is non-2xx or malformed now writes `idp_invalid_response`, not `idp_unreachable`. The only Identity-provider alert, docs/system-spec/operations.md:42, matches `idp_unreachable` alone, and D-070 adds the new event without amending that alert. `signin_error` has no alert either.
+Consequence: a mistyped `IDP_ISSUER` or a provider answering 5xx used to alert, and now raises nothing. The 5xx-rate alert needs 20 requests, so it misses a quiet Deployment. The deployment slices will build their alerts from operations.md and inherit the hole.
+
+## gap — a token-endpoint outage is treated as a refusal
+Where: src/signin/identity-provider.ts:176
+Axis: both
+Any non-2xx answer from the token endpoint, including a 500 or 503 with an HTML body, becomes `IdentityProviderRefused("unknown_error")`. The rework's docstring (:23) now says that class means "answered with an OAuth error". A 2xx answer that is not JSON becomes `IdTokenInvalid`. Neither path writes `idp_invalid_response`, although spec.md:73 introduces that event for exactly this.
+Consequence: during a provider outage every refresh gets `invalid_grant` (broker.ts:277), not 503 `temporarily_unavailable`. Claude and ChatGPT then discard their Refresh tokens, and every Staff member has to sign in again. The callback shows "refused the sign-in: unknown_error", and the Operator gets no line at all. No test serves a 5xx from the token endpoint.
+
+## gap — the refresh half of "a Server fault is not a failed verification" is untested
+Where: src/signin/broker.ts:278
 Axis: spec and scope
-When the provider rotates its refresh token, a new Refresh token is issued with `exp` = now + 30 d (`issue`, broker.ts:319). The presented token's `exp` is not inherited. data-model.md says Refresh tokens are "not rotated on use", and D-051 says they last at most 30 days. The spec asks for the rotated provider token to be carried but does not say which `exp` applies, and no D-### records the choice. Consequence: Entra ID rotates on every use, so a Sign-in can be renewed without limit, and every earlier Refresh token stays valid in parallel. docs/security-material/sign-in.md:28 promises a bound that does not hold, and S-006 will decide this again. Raised as Q-025.
+spec.md:74 promises the 500 response and the `signin_error` line for "the callback or a refresh". `unexpected_signin_error_is_logged_not_hidden` covers only the callback. No test asserts `server_error`, or `signin_error` with `endpoint: "token"`.
+Consequence: folding lines 278–279 back into `invalid_grant` leaves the suite green, and a refresh fault would again look like a refused token.
 
-## gap — the 5 s Identity provider limit does not cover the response body
-Where: src/signin/idp.ts:75
-Axis: spec and scope
-`within(CALL_MS, …)` wraps only the fetch. `res.json()` then runs with no limit for the token response (idp.ts:161), discovery (:85) and keys (:98). Consequence: a provider that sends headers and then stalls holds `/authorize`, `/oauth/callback` or `/token` past 5 s, and no `idp_unreachable` line is written, against Proven-by "has not answered after 5 s ends the sign-in". The metadata-document fetch does read its body inside its limit.
+## gap — the spec's log-line shapes were not updated
+Where: docs/slices/S-001/spec.md:45
+Axis: both
+The block lists only `config_invalid`, `idp_unreachable` and `cimd_fetch_failed`, and the reasons it gives `cimd_fetch_failed` omit `network` and `invalid_document`. `idp_invalid_response` (`issuer`, `endpoint`) and `signin_error` (`endpoint`) appear only in D-070. D-068 asks each slice to document the shape of every event it adds in its own spec.
+Consequence: S-006's Node adapter and the alert setup will be built from an incomplete list of events.
 
-## gap — `localhost.` passes the no-localhost rule
-Where: src/signin/clients.ts:47
-Axis: spec and scope
-`new URL("https://localhost./c.json").hostname` is `localhost.`, which is neither `=== "localhost"` nor `.endsWith(".localhost")`. Consequence: a URL the spec says is refused without fetching gets fetched. On Workers, egress still blocks it. On the S-006 Node adapter it reaches loopback unless the connect-time check catches it.
+## gap — D-070's rejected alternatives now sit under D-071
+Where: .sdlc/decisions.md:385
+Axis: both
+The rework inserted D-070's new bullets and all of D-071 above D-070's original closing line. That line rejects storing the kind as a payload field and defaulting a missing `resource`.
+Consequence: D-071 now appears to reject those alternatives, and D-070 shows none. D-070 is the record later slices consult for the `typ` header and the required `resource`.
 
-## gap — the redirect test cannot detect a fetch that follows redirects
-Where: test/signin/register.test.ts:100
-Axis: spec and scope
-The fake fetch ignores `init.redirect` and always returns the 302 itself. Consequence: removing `redirect: "manual"` (clients.ts:65) leaves every test green while production follows redirects, breaking security.md's no-redirect rule.
-
-## gap — rotation is proven only at the unit level
-Where: test/signin/tokens.test.ts:41
-Axis: spec and scope
-No test sends an old-secret Sign-in through `createApp` with `SERVER_SECRET_PREVIOUS` set. Consequence: if app.ts:58 stopped passing `config.previousSecret`, every test would still pass, and a planned rotation would sign everyone out.
-
-## gap — the metadata-document client is never taken through /token
-Where: src/signin/broker.ts:245
-Axis: spec and scope
-Every CIMD test stops at `/authorize`, and the end-to-end flow uses `/register`. Consequence: the server advertises `client_id_metadata_document_supported`, so Claude may take this path live. Its `/token` half, including the "ends in `invalid_client`" promise, is untested.
-
-## gap — the secrets-in-logs test omits two values the spec names
-Where: test/signin/mcp-gate.test.ts:99
-Axis: spec and scope
-The list leaves out the Server-issued Authorization code and the ID token. Consequence: logging either would not fail the test.
-
-## gap — decisions taken silently
-Where: src/config.ts:53
-Axis: spec and scope
-These choices are in neither the spec nor D-070:
-- An invalid `PUBLIC_URL`, or a non-https `IDP_ISSUER` (config.ts:56), puts the whole Deployment into the "Deployment misconfigured" 503, `/mcp` included. The spec defines that state only for `SERVER_SECRET`.
-- The did-not-answer page uses status 502 (broker.ts:145, :208).
-- `/token` answers `unsupported_grant_type` (broker.ts:283).
-
-Consequence: S-006's Node adapter and later slices will choose these again, possibly differently.
-
-## gap — Security material calls the Authorization code one-time
-Where: docs/security-material/sign-in.md:18
-Axis: spec and scope
-It says "a one-time code", but the same document (line 43) and D-051 say a code can be replayed within 60 s. Consequence: the T-012 deliverable contradicts itself on an accepted threat a Security reviewer relies on.
-
-## gap — Authorization code carries a field data-model.md does not define
-Where: src/signin/broker.ts:223
+## nit — "Unreachable" is thrown for a provider that answered
+Where: src/signin/identity-provider.ts:94
 Axis: standards and naming
-`idp_refresh_exp` is written into the code and read back at broker.ts:310. It is not in data-model.md or D-070, though the spec says tokens are issued "exactly as data-model.md defines them". Consequence: the token format has drifted unrecorded, and the next `v` change and the Security material will be built from a wrong data model.
+`invalid()` returns `IdentityProviderUnreachable`, but the class's docstring says "did not answer in time, or could not be reached". So a malformed answer shows the "did not answer" page. The behaviour is acceptable; the name misleads.
 
-## gap — catch-all turns any error into a refusal with no log line
-Where: src/signin/broker.ts:209
-Axis: standards and naming
-In the callback, and in refresh at broker.ts:269, every error that is not `IdpRefused` or `IdpUnreachable` becomes the could-not-be-verified page or `invalid_grant`. `IdTokenInvalid` is never tested for, and no comment says this is intended. Consequence: a programming error or an unexpected `jose` exception looks exactly like a forged token, and the Operator has no line to tell a bug from an attack.
-
-## gap — network failures logged as `cimd_fetch_failed` reason `status`
-Where: src/signin/clients.ts:85
-Axis: standards and naming
-DNS, connection and TLS failures are all logged as `status`, which line 67 uses for a non-2xx answer. Consequence: an Operator is told the host answered with an error when it was never reached.
-
-## gap — rejected alias "IdP" in type and class names
-Where: src/signin/idp.ts:17
-Axis: standards and naming
-These are `IdpUnreachable`, `IdpRefused` (idp.ts:23), `IdpSettings` (src/config.ts:6), `PAGES.idpDown` (broker.ts:26), `FakeIdp` (test/signin/helpers.ts:44) and the file name, while the same module's class is `IdentityProvider`. This is a gap rather than a blocker because the system spec itself fixes `IDP_*`, `idp_refresh` and `idp_unreachable`, but no document fixes these TypeScript names. Consequence: later slices copy `Idp*` as house style.
-
-## nit — `/token` answers `invalid_client` with 401
-Where: src/signin/broker.ts:245
+## nit — Server faults outside the try blocks bypass `signin_error`
+Where: src/signin/broker.ts:216
 Axis: spec and scope
-D-070 records it, but the spec's Interface line still says 400.
+A throw from `tokens.issue` or `tokens.open` reaches Hono's default handler. That handler writes the error and its stack through `console.error`, against spec.md:16, though such a throw is unlikely.
 
-## nit — keys fetched twice when the cache has expired and the `kid` is unknown
-Where: src/signin/idp.ts:108
+## nit — data-model.md still says Refresh tokens are not rotated
+Where: docs/system-spec/data-model.md:41
 Axis: spec and scope
-This costs one extra JWKS fetch, and is harmless.
+Under D-071 a new Refresh token is issued when the provider rotates its own, and the earlier one stays valid until the shared `exp`. Correct the document at the next system-spec revision.
 
-## nit — a second sign-in in the same browser voids the first
-Where: src/signin/broker.ts:179
-Axis: spec and scope
-The fixed cookie name means the earlier sign-in's callback shows the different-browser page.
+## nit — test helper keeps the rejected alias
+Where: test/signin/helpers.ts:44
+Axis: standards and naming
+D-070 covers only the property `h.idp`. The class `FakeIdp` and the re-declared Google issuer at :8 remain. Renaming the class would touch helpers.ts alone.
 
 ## nit — T-011's live outcome is not yet recorded
-Where: docs/slices/S-001/spec.md:135
+Where: docs/slices/S-001/spec.md:145
 Axis: spec and scope
-Q-019 is still open. This is expected before deploy, but the Delivers line is not shown live until it is recorded.
+Q-019 is still open. This is expected before deploy.
 
-## nit — 60 s skew defined twice
-Where: src/signin/idp.ts:13
-Axis: standards and naming
-It is also at broker.ts:20, and test/signin/helpers.ts:8 re-declares `GOOGLE_ISSUER`.
+Verdict: hold (0 blockers, 5 gaps, 5 nits)
 
-## nit — `IdentityProvider.config()` returns the discovery document
-Where: src/signin/idp.ts:82
-Axis: standards and naming
-The name collides with `Config` and `readConfig`.
+## Previous review
 
-## nit — three types named `Env`, one imported as `Settings`
-Where: src/worker.ts:2
-Axis: standards and naming
-`Settings` echoes the domain term Server setting, but the type holds `SERVER_SECRET`.
-
-## nit — `/mcp` has two error shapes
-Where: src/app.ts:45
-Axis: standards and naming
-The 503 is plain text and the 401 is a JSON-RPC body.
-
-## nit — environments.md still says variables are read per request on Workers
-Where: src/worker.ts:16
-Axis: standards and naming
-The app is now built once per isolate (D-070), and the document was not updated.
-
-## nit — `.dev.vars.example` omits variables without saying why
-Where: .dev.vars.example:21
-Axis: standards and naming
-`HYPERDRIVE`, `DATABASE_URL` and `PORT` are left out unexplained, while `ENGINE`'s omission is explained.
-
-## nit — `idp_unreachable` written for a provider that did answer
-Where: src/signin/idp.ts:87
-Axis: standards and naming
-It is also written at line 100, for a non-2xx or malformed response, with `ms: 5000`.
-
-## nit — stale comment
-Where: src/app.ts:76
-Axis: standards and naming
-"Blocked until Sign-in exists" should now say "until Sign-in is configured".
-
-Verdict: hold (0 blockers, 13 gaps, 12 nits)
+Commit e8fd168, reviewed against the same spec: hold (0 blockers, 13 gaps, 12 nits). The table above records how each was settled.

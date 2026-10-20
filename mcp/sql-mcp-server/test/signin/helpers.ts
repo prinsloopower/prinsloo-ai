@@ -41,7 +41,7 @@ export class Clock {
 type Route = (req: Request, body: URLSearchParams) => Promise<Response> | Response;
 
 /** Stand-in Identity provider and outside web, reached only through the `fetch` handed to the app. */
-export class FakeIdp {
+export class FakeIdentityProvider {
   calls: string[] = [];
   routes = new Map<string, Route>();
   kid = "k1";
@@ -59,7 +59,7 @@ export class FakeIdp {
   ) {}
 
   static async create(clock: Clock, issuer = ISSUER) {
-    const idp = new FakeIdp(clock, issuer);
+    const idp = new FakeIdentityProvider(clock, issuer);
     idp.key = await generateKeyPair("RS256", { extractable: true });
     idp.install();
     return idp;
@@ -145,7 +145,7 @@ export interface TestApp {
 
 export interface Harness {
   app: TestApp;
-  idp: FakeIdp;
+  idp: FakeIdentityProvider;
   clock: Clock;
   staffSeen: unknown[];
 }
@@ -154,7 +154,7 @@ export interface Harness {
 export async function harness(envOver: Env = {}, opts: { realMcp?: boolean; clock?: Clock } = {}): Promise<Harness> {
   const clock = opts.clock ?? new Clock();
   const env = baseEnv(envOver);
-  const idp = await FakeIdp.create(clock, env.IDP_ISSUER ?? ISSUER);
+  const idp = await FakeIdentityProvider.create(clock, env.IDP_ISSUER ?? ISSUER);
   const staffSeen: unknown[] = [];
   const hono = createApp({
     ping: async () => {},
