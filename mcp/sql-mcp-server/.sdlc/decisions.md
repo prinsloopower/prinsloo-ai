@@ -356,7 +356,7 @@ Rationale: Google issues refresh tokens only when the authorization request carr
 Alternatives rejected: an Operator setting for extra authorization parameters, which is one more variable for a single provider's quirk; sending the parameters to every provider, which some reject.
 
 ## D-070 — Small choices made while building S-001
-Decided by: model | Date: 2026-10-19 | Phase: build (S-001)
+Decided by: human (confirmed 2026-10-20 at the S-001 verification gate) | Date: 2026-10-19 | Phase: build (S-001)
 Rationale: the spec left these open, and each follows from it without changing behaviour a Staff member sees:
 - Each token carries its kind in the JOSE protected header (`typ: sqlmcp-<kind>`), so an Authorization code, a Refresh token or an Authorization request can never be presented as a Sign-in. data-model.md's payload fields are unchanged.
 - `/authorize` requires `resource`. Without it a Sign-in would have no audience to bind to, so its absence is refused like any other bad request, with `error=invalid_request`.
@@ -389,3 +389,9 @@ Alternatives rejected: a fresh 30 days on every renewal. Regular users would nev
 Decided by: human | Date: 2026-10-20 | Phase: verify (S-001)
 Rationale: found in S-001's live verification. ChatGPT's desktop client, identifying itself as "Codex" by a Client ID Metadata Document, registers `http://127.0.0.1/callback/<id>` and `http://localhost/callback/<id>` without a port. It then asks to return on whichever port it opened, such as `:54414`. RFC 8252 section 7.3 requires an authorization server to accept any port on a loopback redirect URI. security.md's exact-match rule refused it. A requested URI now matches a registered one if both are `http` on `127.0.0.1`, `[::1]` or `localhost` and agree on everything but the port. Every other redirect URI, `https` included, still matches exactly. A loopback address only ever reaches the Staff member's own machine, and the Authorization code stays bound to the exact URI it was issued for, port included, at `/token`.
 Alternatives rejected: keeping exact matching, which leaves every native desktop AI tool unsupported; editing security.md now, which re-gates the system spec and the slices and clears S-001's state again. The wording waits for the next system-spec revision (Q-026).
+
+## D-073 — Google is dropped from the release's sign-in requirements; Entra ID is the tested provider; answers Q-023
+Decided by: human | Date: 2026-10-20 | Phase: verify (S-001)
+Rationale: product owner's decision at S-001's verification: "pass S-001 for Entra now, drop Google client from requirements". Release testing covers Microsoft Entra ID only. That narrows ADR-004 ("Release testing covers Microsoft Entra ID and Google") and D-048's answer to Q-006. Any OpenID Connect provider that publishes discovery still works in principle, since nothing in the code is Entra-specific. Google's quirk (D-069) stays in the code and its tests, but no live Google run is required. S-001 passes on Claude and ChatGPT signing in through Entra ID.
+Alternatives rejected: holding S-001 until a Google client exists; keeping Google as a release requirement for a later slice.
+Consequence: the PRD's sign-in metric ("for each supported Identity provider") is measured against Entra ID alone. The slice list's S-001 line and ADR-004 still mention Google. They are corrected at the next revision of those documents (Q-026), because editing them now re-gates the slice list and clears the declared slice from the pipeline state.

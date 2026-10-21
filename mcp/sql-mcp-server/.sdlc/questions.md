@@ -90,6 +90,7 @@ Answered at prd: see D-036.
 ## Q-019 — Can the target AI tools complete sign-in against the organisation's identity provider?
 Raised by: journeys | Blocks: architecture
 MCP clients (Claude, ChatGPT, Copilot) commonly expect what some enterprise identity providers do not offer, such as dynamic client registration. If a client cannot complete sign-in, J-002 and J-004 stop for that tool. Concerns R-009, J-002, J-004.
+Answered for Entra ID by S-001's live verification (.sdlc/verification/S-001.md): yes. Claude and ChatGPT both complete Sign-in through the Server's broker by Client ID Metadata Document, and renewal works. Google is untested until Q-023.
 ## Q-020 — Do views (and other schema items such as functions) count as Objects?
 Raised by: domain | Blocks: prd
 Upstream speaks only of tables and columns. Reporting databases often expose data through views; whether the Boundary and Allow-list can name them, and whether the Query check treats them as Objects, changes what Staff members can ask. Concerns R-003, R-004.
@@ -107,6 +108,7 @@ D-065 says the product owner provides them. Until they exist, nothing can deploy
 ## Q-023 — Who creates the Google OAuth client for the Sign-in test run, and when?
 Raised by: slice-spec (S-001) | Blocks: S-001 verification (T-011)
 ADR-004 tests Entra ID and Google at release. The product owner has an Entra account. No Google OAuth client exists yet. It needs to be a web application client with redirect URI `https://sql-mcp-server.prinsloopower.workers.dev/oauth/callback`.
+Answered by the product owner at S-001's verification: see D-073. Nobody does: Google is dropped from the release's sign-in requirements.
 
 ## Q-024 — Should the workerd test allow for a cold first boot?
 Raised by: build (S-001) | Blocks: nothing; affects first-run results
@@ -119,7 +121,7 @@ Answered by the product owner: see D-071. It inherits.
 
 ## Q-026 — security.md's redirect URI rule needs the loopback-port exception
 Raised by: verify (S-001) | Blocks: nothing; to apply at the next system-spec revision
-security.md says `/authorize` accepts only "a `redirect_uri` exactly equal to one the Client registration lists". D-072 adds RFC 8252's exception: a plain-http loopback URI may carry any port. The rule should say so, so that S-006's Node adapter and later reviews do not take the exact-match wording as current. The system spec was left unedited for now, because editing it re-gates the slices, and that clears the declared slice from the pipeline state.
+security.md says `/authorize` accepts only "a `redirect_uri` exactly equal to one the Client registration lists". D-072 adds RFC 8252's exception: a plain-http loopback URI may carry any port. The rule should say so, so that S-006's Node adapter and later reviews do not take the exact-match wording as current. The system spec was left unedited for now, because editing it re-gates the slices, and that clears the declared slice from the pipeline state. The same revision should also bring the slice list's S-001 line and ADR-004 in line with D-073, which drops Google from the tested providers.
 
 ## Q-027 — Should the Allow-list travel in a request header after all?
 Raised by: verify (S-001) | Blocks: slice-spec for S-002

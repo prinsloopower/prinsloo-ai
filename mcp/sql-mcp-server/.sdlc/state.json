@@ -94,7 +94,7 @@
     {
       "id": "S-001",
       "title": "Signing in from Claude and ChatGPT",
-      "status": "deployed",
+      "status": "verified",
       "traces": [
         "J-002",
         "R-009",
@@ -127,15 +127,15 @@
           "at": "2026-10-20T02:34:08+00:00"
         },
         "verify": {
-          "result": "hold",
+          "result": "pass",
           "by": "human",
-          "at": "2026-10-20T12:10:35+00:00",
-          "quote": "The Claude connection worked and I was able to authenticate. ChatGPT gave this error: \"This AI tool's sign-in request is not valid\""
+          "at": "2026-10-21T01:10:59+00:00",
+          "quote": "1. pass S-001 for Entra now, drop Google client from requirements 2. Confirm D-070"
         }
       }
     }
   ],
-  "blocked_on": "verify: Claude + Entra verified live. ChatGPT/Codex desktop refused: loopback redirect URI with a varying port (RFC 8252) failed exact match; fix as D-072",
+  "blocked_on": null,
   "open_questions": [],
   "phase": null
 }

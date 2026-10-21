@@ -1,6 +1,6 @@
 # S-001 — Signing in from Claude and ChatGPT
 
-Delivers: from Claude or ChatGPT, a Staff member proves who they are with their work account at Entra ID or Google, and their AI tool then reports the Server as connected, with nothing to ask it yet. An unsigned caller learns nothing beyond the not-authenticated reply.
+Delivers: from Claude or ChatGPT, a Staff member proves who they are with their work account at Entra ID (D-073), and their AI tool then reports the Server as connected, with nothing to ask it yet. An unsigned caller learns nothing beyond the not-authenticated reply.
 Traces: J-002, R-009, R-017
 
 ## Screens
@@ -97,7 +97,6 @@ No stores. It issues and checks Sign-in, Refresh token, Client registration, Aut
 - `config_invalid` and `idp_unreachable` lines are written in the shapes above, and no operational line ever contains a token, an ID token, an authorization code, `SERVER_SECRET`, `SERVER_SECRET_PREVIOUS` or `IDP_CLIENT_SECRET`.
 - `docs/security-material/sign-in.md` exists and covers every point under Security material above.
 - Live, on the project test Deployment with the product owner's Entra ID tenant: Claude and ChatGPT each add the connector, complete Sign-in, and show it connected with no tools. Q-019 is then answered for Entra ID.
-- Live, with a Google OAuth client: the same, from at least one of Claude and ChatGPT.
 
 ## Out of scope
 - Any tool, Tool call or Audit record (S-002, D-061).
@@ -106,7 +105,6 @@ No stores. It issues and checks Sign-in, Refresh token, Client registration, Aut
 
 ## Needs from the product owner before live verification
 - From Entra: the tenant ID (for `IDP_ISSUER` = `https://login.microsoftonline.com/<tenant>/v2.0`), an app registration of the Web platform type with redirect URI `https://sql-mcp-server.prinsloopower.workers.dev/oauth/callback`, and its client ID and a client secret. The product owner enters the secret with `wrangler secret put`, never in a message.
-- A Google OAuth client, web application type, with the same redirect URI (Q-023).
 
 ## Tasks
 
@@ -148,8 +146,13 @@ Run 2026-10-19, from a fresh clone of commit 05ed77a, on Windows 10 with Node 24
 
 No step needed fixing in environments.md. The cold-start timeout is recorded as Q-024.
 
-### T-011 — Claude and ChatGPT sign in to the deployed Server through Entra ID and Google
+### T-011 — Claude and ChatGPT sign in to the deployed Server through Entra ID
 Verified by: npm run smoke -- https://sql-mcp-server.prinsloopower.workers.dev, manual — the smoke test also checks the authorization-server metadata. The product owner adds the connector in Claude and in ChatGPT, completes Sign-in with Entra ID, and sees it connected. They repeat it with Google from at least one of the two. The outcome for each, with the date, is recorded in this spec and answers Q-019.
+
+Outcome, recorded from the product owner's live runs against the project test Deployment:
+- 2026-10-20, **Claude with Entra ID**: added as a custom connector with "Use Claude's published identity" (a Client ID Metadata Document). It signed in and showed connected. More than an hour later it still worked without signing in again, so renewal through a Refresh token works against Entra, and Entra's refresh response carries an ID token.
+- 2026-10-20, **ChatGPT with Entra ID**: the desktop client ("Codex", by Client ID Metadata Document) was first refused, because its loopback redirect URI uses a random port. It was fixed under D-072 and redeployed as version 8f666e42, then signed in and showed connected.
+- **Google**: dropped from the requirements by the product owner (D-073), so not run.
 
 ### T-012 — A Security reviewer can read how Sign-in works and what it does not protect against
 Verified by: manual — `docs/security-material/sign-in.md` is read against the Security material section above, and every point is present, each pointing to its rule in security.md or its decision.
