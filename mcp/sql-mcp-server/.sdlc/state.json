@@ -9,8 +9,8 @@
       "gate": {
         "result": "pass",
         "by": "human",
-        "at": "2026-10-10T20:13:54+00:00",
-        "quote": "Confirm all"
+        "at": "2026-10-21T11:49:52+00:00",
+        "quote": "Approve the amended discovery, journeys, domain model, PRD, architecture, system spec and slices, confirm D-077, and commit."
       },
       "hash": null
     },
@@ -20,20 +20,21 @@
       "gate": {
         "result": "pass",
         "by": "human",
-        "at": "2026-10-10T20:44:40+00:00",
-        "quote": "Public, private also supported; Read-only (Recommended)"
+        "at": "2026-10-21T11:49:53+00:00",
+        "quote": "Approve the amended discovery, journeys, domain model, PRD, architecture, system spec and slices, confirm D-077, and commit."
       },
-      "hash": "sha256:5a14429112d3dffa"
+      "hash": "sha256:49067d857359c996"
     },
     "domain": {
       "status": "approved",
       "rework": 2,
       "gate": {
         "result": "pass",
-        "by": "model",
-        "at": "2026-10-11T02:06:04+00:00"
+        "by": "human",
+        "at": "2026-10-21T11:49:54+00:00",
+        "quote": "Approve the amended discovery, journeys, domain model, PRD, architecture, system spec and slices, confirm D-077, and commit."
       },
-      "hash": "sha256:ebf9b0e28b182cf6"
+      "hash": "sha256:ac9e2cfa1d72b751"
     },
     "prd": {
       "status": "approved",
@@ -41,19 +42,19 @@
       "gate": {
         "result": "pass",
         "by": "human",
-        "at": "2026-10-19T00:30:52+00:00",
-        "quote": "Approve the amended PRD, architecture, system spec and slices, confirm D-061 and D-062, and commit."
+        "at": "2026-10-21T11:49:54+00:00",
+        "quote": "Approve the amended discovery, journeys, domain model, PRD, architecture, system spec and slices, confirm D-077, and commit."
       },
-      "hash": "sha256:27ea392bcca1bacb"
+      "hash": "sha256:e5202a7e4b5ba529"
     },
     "design": {
       "status": "approved",
-      "hash": "sha256:2bc3afbe9d2c7c6f",
+      "hash": "sha256:788fabc1df0efc02",
       "gate": {
         "result": "pass",
         "by": "human",
-        "at": "2026-10-19T00:30:53+00:00",
-        "quote": "Approve the amended PRD, architecture, system spec and slices, confirm D-061 and D-062, and commit."
+        "at": "2026-10-21T11:49:55+00:00",
+        "quote": "Approve the amended discovery, journeys, domain model, PRD, architecture, system spec and slices, confirm D-077, and commit."
       }
     },
     "architecture": {
@@ -62,10 +63,10 @@
       "gate": {
         "result": "pass",
         "by": "human",
-        "at": "2026-10-19T00:30:53+00:00",
-        "quote": "Approve the amended PRD, architecture, system spec and slices, confirm D-061 and D-062, and commit."
+        "at": "2026-10-21T11:49:55+00:00",
+        "quote": "Approve the amended discovery, journeys, domain model, PRD, architecture, system spec and slices, confirm D-077, and commit."
       },
-      "hash": "sha256:03b269680120e707"
+      "hash": "sha256:4e5c0d52e199bc87"
     },
     "system-spec": {
       "status": "approved",
@@ -73,10 +74,10 @@
       "gate": {
         "result": "pass",
         "by": "human",
-        "at": "2026-10-20T00:36:52+00:00",
-        "quote": "Approve the amended system spec, slices and S-001 spec, close the review, and commit."
+        "at": "2026-10-21T11:49:55+00:00",
+        "quote": "Approve the amended discovery, journeys, domain model, PRD, architecture, system spec and slices, confirm D-077, and commit."
       },
-      "hash": "sha256:e5d013431f62e6d8"
+      "hash": "sha256:44171e3319be271b"
     },
     "slices": {
       "status": "approved",
@@ -84,10 +85,10 @@
       "gate": {
         "result": "pass",
         "by": "human",
-        "at": "2026-10-20T00:36:52+00:00",
-        "quote": "Approve the amended system spec, slices and S-001 spec, close the review, and commit."
+        "at": "2026-10-21T11:49:56+00:00",
+        "quote": "Approve the amended discovery, journeys, domain model, PRD, architecture, system spec and slices, confirm D-077, and commit."
       },
-      "hash": "sha256:84da05e50f851134"
+      "hash": "sha256:c88f1d4475911c83"
     },
     "retro": {
       "status": "approved",
@@ -99,51 +100,7 @@
       }
     }
   },
-  "slices": [
-    {
-      "id": "S-001",
-      "title": "Signing in from Claude and ChatGPT",
-      "status": "verified",
-      "traces": [
-        "J-002",
-        "R-009",
-        "R-017"
-      ],
-      "rework": {
-        "verify": 1
-      },
-      "gates": {
-        "slice-spec": {
-          "result": "pass",
-          "by": "human",
-          "at": "2026-10-20T00:37:14+00:00",
-          "quote": "Approve the amended system spec, slices and S-001 spec, close the review, and commit."
-        },
-        "build": {
-          "result": "pass",
-          "by": "script",
-          "at": "2026-10-20T00:37:30+00:00"
-        },
-        "review": {
-          "result": "pass",
-          "by": "human",
-          "at": "2026-10-20T00:37:30+00:00",
-          "quote": "Approve the amended system spec, slices and S-001 spec, close the review, and commit."
-        },
-        "deploy": {
-          "result": "pass",
-          "by": "script",
-          "at": "2026-10-20T02:34:08+00:00"
-        },
-        "verify": {
-          "result": "pass",
-          "by": "human",
-          "at": "2026-10-21T01:10:59+00:00",
-          "quote": "1. pass S-001 for Entra now, drop Google client from requirements 2. Confirm D-070"
-        }
-      }
-    }
-  ],
+  "slices": [],
   "blocked_on": null,
   "open_questions": [],
   "phase": null

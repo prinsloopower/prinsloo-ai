@@ -11,7 +11,7 @@ Organised by R-014's four questions, the shape the Security material also takes;
 | A Sign-in is valid only if it decrypts under a current key and has the right `v`, `iss` equal to `IDP_ISSUER`, `aud` equal to the request's resource URL, and `exp` in the future, with 60 seconds of clock skew allowed | Sign-in broker |
 | Anyone the Identity provider authenticates may sign in (D-015). The Server keeps no list of permitted people | Identity provider |
 | An ID token is accepted only with an RS256, PS256 or ES256 signature verified against the provider's published keys, `iss` and `aud` matching, an unexpired `exp`, and the `nonce` from the Authorization request | Sign-in broker |
-| `/authorize` accepts only `response_type=code`, PKCE `S256`, a `redirect_uri` exactly equal to one the Client registration lists, and a `resource` under this Deployment's `/mcp` | Sign-in broker |
+| `/authorize` accepts only `response_type=code`, PKCE `S256`, a `redirect_uri` exactly equal to one the Client registration lists (a plain-http loopback one may differ in port only, RFC 8252, D-072), and a `resource` under this Deployment's `/mcp` | Sign-in broker |
 | `/token` accepts a code or Refresh token only for the `client_id`, `redirect_uri` and `resource` it was issued for, plus a matching `code_verifier` | Sign-in broker |
 
 ### Fetches the Server makes on a caller's behalf
@@ -26,11 +26,13 @@ These carry forward the architecture's Integrations rows.
 
 | rule | enforced in |
 |---|---|
-| The Visible objects for a Tool call are the Boundary intersected with that call's Allow-list, plus the Created objects in a Conversation token signed for this Staff member and this Deployment | Visibility resolver |
+| The Visible objects for a Tool call are the Allow-list, read from the Database account's grants at that moment, intersected with the Boundary (none when unset, D-075), less system schemas and tables the account owns, plus the Created objects in a Conversation token signed for this Staff member and this Deployment (ADR-006) | Visibility resolver, and the Database itself, which refuses what is not granted |
+| A Tool call made while the Database account fails ADR-006's check answers 503. Sign-in, `/healthz` and metadata keep answering, and `/healthz` reports `database: unsafe` (D-077) | Visibility resolver, on every Tool call |
+| Nothing the AI tool sends affects what is visible: there is no Allow-list in the URL, a header or a tool input | MCP endpoint |
 | Every name the Agent receives — tool descriptions, results, Refusals, Database errors — comes from the Visibility resolver's list for that Tool call | Visibility resolver, MCP endpoint |
 | A Database error's message is rebuilt from its `reason_class` and the Visible objects it names. The driver's text is never passed through, because rebuilding is easier to prove free of Hidden object names than scrubbing is (D-005) | Engine adapter |
 | A Refusal for a Hidden object reads the same as one for an Object that does not exist (D-005) | Visibility resolver |
-| `/healthz` reports only `ok`, `unreachable` or `invalid`, never a driver message (skeleton) | Runtime adapter |
+| `/healthz` reports only `ok`, `unreachable`, `invalid` or `unsafe`, never a driver message. Its health-check Server statement includes the D-077 check | Runtime adapter |
 
 ## What it can run
 
@@ -68,12 +70,11 @@ Every other function is refused, including `nextval`, `pg_sleep`, `set_config`, 
 - Sign-in, Refresh tokens, Authorization codes, Conversation tokens, ID tokens, the Identity provider's refresh tokens, and `Authorization` headers;
 - `SERVER_SECRET`, `SERVER_SECRET_PREVIOUS`, `IDP_CLIENT_SECRET`, and the Database connection string or password;
 - the driver's own error text, which can name Hidden objects (D-005);
-- the decoded Allow-list. Only its hash is logged;
 - with Redaction on, literals in SQL and in Typed tool inputs (D-007, D-028).
 
 **Redaction rule.** SQL is redacted by the Engine's parser: every literal becomes `?`, and identifiers and keywords stay. On PostgreSQL this uses `libpg-query`'s normalise. On MS SQL Server it uses the `node-sql-parser` AST. SQL that does not parse is logged as `<unparsed: N chars>` and nothing more. Typed tool input values become `"<redacted>"`, keys stay, and Object names stay because they are identifiers. `request_text` is never redacted (R-011).
 
-**Outside the Server's control.** The Host platform keeps its own request logs. Workers Logs and Azure Container Apps' ingress and console logs record each request's URL, so the connector URL, Allow-list segment included, appears there even for blocked calls that leave no Audit record (D-056).
+**Outside the Server's control.** The Host platform keeps its own request logs. Workers Logs and Azure Container Apps' ingress and console logs record each request's URL, so the connector URL appears there even for blocked calls that leave no Audit record (D-056).
 
 ## Secrets
 

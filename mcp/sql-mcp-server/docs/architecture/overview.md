@@ -3,7 +3,7 @@
 ## Shape
 One TypeScript codebase built twice. Cloudflare runs it as a Worker for PostgreSQL on Supabase. Azure runs the same code as a container image for MS SQL Server (ADR-001, ADR-002, D-063). Behind a thin runtime adapter, everything is written against web-standard Request, Response and crypto APIs, so the parts that enforce R-003, R-004, R-009 and R-010 are identical on every cloud.
 
-A Deployment is one process with no state store of its own (ADR-004, ADR-006, ADR-007). The Deployment keeps no record of who signed in, which client registered, which Allow-list applies or which Created objects exist. Each of these travels with the request as a signed or encrypted value, or is carried in the URL the Organisation admin configured. As a result, a Deployment needs only three things: its Server settings, one signing secret and a network path to the Database.
+A Deployment is one process with no state store of its own (ADR-004, ADR-006, ADR-007). The Deployment keeps no record of who signed in, which client registered, or which Created objects exist. Each of these travels with the request as a signed or encrypted value. What is visible is read from the Database's own grants (ADR-006). As a result, a Deployment needs only three things: its Server settings, one signing secret and a network path to the Database.
 
 ```
 AI tool --HTTPS--> Runtime adapter --> Sign-in broker --> MCP endpoint --> Visibility resolver
@@ -29,7 +29,7 @@ AI tool --HTTPS--> Runtime adapter --> Sign-in broker --> MCP endpoint --> Visib
 
 ## Boundaries
 - **Trusted:** Server settings and the deployment secret, which are set by the Operator; the Identity provider's ID tokens, once verified against its published keys; the Database's catalog.
-- **Untrusted:** everything the AI tool sends, including the Allow-list in the URL (D-009), the Conversation token (ADR-007), the Request text and every tool input.
+- **Untrusted:** everything the AI tool sends, including the Conversation token (ADR-007), the Request text and every tool input. The Allow-list comes from the Database's grants, never from the AI tool (ADR-006).
 - **Off the Host:** nothing. Audit records go only to the runtime's attached log facility (D-006, D-008).
 
 ## Integrations
@@ -41,4 +41,4 @@ AI tool --HTTPS--> Runtime adapter --> Sign-in broker --> MCP endpoint --> Visib
 | Database (PostgreSQL / MS SQL Server) | enforce its own grants (D-004); report the objects a plan reads (ADR-005) | Tool calls end in a Database error; `/healthz` reports the Database down; nothing is retried automatically. Connecting has a time limit, set in the system spec; slow queries are D-003's concern | the Operator: connection string (a secret), or the Hyperdrive binding on Cloudflare |
 | Hyperdrive (Cloudflare only) | pool and route connections to PostgreSQL | same as Database unavailable | Wrangler config: binding name and Hyperdrive ID |
 | Host log facility (Workers Logs, Azure Monitor) | keep Audit records on the Host | the runtime's own buffering; if the facility drops a line, nothing in the Server can tell, and the Security material says so | runtime defaults; on Cloudflare, `observability.enabled` in the Wrangler config |
-| AI tool (Claude, ChatGPT, D-043) | nothing; every input is untrusted | not the Server's concern | the Organisation admin: the connector URL carrying the Allow-list (ADR-006) |
+| AI tool (Claude, ChatGPT, D-043) | nothing; every input is untrusted | not the Server's concern | each AI tool's workspace admin: the connector URL, plain `/mcp` |

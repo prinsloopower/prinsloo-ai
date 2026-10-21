@@ -41,7 +41,7 @@ All of these are encrypted or signed with keys derived from the one deployment s
 ## Accepted, and why
 
 - **No per-token revocation** (D-051). The Server keeps no store, by design (ADR-004), so it cannot revoke one Sign-in, Refresh token or registration on its own. An Authorization code could in principle be replayed within its 60 seconds, but only by someone who also holds the AI tool's PKCE verifier.
-- **Platform request logs** (D-056). Blocked calls leave no Audit record, but the hosting platform's own request logs record each request's URL, including the connector URL and its Allow-list segment. Those logs are Workers Logs on Cloudflare and Container Apps logs on Azure.
+- **Platform request logs** (D-056). Blocked calls leave no Audit record, but the hosting platform's own request logs record each request's URL, including the connector URL. Since D-074 that URL is plain `/mcp` and names no tables. Those logs are Workers Logs on Cloudflare and Container Apps logs on Azure.
 - **No rate limit** (D-057). Unauthenticated calls and registrations store nothing and never reach the Database. Use your platform's own protection if you want a limit.
 - **Client metadata fetches.** When an AI tool identifies itself by a metadata document URL, the Server fetches that document. It fetches only `https` URLs on port 443 that name a host, never an IP address or `localhost`. It follows no redirects, reads at most 16 KiB and waits at most 3 seconds. On Cloudflare, the platform cannot reach private network ranges at all.
 

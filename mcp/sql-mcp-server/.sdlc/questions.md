@@ -71,6 +71,7 @@ Answered at architecture: see D-048 (ADR-007).
 ## Q-015 — Do the target AI tools have admin-managed configuration that can carry an allow-list to a remote server?
 Raised by: journeys | Blocks: architecture
 D-011 places the allow-list in admin-managed client configuration. If Claude, ChatGPT or Copilot (interview answer 2) offer no channel for an admin to pass it to a remote MCP server, J-003 cannot complete for that tool. Concerns R-003, R-017, J-003.
+Lapsed under D-074 (2026-10-20): the Allow-list no longer travels with the AI tool, so no managed configuration needs to carry it.
 
 ## Q-016 — Does the person asking approve a write, delete or schema change before it runs?
 Raised by: journeys | Blocks: prd
@@ -122,7 +123,17 @@ Answered by the product owner: see D-071. It inherits.
 ## Q-026 — security.md's redirect URI rule needs the loopback-port exception
 Raised by: verify (S-001) | Blocks: nothing; to apply at the next system-spec revision
 security.md says `/authorize` accepts only "a `redirect_uri` exactly equal to one the Client registration lists". D-072 adds RFC 8252's exception: a plain-http loopback URI may carry any port. The rule should say so, so that S-006's Node adapter and later reviews do not take the exact-match wording as current. The system spec was left unedited for now, because editing it re-gates the slices, and that clears the declared slice from the pipeline state. The same revision should also bring the slice list's S-001 line and ADR-004 in line with D-073, which drops Google from the tested providers.
+Resolved in the D-074 amendment (2026-10-20): security.md now carries the loopback-port exception (D-072), and the slice list and ADR-004 name Entra ID only (D-073).
 
 ## Q-027 — Should the Allow-list travel in a request header after all?
 Raised by: verify (S-001) | Blocks: slice-spec for S-002
 ADR-006 put the Allow-list in the connector URL path because "neither Claude's nor ChatGPT's organisation connector settings accept custom headers". Claude's connector settings now offer up to four request headers, sent with every request and stored securely. A header would keep the Allow-list out of URLs and out of the platform's request logs (D-056). It also might not change the OAuth resource identifier when the list changes, which would avoid reconnecting. Before S-002 is specified, check whether ChatGPT offers the same and whether the Organisation admin can lock the header so Staff members cannot edit it (D-011, D-040), then keep or revise ADR-006.
+Lapsed under D-074 (2026-10-20): the Allow-list is read from the Database account's grants, not sent by the AI tool in a URL or a header.
+
+## Q-028 — How does the pipeline open a second iteration?
+Raised by: router (iteration 2) | Blocks: nothing; affects metrics
+`sdlc_lint.py next` reports `iteration-complete`, but no command increments `state.iteration`, which only `init` sets. Iteration 2's amendment and slices are therefore logged as iteration 1 in `metrics.jsonl`, and `improve`'s recurrence count, which counts reflection headings across iterations, cannot tell the two apart from the metrics. This is for the improve step: add `sdlc_lint.py iteration` (or have `size` open one after `iteration-complete`).
+
+## Q-029 — How are Created objects owned and found on MS SQL Server?
+Raised by: amendment critique (D-076) | Blocks: slice-spec for S-012 on MS SQL Server
+D-076 relies on the Database account owning what it creates, as on PostgreSQL. On MS SQL Server a new table's owner is normally its schema's owner (`principal_id` NULL), not its creator. An account with only CREATE TABLE and ALTER on a schema could not SELECT its own Created object, and an account that owns the schema owns every table in it. S-012 needs a design for SQL Server: a schema the Database account owns, inside the Boundary, kept for Created objects; how "owned by the account" is computed there; and how the Database administrator takes one over (`ALTER AUTHORIZATION` and a schema transfer).

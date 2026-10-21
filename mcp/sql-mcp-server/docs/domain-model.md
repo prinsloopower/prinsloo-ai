@@ -6,16 +6,16 @@ natural-language request* (Question vs Request text) and *analyst* (Analyst vs
 Staff member). The rest collapses synonyms.
 
 ## Operator
-The person who deploys and runs a Deployment in their organisation's cloud, and who owns every Server setting. Not the Organisation admin, who owns only the Allow-list; not someone who merely holds admin rights in the Identity provider, though one person may be both.
+The person who deploys and runs a Deployment in their organisation's cloud, and who owns every Server setting. Not the Database administrator, who owns the Allow-list through the Database account's grants; not someone who merely holds admin rights in the Identity provider, though one person may be all three.
 Source: discovery.md Problems, R-001, R-007, R-013, R-017; journeys.md J-001, J-002, J-009
 Aliases: self-hosting engineer
 Relates to: one Operator runs one or more Deployments; each Deployment has exactly one Operator role behind it.
 
-## Organisation admin
-The person who owns the Allow-list and pushes it to Staff members through Managed client configuration. Not the Operator, and not an administrator of the Identity provider — owning the Allow-list grants no other setting.
-Source: discovery.md R-003, R-017; journeys.md J-003, J-006; decisions.md D-011
-Aliases: none (bare "admin" is not rejected — because "admin-managed" and "admin rights in the identity provider" use it for other things — downstream artifacts write "Organisation admin" in full)
-Relates to: an organisation has one or more Organisation admins; they maintain the Allow-list in each AI tool's Managed client configuration, and may push different Allow-lists to different AI tools or groups.
+## Database administrator
+The person who decides which tables and columns of the Database the Server may read, by granting them to the Database account in the Database itself (D-074). Not the Operator, who owns the Server settings, though one person may be both; not an administrator of the AI tool, who has no say in what is visible. Replaces the Organisation admin, retired by D-074, who owned the Allow-list in AI tool configuration.
+Source: discovery.md R-003, R-016, R-017; decisions.md D-074
+Aliases: none ("DBA" and "Organisation admin" are not rejected — DBA is the everyday name, and Organisation admin survives in the record of earlier gates — but downstream artifacts write "Database administrator" in full)
+Relates to: a Database has one or more Database administrators; they own the Allow-list of every Deployment connected to it.
 
 ## Staff member
 Anyone who asks Questions through an AI tool connected to a Deployment. Includes guest and external accounts the Identity provider authenticates (D-015), so "staff" names the role, not employment status. Not the Analyst, even when their job title is analyst.
@@ -66,10 +66,10 @@ Aliases: database engine
 Relates to: each Engine has many Databases.
 
 ## Database account
-The credentials a Deployment uses to connect to its Database. Its grants cap what any Permission tier can do; the Permission tier can only restrict them (D-004).
-Source: discovery.md R-008; journeys.md J-001, J-005, J-006, J-009; decisions.md D-004
+The credentials a Deployment uses to connect to its Database. Its SELECT grants are the Allow-list (D-074); all its grants cap what any Permission tier can do, and the Permission tier can only restrict them (D-004). It must not hold a role that bypasses grants (D-077). Tables it owns, including every Created object, are never on the Allow-list (D-076).
+Source: discovery.md R-003, R-008; journeys.md J-001, J-005, J-006, J-009; decisions.md D-004, D-074
 Aliases: SQL user account, SQL account
-Relates to: a Deployment uses exactly one Database account.
+Relates to: a Deployment uses exactly one Database account; its grants are set by a Database administrator.
 
 ## Identity provider
 The organisation's existing service that authenticates Staff members, reached through OAuth (D-002). Who may sign in is governed here, not in the Server (D-015).
@@ -87,7 +87,7 @@ Relates to: a Staff member signs in through one AI tool; every later Tool call f
 The application a Staff member uses to ask Questions, such as Claude, ChatGPT or Copilot, which connects to a Deployment. Not the Agent inside it, and not the AI provider that runs it.
 Source: discovery.md Problems, R-012; journeys.md J-002, J-003, J-004
 Aliases: AI client
-Relates to: an AI tool hosts one Agent per Conversation; it reads the Managed client configuration.
+Relates to: an AI tool hosts one Agent per Conversation.
 
 ## Agent
 The AI model inside an AI tool that interprets a Question, writes Agent-written queries and makes Tool calls. Not the AI tool, and not the Staff member on whose behalf it acts.
@@ -180,10 +180,10 @@ Aliases: database object
 Relates to: a Database holds many Objects; a table has many columns.
 
 ## Visible object
-An Object the Agent may see and act on: inside the Boundary and on the Allow-list that arrives with the Tool call, or a Created object in the current Conversation. With no Allow-list or no Boundary, only Created objects are visible (D-012).
-Source: discovery.md R-003, R-004, R-016; decisions.md D-009, D-012
+An Object the Agent may see and act on: on the Allow-list and inside the Boundary, or a Created object in the current Conversation. With nothing granted, only Created objects are visible; with no Boundary, the Allow-list alone decides (D-075).
+Source: discovery.md R-003, R-004, R-016; decisions.md D-012, D-074, D-075
 Aliases: allowed object
-Relates to: the set of Visible objects is decided per Tool call, from the Deployment's Boundary, the Allow-list arriving with that call, and the Conversation's Created objects; two Staff members on one Deployment may see different sets.
+Relates to: the set of Visible objects is decided per Tool call, from the Allow-list read from the Database at that moment, the Deployment's Boundary, and the Conversation's Created objects; every Staff member on one Deployment sees the same set, apart from their own Created objects.
 
 ## Hidden object
 Any Object that is not a Visible object. Never appears in anything the Agent receives.
@@ -192,28 +192,22 @@ Aliases: none
 Relates to: the complement of Visible objects within the Database.
 
 ## Boundary
-The Server setting that bounds which Objects could ever be visible — for example, included schemas and excluded tables. Set by the Operator; changing it needs a redeploy. Not the Allow-list, which narrows within it.
-Source: discovery.md R-003, R-017; journeys.md J-001, J-003; inputs interview answer 19
+The Server setting that bounds which Objects could ever be visible — for example, included schemas and excluded tables — whatever the Allow-list grants. Set by the Operator; changing it needs a redeploy. Optional: unset, it excludes nothing. Not the Allow-list, which it narrows.
+Source: discovery.md R-003, R-017; journeys.md J-001, J-003; inputs interview answer 19; decisions.md D-074
 Aliases: ceiling, server ceiling, visibility boundary
-Relates to: a Deployment has exactly one Boundary (possibly unset); every Allow-list it receives is narrowed to it.
+Relates to: a Deployment has exactly one Boundary (possibly unset); the Allow-list is narrowed to it.
 
 ## Allow-list
-The tables and columns, within the Boundary, that the Organisation admin makes visible. Kept in Managed client configuration (D-011), arriving with each Tool call, and treated by the Server as untrusted narrowing input (D-009). The Server stores none. Changes without a redeploy.
-Source: discovery.md R-003, R-017; journeys.md J-003, J-006; decisions.md D-009, D-011
+The tables and columns of the Database that the Database account is granted SELECT on, set by the Database administrator in the Database and read by the Server on each Tool call (D-074). Changes without a redeploy or a reconnect. Narrowed by the Boundary. The Server stores no copy; nothing the AI tool sends affects it.
+Source: discovery.md R-003, R-017; journeys.md J-003, J-006; decisions.md D-074
 Aliases: allowlist, whitelist, client allow-list, table allowlist
-Relates to: one Allow-list per Managed client configuration; a Deployment may receive several different Allow-lists from different AI tools or groups, and applies each to the Tool calls it arrives with.
-
-## Managed client configuration
-The settings an Organisation admin pushes to Staff members' AI tools and that Staff members cannot edit. Holds the Allow-list. Whether target AI tools offer it is Q-015.
-Source: discovery.md R-017; journeys.md J-003; decisions.md D-011; questions.md Q-015
-Aliases: client config, admin-managed client config
-Relates to: an organisation has one or more Managed client configurations per AI tool (for example, one per group); each holds one Allow-list.
+Relates to: one Allow-list per Deployment, the same for every Staff member and every AI tool; a Database administrator owns it.
 
 ## Created object
-An Object a Typed tool creates during a Conversation. Visible in that Conversation — including when the chat is reopened later (D-025) — and nowhere else, until the Organisation admin adds it to an Allow-list, after which it is visible to Tool calls carrying that Allow-list; its creation response says so.
-Source: discovery.md R-016; journeys.md J-006
+An Object a Typed tool creates during a Conversation. Visible in that Conversation — including when the chat is reopened later (D-025) — and nowhere else, until the Database administrator takes it over — changes its owner — and grants it, after which it is on the Allow-list (D-076); its creation response says so.
+Source: discovery.md R-016; journeys.md J-006; decisions.md D-074, D-076
 Aliases: temporary table, session object
-Relates to: a Created object belongs to exactly one Conversation until added to an Allow-list.
+Relates to: a Created object belongs to exactly one Conversation until taken over and granted.
 
 ## Server setting
 A setting the Operator owns, set in the Deployment: Database account and connection, Identity provider, Permission tier, Redaction, Row limit and Boundary. Nothing a Staff member sends can change one, and no Allow-list can widen one.
@@ -252,8 +246,8 @@ Aliases: log entry, audit log entry
 Relates to: each Tool call has exactly one Audit record; Audit records stay on the Host. How long they are kept is Q-010.
 
 ## Security material
-The project's own description of what the Agent can see, what it can run, who can call it, and what is logged, written for the Security reviewer and grown with each slice (D-014). Must disclose what the Server does not enforce: the lock on Managed client configuration, that different AI tools or groups may carry different Allow-lists, and Request text logged as received.
-Source: discovery.md R-011, R-014, R-017; journeys.md J-007; decisions.md D-014
+The project's own description of what the Agent can see, what it can run, who can call it, and what is logged, written for the Security reviewer and grown with each slice (D-014). Must disclose what the Server does not enforce: that the Allow-list is only as narrow as the grants the Database administrator gives, and that Request text is logged as received.
+Source: discovery.md R-011, R-014, R-017; journeys.md J-007; decisions.md D-014, D-074
 Aliases: reviewer material, security documentation
 Relates to: one body of Security material per Server release.
 
@@ -300,3 +294,5 @@ Gate 3, 2026-10-10, critique in fresh context. Verdict: pass (0 blockers, 0 gaps
 Amendment, 2026-10-11, at the PRD gate, directed by the product owner (D-044, superseding D-027). Not re-gated, at the owner's choice.
 
 - Unsigned calls → a call with no Sign-in is blocked, is not a Tool call, and leaves no Audit record. Tool call now always has exactly one Staff member. Refusal no longer lists no Sign-in as a reason. Audit record drops the "not signed in" mark.
+
+Vocabulary changes for D-074 (2026-10-20): a new term, Database administrator, takes over from the retired Organisation admin; Allow-list keeps its name but now means the Database account's SELECT grants; Managed client configuration is gone; six neighbouring terms are reworded to match.

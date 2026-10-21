@@ -3,15 +3,15 @@
 Ordered by the PRD's sequencing, under D-063. The walking skeleton (step 1) is already deployed on Cloudflare against Supabase (skeleton.md), so S-001 extends that path. Every PostgreSQL slice ships to the project test Deployment, and its tests run against the AI Golf App Supabase project, schema `sqlmcp_test` (D-060). Every slice adds its own section to the Security material (D-014), and the audit fields that go with its Tool calls (PRD, Sequencing).
 
 ## S-001 — Signing in from Claude and ChatGPT
-Delivers: a Staff member can add the Deployment as a connector in Claude or ChatGPT and complete Sign-in through the organisation's Identity provider, with Entra ID and Google both tried, and the connector then shows as connected. They can ask it nothing yet, because it offers no tools. Anyone not signed in is still turned away with the not-authenticated reply, and an Operator can rotate `SERVER_SECRET` without signing anyone out.
+Delivers: a Staff member can add the Deployment as a connector in Claude or ChatGPT and complete Sign-in through the organisation's Identity provider, tested with Entra ID (D-073), and the connector then shows as connected. They can ask it nothing yet, because it offers no tools. Anyone not signed in is still turned away with the not-authenticated reply, and an Operator can rotate `SERVER_SECRET` without signing anyone out.
 Traces: J-002, R-009, R-017
 Settles Q-019 by a live connection from both AI tools. Done also includes `.dev.vars.example` and one run of the local setup from a fresh clone (D-059).
 
 ## S-002 — Seeing which tables are available
-Delivers: a signed-in Staff member can ask the Agent what data it can reach and gets exactly the tables and columns inside the Boundary and on the Allow-list in their connector URL, and nothing else. Errors from that listing never name a Hidden object. An Organisation admin can change that list by replacing the connector URL, with no redeploy, and a broken URL is reported as one. An Operator finds one Audit record per such Tool call in Workers Logs, naming the Staff member. Staff members still cannot read any rows.
+Delivers: a signed-in Staff member can ask the Agent what data it can reach, and gets exactly the tables and columns the Database account is granted, inside the Boundary, and nothing else. Errors from that listing never name a Hidden object. A Database administrator can change what is visible by granting or revoking in the database, which takes effect on the next Tool call with no redeploy and no reconnect. A Deployment whose Database account bypasses grants refuses to serve. An Operator finds one Audit record per such Tool call in Workers Logs, naming the Staff member. Staff members still cannot read any rows.
 Traces: J-003, R-003, R-010, R-017
 After: S-001
-Settles Q-015 by a live Allow-list in Claude's and ChatGPT's organisation connector settings. Ships the Visibility resolver, the Audit logger, the Allow-list helper command and the first Tool call (D-061).
+Ships the Visibility resolver reading grants on PostgreSQL and the Database account check (ADR-006, D-077), the Audit logger and the first Tool call (D-061). Creates the dedicated `sqlmcp_reader` role on the test Database, whose tests grant and revoke on the `sqlmcp_test` schema (D-060, D-077).
 
 ## S-003 — Answering a question from the data
 Delivers: a Staff member can ask a question in their own words and get an answer from rows the Agent reads with its own SELECT over Visible objects, on PostgreSQL hosted on Supabase. A result cut short by the Row limit says so. A query that reads a Hidden object or does anything but read is refused without naming what it touched. The Operator can trace any answer back to the Staff member, their Request text and the redacted SQL that ran.
@@ -62,7 +62,7 @@ Traces: J-005, J-009, R-005, R-007, R-008
 After: S-010
 
 ## S-012 — Creating a table in a Conversation
-Delivers: at the full tier, a Staff member on either Engine can have the Agent create a table inside the Boundary and keep querying it for the rest of that Conversation, including after reopening it. No other Conversation sees the table until an Organisation admin adds it to an Allow-list, and the creation response tells them to.
+Delivers: at the full tier, a Staff member on either Engine can have the Agent create a table inside the Boundary and keep querying it for the rest of that Conversation, including after reopening it. No other Conversation sees the table until the Database administrator takes it over and grants it (D-076), and the creation response tells them so.
 Traces: J-006, R-005, R-007, R-016
 After: S-011
 
@@ -96,3 +96,5 @@ Hold resolved by the product owner, 2026-10-18:
 - Nits → all four fixed. S-006 now comes after S-002, and the write slices state their tier matrix and Hidden-object coverage on both Engines.
 
 Deferred: everything D-063 puts out of scope, R-001's AWS part included. Private Deployments (D-064). Schema changes other than creating a table (D-030). Copilot and other AI tools (D-043). Q-007's metric, which has no figure to rest on.
+
+Amendment, 2026-10-20 (D-074, iteration 2): S-002 now reads the Allow-list from the Database account's grants instead of a connector-URL segment. Its helper command and the Q-015 live test are gone. S-012's Created objects become visible elsewhere by grant. S-001's line names Entra ID only (D-073).

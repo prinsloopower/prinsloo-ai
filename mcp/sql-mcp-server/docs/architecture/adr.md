@@ -23,7 +23,7 @@ Amended 2026-10-18 by D-063 and D-064: AWS removed, each runtime tied to one Eng
 
 ## ADR-003 — MCP over Streamable HTTP, stateless, using the official SDK's web-standard transport
 Traces: R-004, R-009, J-004
-Decision: The Server uses `@modelcontextprotocol/sdk` with `WebStandardStreamableHTTPServerTransport`, with no session ID. Every request stands alone and carries its Sign-in, Allow-list and Conversation token.
+Decision: The Server uses `@modelcontextprotocol/sdk` with `WebStandardStreamableHTTPServerTransport`, with no session ID. Every request stands alone and carries its Sign-in and Conversation token.
 Alternatives rejected:
 - Stateful MCP sessions, which are Durable Objects on Cloudflare and sticky sessions on containers. They need per-cloud state, and a session is not a Conversation anyway (Q-014). See ADR-007.
 - The legacy SSE transport, which is deprecated in the MCP specification.
@@ -34,7 +34,7 @@ Traces: R-009, R-017, J-002
 This builds on D-002, D-015, D-017, D-024, D-044 in the decisions register.
 Decision: This adopts D-002's OAuth. The Server publishes protected-resource metadata (RFC 9728) and authorization-server metadata, and it accepts Client ID Metadata Documents, which Claude and ChatGPT both prefer under the 2026-07-28 MCP specification. It also offers dynamic client registration in which the issued `client_id` is a signed blob, so nothing is stored. It runs PKCE (S256) only.
 
-At `/authorize` it sends the Staff member to the Identity provider as a confidential OpenID Connect client. On callback it verifies the ID token and issues its own access token: encrypted, bound to the resource, carrying the Staff member's subject and name, and expiring at the ID token's expiry (D-024). Refresh tokens carry the provider's refresh token, encrypted. Any OpenID Connect provider that publishes discovery metadata is supported. Release testing covers Microsoft Entra ID and Google. This answers Q-006 and is the Server's answer to Q-019.
+At `/authorize` it sends the Staff member to the Identity provider as a confidential OpenID Connect client. On callback it verifies the ID token and issues its own access token: encrypted, bound to the resource, carrying the Staff member's subject and name, and expiring at the ID token's expiry (D-024). Refresh tokens carry the provider's refresh token, encrypted. Any OpenID Connect provider that publishes discovery metadata is supported. Release testing covers Microsoft Entra ID (D-073). This answers Q-006 and is the Server's answer to Q-019.
 
 Alternatives rejected:
 - Acting only as a resource server that validates the provider's tokens directly. Entra ID and most enterprise providers offer neither dynamic registration nor Client ID Metadata Documents, so Claude and ChatGPT could not complete sign-in against them (Q-019).
@@ -56,23 +56,19 @@ Decision: The check has three layers.
 Alternatives rejected:
 - A single JavaScript parser for both engines, with no plan check. Wherever the parser and the engine disagree, a hidden read gets through, and attackers look for exactly those disagreements.
 - Rewriting the query into a sandboxed form, such as wrapping it in a subquery with LIMIT. That changes semantics such as ORDER BY, and it is still parser-dependent.
-- Relying on the Database account's grants alone. Those grants cannot express the per-call Allow-list (R-003).
+- Relying on the Database account's grants alone, although they are the Allow-list (ADR-006). They cannot express the Boundary or keep a Created object to its Conversation, and a query refused by the Database would still have been sent, with its error to clean (D-005).
 
 Consequence: Every Agent-written query costs one extra round trip for the plan. `libpg-query` adds about 1 MB of WebAssembly to the Worker bundle, which still fits the paid Worker size limit but not the free one, so the Deployment kit says so. On MS SQL Server the structural layer is weaker, so the plan check carries more weight. The list of supported constructs per Engine is written down in the system spec.
 
-## ADR-006 — The Allow-list travels in the connector URL path that the Organisation admin configures
+## ADR-006 — The Allow-list is read from the Database account's grants
 Traces: R-003, R-017, J-003
-This builds on D-009, D-011, D-012 in the decisions register.
-Decision: The admin builds a URL of the form `https://<host>/mcp/a/<encoded>`. `<encoded>` is the Allow-list (tables, each with optional columns), as compact JSON, deflate-compressed and base64url-encoded. The project ships a small command-line helper that produces it. The admin enters this URL as the organisation's custom connector in Claude or ChatGPT. Staff members connect to that connector but cannot edit its URL.
-
-The Server decodes the Allow-list on every request and treats it as untrusted narrowing input (D-009). A connector URL without the `/a/<encoded>` segment therefore exposes only Created objects, by D-012. This is the Server's answer to Q-015, still to be proven live (skeleton.md).
-
+This builds on D-004, D-012, D-074 in the decisions register.
+Decision: On each Tool call, the Visibility resolver reads the Allow-list from the Database in one catalog Server statement. The Allow-list is the tables and columns the Database account may SELECT: `has_table_privilege` and `has_column_privilege` on PostgreSQL, and `HAS_PERMS_BY_NAME` and `sys.fn_my_permissions` on MS SQL Server. The resolver intersects it with the Boundary (none when unset, D-075). It leaves out system schemas and tables the Database account owns, and adds the Created objects named by the Conversation token (D-076). The same statement checks whether the account holds any grant that reaches every table at once, as D-077 lists for each Engine. If it does, the Tool call answers 503 and writes `config_invalid`, while Sign-in, `/healthz` and the metadata endpoints keep answering. The connector URL is plain `/mcp`.
 Alternatives rejected:
-- A custom request header. Neither Claude's nor ChatGPT's organisation connector settings accept custom headers, only the server URL and OAuth client settings.
-- A URL query string. OAuth resource identifiers should not carry a query (RFC 8707), and the URL is the resource identifier here.
-- An Allow-list held on the Server. That reverses D-011.
-
-Consequence: The Allow-list is visible to anyone who can see the connector URL. It names Objects, but it grants nothing beyond what the Boundary already allows. Its size is bounded by URL length limits, roughly a few hundred tables and columns, and the helper warns when a list gets close. Changing the Allow-list changes the URL, so the admin replaces the connector, and Staff members may have to reconnect.
+- The Allow-list in the connector URL path, the earlier form of this ADR. It leaks into URLs and request logs, forces a reconnect on each change, Staff members can alter it, and it depends on each AI tool's admin settings (Q-015).
+- A request header (Q-027). Claude stores headers write-only, ChatGPT's support is unknown, and Staff members can still alter it.
+- A list held as a Server setting. It works, but it splits ownership between the Server's settings and the Database's own grants, and the Database would still allow reads the list forbids.
+Consequence: The Database enforces the Allow-list itself, so a defect in the Visibility resolver cannot read what was not granted. Each Tool call costs one catalog Server statement. Every Staff member on a Deployment sees the same Allow-list. Different lists per group need Identity provider groups mapped to database roles (`SET ROLE` / `EXECUTE AS USER`), which is a later slice. `SELECT *` on a partly granted table fails in the Database, so the Agent names columns. Supersedes the URL-path design of 2026-10-11 (D-074).
 
 ## ADR-007 — A Conversation is identified by a signed Conversation token the Agent carries
 Traces: R-016, J-006
@@ -128,8 +124,8 @@ Consequence: An Agent can write anything in `request_text`, or leave it vague. J
 Traces: R-002, R-007, J-001
 Decision: Each Deployment has one connection, one Database account, one Boundary and one Permission tier. An organisation with several Databases runs several Deployments, each its own connector. This answers Q-009.
 Alternatives rejected:
-- One Deployment with many Databases. That needs a per-Database Boundary and tier inside one set of Server settings, and an Allow-list format that names the Database, which is more surface for a reviewer to check.
-Consequence: More Deployments to run, and more connectors for the Organisation admin to manage.
+- One Deployment with many Databases. That needs a per-Database Boundary, tier and Database account inside one set of Server settings, which is more surface for a reviewer to check.
+Consequence: More Deployments to run, and more connectors for each AI tool's workspace admin to add.
 
 ## ADR-013 — Audit records are JSON lines on standard output, kept by the Host log facility's own retention
 Traces: R-010, R-011, J-008

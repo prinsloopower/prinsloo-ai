@@ -18,7 +18,7 @@ The access token the Server issues once a Staff member completes Sign-in, presen
 | sub | string | the Identity provider's subject for the Staff member; becomes the Audit record's Staff member identity |
 | name | string | display name from the ID token (`name`, else `preferred_username`, else `email`); for Audit records only, never used in a decision |
 | iss | string | the Identity provider issuer it came from; must equal the Deployment's `IDP_ISSUER` when presented |
-| aud | string | the exact resource URL signed in to, Allow-list segment included (ADR-006); must equal the request's resource URL |
+| aud | string | the exact resource URL signed in to, normally `<origin>/mcp`; must equal the request's resource URL |
 | client_id | string | the Client registration it was issued to |
 | iat | integer | issue time, seconds |
 | exp | integer | the ID token's `exp` (D-024), and never more than 24 hours after `iat` |
@@ -96,20 +96,16 @@ Migration: new.
 
 ## Allow-list
 Traces: R-003, R-017, J-003
-The `<encoded>` segment of the connector URL (ADR-006). Decoding is base64url, then raw DEFLATE, then UTF-8 JSON:
+Not a stored value. On each Tool call, the Visibility resolver reads it from the Database as the set of `(schema, table, column)` the Database account may SELECT (ADR-006, D-074). A table counts as fully granted when every one of its columns is, and partly granted otherwise. The result lasts for that Tool call only.
 
-```json
-{"v":1,"t":[["sales","orders"],["sales","customers",["id","name","region"]]]}
-```
+| Engine | read with |
+|---|---|
+| PostgreSQL | `has_table_privilege` and `has_column_privilege` over the user tables in `pg_class` and `pg_attribute`, which count role membership |
+| MS SQL Server | `sys.fn_my_permissions(<table>, 'OBJECT')` per candidate table, with `HAS_PERMS_BY_NAME(<table>, 'OBJECT', 'SELECT', <column>, 'COLUMN')` per column |
 
-| field | type | notes |
-|---|---|---|
-| v | integer | 1 |
-| t | array | entries of `[schema, table]` for every column of the table, or `[schema, table, [column, …]]` for named columns only |
-
-Names are matched exactly against the Database catalog: case-sensitive on PostgreSQL, and by the Database's collation on MS SQL Server. Entries must name a schema, because an unqualified table would resolve differently per Database account. Duplicate entries merge. A malformed segment, an unknown `v` or a breached limit (operations.md) ends every Tool call that carries it in a Refusal of class `invalid_allow_list`, telling the Agent the connector URL is invalid (D-053). The Server never falls back to a partial reading. A URL with no `/a/<encoded>` segment is not invalid: it simply has no Allow-list (D-012).
-Retention: none on the Server. It lives in Managed client configuration.
-Migration: new. Version 2 will be read alongside version 1, as for tokens.
+Names come from the Database catalog as they are stored. System schemas never count, and nor do tables the Database account owns, except the Created objects a Conversation token names (D-076, D-077). The same statement runs ADR-006's check on the account.
+Retention: none on the Server. The grants live in the Database.
+Migration: none. The URL-path form (2026-10-11) was never built, so no connector URL carries a segment to read.
 
 ## Conversation
 Traces: R-016, J-006
@@ -147,7 +143,6 @@ One JSON line per Tool call on standard output (ADR-013). The top-level `type` i
 | request_text | string | as received, never redacted (R-011); at most 4,000 characters (operations.md) |
 | tool | string | the MCP tool name |
 | inputs | object | the tool's inputs other than `request_text` and `conversation`, with values redacted when Redaction is on (D-028) |
-| allow_list | string | SHA-256 (hex) of the encoded Allow-list segment, or `null`; lets J-008 match records to a connector URL without logging the list |
 | conversation_objs | array | the Created objects the presented Conversation token named; names only |
 | statements | array | `{sql, rows, ms}` per Statement sent, with `sql` redacted when Redaction is on; Server statements excluded (D-026) |
 | submitted_sql | string | for a refused Agent-written query only, redacted when Redaction is on |
@@ -155,6 +150,6 @@ One JSON line per Tool call on standard output (ADR-013). The top-level `type` i
 | duration_ms | integer | arrival to response |
 | shortened | boolean | `true` if the record exceeded 64 KiB and the longest SQL strings were cut, each ending with `…[cut]` |
 
-`reason_class` is one of `hidden_object`, `query_check`, `tier`, `boundary`, `invalid_input`, `invalid_allow_list` for a Refusal, and `permission`, `constraint`, `timeout`, `connection`, `other` for a Database error. `reason` is the text the Agent was given, which is already free of Hidden object names (D-005).
+`reason_class` is one of `hidden_object`, `query_check`, `tier`, `boundary`, `invalid_input` for a Refusal, and `permission`, `constraint`, `timeout`, `connection`, `other` for a Database error. `reason` is the text the Agent was given, which is already free of Hidden object names (D-005).
 Retention: whatever the Host log facility keeps, set by the Operator's own policy (D-052). The Server sets none. When a Staff member leaves, their records stay for that period. Deleting a person's records is the Operator's task, done in the Host log facility.
 Migration: new. Adding a field leaves `v` unchanged. Renaming or removing one raises `v`, and the Security material lists each version's fields.

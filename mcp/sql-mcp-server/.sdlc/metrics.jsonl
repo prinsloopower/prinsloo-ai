@@ -41,3 +41,11 @@
 {"iteration": 1, "phase": "verify", "slice": "S-001", "gate": "hold", "duration_s": null, "rework_count": 1, "defects_found": 0, "output_bytes": 0}
 {"iteration": 1, "phase": "verify", "slice": "S-001", "gate": "pass", "duration_s": null, "rework_count": 1, "defects_found": 0, "output_bytes": 1591}
 {"iteration": 1, "phase": "retro", "slice": null, "gate": "pass", "duration_s": 77, "rework_count": 0, "defects_found": 0, "output_bytes": 9140}
+{"iteration": 1, "phase": "discovery", "slice": null, "gate": "pass", "duration_s": null, "rework_count": 5, "defects_found": 0, "output_bytes": 23538}
+{"iteration": 1, "phase": "journeys", "slice": null, "gate": "pass", "duration_s": null, "rework_count": 3, "defects_found": 0, "output_bytes": 21438}
+{"iteration": 1, "phase": "domain", "slice": null, "gate": "pass", "duration_s": null, "rework_count": 2, "defects_found": 0, "output_bytes": 26552}
+{"iteration": 1, "phase": "prd", "slice": null, "gate": "pass", "duration_s": null, "rework_count": 2, "defects_found": 0, "output_bytes": 12823}
+{"iteration": 1, "phase": "design", "slice": null, "gate": "pass", "duration_s": null, "rework_count": 0, "defects_found": 0, "output_bytes": 229}
+{"iteration": 1, "phase": "architecture", "slice": null, "gate": "pass", "duration_s": null, "rework_count": 1, "defects_found": 0, "output_bytes": 31224}
+{"iteration": 1, "phase": "system-spec", "slice": null, "gate": "pass", "duration_s": null, "rework_count": 1, "defects_found": 0, "output_bytes": 39441}
+{"iteration": 1, "phase": "slices", "slice": null, "gate": "pass", "duration_s": null, "rework_count": 1, "defects_found": 0, "output_bytes": 10306}

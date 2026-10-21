@@ -1,7 +1,7 @@
 # Journeys — sql-mcp-server
 
 Four people appear here, all named as the discovery document names them: the
-**operator** (the self-hosting engineer), the **organisation admin**, **business
+**operator** (the self-hosting engineer), the **database administrator**, **business
 staff** (the person asking), and the **security reviewer**.
 
 ## J-001 — Getting the server running in the operator's cloud
@@ -10,7 +10,7 @@ Trigger: business staff keep asking for AI access to the company database, and t
 Resolution: the server is deployed in the operator's existing cloud, connected to the database, reachable, limited to a boundary the operator chose, and refusing every call until sign-in is set up (D-017).
 
 1. They find the project and check, before investing time, that it runs on their cloud and talks to their database engine.
-2. They create a database account for the server and decide what to grant it. They are told the deployment's tier will hold even if the account can do more, but that the account caps what any tier can do — so they grant what the highest tier they expect to use will need, and no more.
+2. They create a database account for the server and decide what to grant it. They are told the deployment's tier will hold even if the account can do more, but that the account caps what any tier can do — so they grant what the highest tier they expect to use will need, and no more. Its SELECT grants are also the Allow-list (D-074), so the database administrator decides what the agent can see in the same place.
 3. They decide the boundary: which schemas and tables could ever be visible, leaving out anything no one should reach through an agent.
 4. They decide whether to expose the server publicly, so hosted AI tools can reach it, or keep it inside the organisation's network for clients running there (D-018).
 5. They follow the docs to deploy on their cloud, supplying the connection details, credentials and boundary; with no tier set, it runs read-only (D-019).
@@ -18,7 +18,7 @@ Resolution: the server is deployed in the operator's existing cloud, connected t
 
 Exits:
 - Their cloud and engine combination is not supported (for example MS SQL Server on Cloudflare, Q-001); they stop at step 1 and look for another product.
-- Unsure what to grant, they reuse an existing over-privileged account "for now", and the tier becomes the only thing between the agent and those grants.
+- Unsure what to grant, they reuse an existing all-reading account "for now"; the server refuses to serve with it (R-003), and they must create a dedicated account after all.
 - The docs assume a tool, permission or network route they do not have; they stall past the hour, ask for outside help, or abandon.
 - The cloud cannot reach the database (private network, firewall); they cannot fix this alone and park the project behind a network change request.
 - Their organisation will not allow a public endpoint with database access; they deploy privately, and find the hosted AI tool staff use cannot reach it, so they either switch staff to a client that runs inside the network or stop.
@@ -45,21 +45,20 @@ Depends on: someone with rights to register an application in, and manage accoun
 
 ## J-003 — Making data available to the agent across the organisation
 Traces: R-003, R-017
-Trigger: staff ask the organisation admin to let the agent answer questions about a set of tables (for example, sales orders and customers).
-Resolution: those tables and columns are visible to every staff member's agent, without the server being redeployed.
+Trigger: staff ask the database administrator to let the agent answer questions about a set of tables (for example, sales orders and customers).
+Resolution: those tables and columns are visible to every staff member's agent, on every AI tool, without the server being redeployed or anyone reconnecting.
 
-1. The admin checks the requested tables fall inside the operator's boundary.
-2. They decide which tables and which columns to include — often trimming columns (salary, personal details) staff did not mention but the agent would otherwise see.
-3. They add them to the allow-list in the managed client configuration and push it to staff.
+1. The database administrator checks the requested tables fall inside the operator's boundary.
+2. They decide which tables and which columns to grant, often leaving out columns (salary, personal details) that staff did not mention but the agent would otherwise see.
+3. They grant SELECT on those tables or columns to the server's Database account, in the database, with the tools they already use.
 4. A staff member confirms their agent can now see the tables.
 
 Exits:
-- A requested table lies outside the boundary; the admin asks the operator to widen it, which needs a redeploy, and staff wait or give up.
-- The admin finds the organisation's AI tool offers no managed setting that can carry an allow-list (Q-015) and abandons the rollout for that tool.
-- A staff member's client never receives the configuration; under deny-by-default (D-012) their agent sees nothing, and they report that "it doesn't work".
-- The admin cannot find the exact table and column names to write down, guesses, and the agent sees less than staff asked for.
+- A requested table lies outside the boundary. The database administrator asks the operator to widen it, which needs a redeploy, and staff wait or give up.
+- The database administrator grants a whole table where they meant only some columns, and the agent sees more than intended. Nothing in the server can tell a grant made by mistake from one made on purpose.
+- The Database account was created with a role that reads everything. Every question gets the server's misconfigured reply (R-003), and the operator and database administrator must agree on a narrower account before anyone can use it.
 
-Depends on: the organisation's AI tool supports admin-managed configuration that end users cannot edit (D-009, D-011); the admin can reach the operator; the admin has some view of the table and column names inside the boundary (Q-017).
+Depends on: the database administrator can reach the operator; the Database account is dedicated to the server and holds no grant-bypassing role (D-074).
 
 ## J-004 — Business staff answer a question about their own data
 Traces: R-003, R-004, R-006, R-012, R-015
@@ -104,21 +103,21 @@ Depends on: the database account the operator created has the grants the tier ne
 ## J-006 — Creating a new table in a conversation
 Traces: R-005, R-007, R-016
 Trigger: a member of business staff on a full-tier deployment needs somewhere to hold data for a new piece of work (for example, a list of accounts to follow up).
-Resolution: the table exists, they use it for the rest of the conversation, and the organisation admin adds it to the allow-list so it stays visible.
+Resolution: the table exists, they use it for the rest of the conversation, and the database administrator takes it over and grants it so it stays visible (D-076).
 
 1. They ask the agent to create the table.
-2. The agent creates it with a typed tool and passes on the message that it needs adding to the allow-list.
+2. The agent creates it with a typed tool and passes on the message that it needs granting before anyone else can see it.
 3. They load and query it in the same conversation.
-4. They ask the admin to add it to the allow-list.
+4. They ask the database administrator to take it over and grant it.
 
 Exits:
 - The database account lacks create rights; the create fails, and they abandon the idea or ask the operator.
 - They miss the message, or their AI tool does not show it; next day, in a new conversation, the table is invisible, and they create it again under another name.
-- The admin does not act; after chasing once or twice, they stop using the table and keep the data in a spreadsheet instead, leaving an orphan no one's agent can see.
-- They created it outside the boundary (Q-013); no allow-list can ever make it visible, and they cannot tell why.
+- The database administrator does not act; after chasing once or twice, they stop using the table and keep the data in a spreadsheet instead, leaving an orphan no one's agent can see.
+- They created it outside the boundary (Q-013); no grant can ever make it visible, and they cannot tell why.
 - Their AI tool treats one connection as many conversations, or reconnects mid-conversation (Q-014); they find the table missing mid-task and recreate it, or a colleague stumbles on it.
 
-Depends on: the database account has create rights (D-004); their AI tool shows the server's message; an organisation admin they can reach.
+Depends on: the database account has create rights (D-004); their AI tool shows the server's message; a database administrator they can reach.
 
 ## J-007 — A security reviewer decides whether to approve a deployment
 Traces: R-003, R-004, R-009, R-010, R-011, R-014, R-017
@@ -127,7 +126,7 @@ Resolution: the reviewer approves the deployment, or rejects it with reasons the
 
 1. They work through the project's security material, looking for the four answers R-014 names.
 2. They compare it with the deployment's actual settings: tier, boundary, redaction, identity provider, and whether the endpoint is public or private.
-3. They weigh what the server enforces against what depends on the organisation (the client lock on the allow-list, request text logged as received).
+3. They weigh what the server enforces against what depends on the organisation (that visibility is only as narrow as the database grants, request text logged as received).
 4. Where they want a tighter setting (redaction on, a lower tier), they ask the operator to change it and check again.
 5. They decide.
 
@@ -135,7 +134,7 @@ The material this journey reads describes features delivered by every other jour
 
 Exits:
 - The material does not answer one of their questions; they reject, and the operator cannot tell what to fix.
-- They will not accept that the allow-list lock rests on client tooling; they reject, or approve only the read-only tier.
+- They find the Database account granted more than the organisation intended; they reject until the database administrator narrows it.
 - They will not accept a public endpoint with database access behind it; they approve only a private deployment (D-018), which rules out the hosted AI tools staff wanted.
 - They will not accept query results passing to the AI tool's provider, outside the organisation (Q-018); they reject regardless of how well the server itself behaves.
 - They need a retention period the project does not state (Q-010) or a framework it does not address (Q-011); approval stalls.
@@ -220,3 +219,5 @@ Hold resolved by the product owner, 2026-10-10 (interview answers 27–28):
 - Reachability → public by default, private also supported (D-018). J-001 step 4 is the operator's choice, with an exit for organisations that refuse a public endpoint; J-004 depends on the AI tool reaching the server; J-007 weighs the endpoint, with a reject-public exit.
 - Default tier → read-only when unset (D-019), shown in J-001 step 5; J-009's trigger now follows from it.
 - Nit → J-006's orphaned-table exit now ends in what the staff member does.
+
+Amendment, 2026-10-20 (D-074): J-003 now follows the database administrator granting tables in the database. The client-configuration exits are gone, replaced by two new ones: a grant made too wide, and an all-reading account. J-006 and J-007 refer to grants instead of an allow-list in AI tool configuration.

@@ -22,8 +22,9 @@ After every deploy, the Operator runs `npm run smoke -- <url>`. The Deployment k
 | PERMISSION_TIER | as the test needs | `read-only` until step 6 | `read-only` (D-019) |
 | ROW_LIMIT | 500 | 500 | 500 |
 | REDACTION | `on` | `on` | `on` (D-007) |
-| BOUNDARY | the sample Database's schemas | `{"schemas":["sqlmcp_test"]}` on both test Deployments (D-060, D-065) | unset: nothing visible (D-012) |
-| IDP_ISSUER | a test provider, or unset to exercise D-017 | an Entra ID test tenant and a Google OAuth client, both created by the Sign-in slice (neither exists yet) | the organisation's provider |
+| BOUNDARY | the sample Database's schemas | `{"schemas":["sqlmcp_test"]}` on both test Deployments (D-060, D-065) | unset: no exclusion, the grants alone decide (D-075) |
+| Database account | a local role with test grants | `sqlmcp_reader`, granted only on `sqlmcp_test` (D-077) | a dedicated account the Database administrator grants; never a role that bypasses grants |
+| IDP_ISSUER | a test provider, or unset to exercise D-017 | the product owner's Entra ID tenant (D-073) | the organisation's provider |
 | Host log retention | n/a | Workers Logs: 7 days (paid plan) | Operator's own policy (D-052). On Azure, the Bicep template takes it as a required parameter with no default, so the choice cannot be skipped. On Cloudflare, Workers Logs keeps 3 days on the Free plan and 7 on Paid, and the period cannot be changed |
 
 **Workers Logs limits that bear on Audit records** (Cloudflare docs, checked 2026-10-18):
@@ -54,8 +55,7 @@ Nothing in the Server pages anyone. Alerting is the Host platform's job, configu
 | `request_text` | 1–4,000 characters | Refusal, `invalid_input` |
 | Agent-written query text | 64 KiB | Refusal, `query_check` |
 | Typed tool row inputs (insert, update, delete) | 100 rows per Tool call | Refusal, `invalid_input` |
-| Allow-list segment | 4,000 characters encoded; 64 KiB after inflating; 500 tables | Refusal, `invalid_allow_list` |
-| Conversation token | 50 Created objects | create-table Refusal, `invalid_input`, asking the Organisation admin to add the objects to the Allow-list |
+| Conversation token | 50 Created objects | create-table Refusal, `invalid_input`, asking the Database administrator to grant the objects |
 | Row limit | 1–10,000; default 500 | configuration error |
 | Audit record line | 64 KiB | the longest SQL strings are cut, and `shortened` is set (data-model.md) |
 | Identity provider call | 5 s | Sign-in fails, naming the provider |

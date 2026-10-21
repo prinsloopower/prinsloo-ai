@@ -33,10 +33,10 @@ Source: inputs/brief.md ("Cloud-hosted: supports AWS, Azure and Cloudflare"); in
 It is unmet if a deployment pointed at either engine cannot run the same tools and return correct results.
 Source: inputs/brief.md ("for MS SQL server and PostgreSQL").
 
-### R-003 — The agent can see only objects that are inside the operator's boundary and on the organisation's allow-list
-Two settings decide visibility. The operator sets a boundary (for example, included schemas and excluded tables). An organisation admin sets an allow-list of tables and columns within that boundary. The agent sees only what both permit, plus objects created in the current conversation (R-016). Anything else never shows up in anything the agent receives: tool descriptions, query results, or error messages.
-It is unmet if a question about a hidden object returns its name, its columns, or anything that confirms it exists, or if an allow-list naming an object outside the boundary makes that object visible.
-Source: inputs/interview-2026-10-10.md, answers 4, 19 and 20; inputs/brief.md ("must not risk schema exposure"). Error messages are covered by assumption (D-005); how far the server trusts the allow-list it receives is assumed (D-009); what the agent sees when either setting is missing is assumed (D-012). Where the allow-list is kept is the owner's constraint (D-011).
+### R-003 — The agent can see only objects the database grants the server's account, within the operator's boundary
+Two things decide visibility. The database administrator grants the server's Database account SELECT on tables, or on individual columns, in the database itself. The operator may also set a boundary (for example, included schemas and excluded tables) that nothing outside can enter, granted or not. The agent sees only what both permit, plus objects created in the current conversation (R-016). Anything else never shows up in anything the agent receives: tool descriptions, query results, or error messages.
+It is unmet if a question about a hidden object returns its name, its columns, or anything that confirms it exists; if a grant on an object outside the boundary makes that object visible; or if the server serves with a Database account that bypasses grants (a superuser or all-reading role) instead of refusing.
+Source: inputs/interview-2026-10-10.md, answers 4, 19 and 20; inputs/brief.md ("must not risk schema exposure"); product owner, 2026-10-20 (D-074: the database's grants, not the AI tool, carry the list). Error messages are covered by assumption (D-005); what the agent sees when nothing is granted or no boundary is set is the owner's decision (D-075).
 
 ### R-004 — Only predictable statements reach the database
 Three kinds of statement may run: those built by a fixed, typed tool, acting only on objects the agent can see (R-003); read-only SELECTs written by the agent that the server has checked against what the agent may see (R-003) before running them; and the server's own metadata and health-check statements. It is unmet if any other statement reaches the database, including a SELECT that touches a hidden object or carries a second statement inside it; if a typed tool writes to, deletes from or changes a hidden object, or its refusal confirms the object exists; or if the server's own statements put anything in front of the agent that R-003 hides.
@@ -78,7 +78,7 @@ It is unmet if answers to a representative set of business questions have to be 
 Source: inputs/interview-2026-10-10.md, answer 7. "Typical" and "correct" are not yet defined (Q-003), nor is which AI client and model the measurement runs with (Q-012).
 
 ### R-013 — A self-hosting engineer can get the server running in their cloud in under an hour, from the docs alone
-The hour ends when the server is deployed, connected to the database, and reachable. Identity-provider and allow-list setup fall outside it. It is unmet if an engineer with database credentials and a cloud account to hand needs more than an hour, or outside help, to get there.
+The hour ends when the server is deployed, connected to the database, and reachable. Identity-provider setup and granting tables to the Database account fall outside it. It is unmet if an engineer with database credentials and a cloud account to hand needs more than an hour, or outside help, to get there.
 Source: inputs/interview-2026-10-10.md, answers 7 and 12.
 
 ### R-014 — A security reviewer at an adopting organisation has what they need to sign off a deployment
@@ -89,15 +89,15 @@ Source: inputs/interview-2026-10-10.md, answer 7. What a reviewer needs to see i
 It is unmet if an agent-written SELECT returns more rows than the limit, or if anything a client or signed-in person sends changes the limit. A result cut short says so to the agent (D-010).
 Source: inputs/interview-2026-10-10.md, answers 16 and 21. No time or concurrency limits were asked for.
 
-### R-016 — An object created through the server is visible for the rest of that conversation only, and the agent is told it should be added to the allow-list
-It is unmet if the agent cannot query an object it created earlier in the same conversation, if the object is visible in any other conversation before an admin adds it to the allow-list, or if the response to the create does not say the object needs adding to the allow-list.
+### R-016 — An object created through the server is visible for the rest of that conversation only, and the agent is told it must be granted to be visible elsewhere
+It is unmet if the agent cannot query an object it created earlier in the same conversation, if the object is visible in any other conversation before the database administrator takes it over and grants it (D-076), or if the response to the create does not say so.
 Source: inputs/interview-2026-10-10.md, answer 15. Applies only at the full tier (R-007). See Q-013.
 
-### R-017 — Each setting has one owner: the operator or an organisation admin; the person asking questions owns none
-The operator owns the database connection and credentials, identity-provider settings, permission tier, literal redaction in logs, row limit, and the visibility boundary. An organisation admin owns the allow-list, which changes without redeploying the server and can only narrow what the operator's settings allow. The semantic model is a skill on the agent's side, not a setting of the server.
-The server guarantees what it controls. Keeping the allow-list out of end users' hands depends on the organisation locking its client configuration, which this product cannot enforce (D-009); the project's own material says so, so a reviewer (R-014) does not take it as a server guarantee.
-It is unmet if anything a person asking questions sends to the server can change an operator-owned setting; if an allow-list, from any source, can widen anything an operator setting restricts; if changing the allow-list requires a redeploy; or if the project's material presents the client lock as something the server enforces.
-Source: inputs/interview-2026-10-10.md, answers 9, 18, 19, 20, 21 and 22. Where the allow-list is kept is the owner's constraint (D-011).
+### R-017 — Each setting has one owner: the operator or the database administrator; the person asking questions owns none
+The operator owns the database connection and credentials, identity-provider settings, permission tier, literal redaction in logs, row limit, and the visibility boundary. The database administrator owns which tables and columns the Database account is granted, in the database, where a change takes effect without redeploying the server, and which can only narrow what the operator's boundary allows. The semantic model is a skill on the agent's side, not a setting of the server.
+Nothing about visibility is held by the AI tool, so nothing a person asking questions controls can widen it (D-074).
+It is unmet if anything a person asking questions sends to the server can change a setting or what is visible; if a grant, from any source, can widen anything the boundary restricts; or if changing what is granted requires a redeploy.
+Source: inputs/interview-2026-10-10.md, answers 9, 18, 19, 20, 21 and 22; product owner, 2026-10-20 (D-074). Answers 18–20 asked that the list change without a redeploy, be owned by someone other than the person asking, and only narrow the server's boundary; database grants meet all three.
 
 ## Open questions
 
@@ -190,3 +190,5 @@ Hold resolved by the product owner, 2026-10-10 (answers 23–24):
 
 - Typed tools on hidden objects → R-004 now applies the visibility rule to typed tools too, refusing without confirming existence (answer 23).
 - Redaction of request text → redaction stays SQL-only; R-011 now requires the project's material to disclose that request text is logged as received (answer 24).
+
+Amendment, 2026-10-20, directed by the product owner (D-074, iteration 2). The Allow-list leaves the AI tool: the database administrator's grants to the Database account decide visibility, within the operator's optional boundary. R-003, R-013, R-016 and R-017 were rewritten. D-009, D-011, D-040 and Q-015 no longer apply.

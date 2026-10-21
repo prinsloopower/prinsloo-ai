@@ -23,7 +23,7 @@ A TLS-intercepting proxy on the client machine can corrupt the chunked 401 respo
 ## What it did not prove
 - **Audit records reaching Workers Logs (ADR-013).** No Tool call runs before Sign-in, so the skeleton writes no Audit record. The first slice that runs a Tool call has to show one in Workers Logs, and has to measure the real retention for Q-010.
 - **Sign-in against a real Identity provider (ADR-004).** Neither Claude nor ChatGPT has connected. Whether both can complete sign-in through the broker (Q-019) is still assumed from their published documentation.
-- **The Allow-list in the connector URL path surviving Claude's and ChatGPT's organisation connector settings (ADR-006, Q-015).** This is assumed, not tested.
+- **Reading the Allow-list from the Database account's grants, and refusing an account that bypasses grants (ADR-006).** Untested on both Engines, and on Supabase's pooler in particular.
 - **The Query check (ADR-005).** In particular, `libpg-query`'s WebAssembly running inside the Worker size limit is assumed, not measured.
 - **The container image on Azure with MS SQL Server (ADR-002, ADR-009, D-063).**
 - **A Database the product owns (D-049).**
