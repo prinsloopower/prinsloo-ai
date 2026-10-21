@@ -137,3 +137,11 @@ Raised by: router (iteration 2) | Blocks: nothing; affects metrics
 ## Q-029 — How are Created objects owned and found on MS SQL Server?
 Raised by: amendment critique (D-076) | Blocks: slice-spec for S-012 on MS SQL Server
 D-076 relies on the Database account owning what it creates, as on PostgreSQL. On MS SQL Server a new table's owner is normally its schema's owner (`principal_id` NULL), not its creator. An account with only CREATE TABLE and ALTER on a schema could not SELECT its own Created object, and an account that owns the schema owns every table in it. S-012 needs a design for SQL Server: a schema the Database account owns, inside the Boundary, kept for Created objects; how "owned by the account" is computed there; and how the Database administrator takes one over (`ALTER AUTHORIZATION` and a schema transfer).
+
+## Q-030 — System-spec and domain wording owed by S-002
+Raised by: slice-spec (S-002) | Blocks: nothing; apply at the next revision of the domain model and system spec
+- Domain model, Typed tool: allow a Typed tool that produces no Statements, only Server statements (`list_tables`, D-078).
+- data-model.md, Audit record: add the Refusal class `unsafe_account` (D-078).
+- environments.md, `HYPERDRIVE`: the config is created with caching disabled (D-079).
+- security.md or data-model.md: the error-class mapping and fixed sentences, and which refusals are Tool calls (D-080).
+These are left out of the gated documents for now because editing them re-gates the slice list, and that clears the declared slice (S-002) from the pipeline state (Q-028, reflections).

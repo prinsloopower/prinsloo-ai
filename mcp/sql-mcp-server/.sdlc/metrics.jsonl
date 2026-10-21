@@ -49,3 +49,6 @@
 {"iteration": 1, "phase": "architecture", "slice": null, "gate": "pass", "duration_s": null, "rework_count": 1, "defects_found": 0, "output_bytes": 31224}
 {"iteration": 1, "phase": "system-spec", "slice": null, "gate": "pass", "duration_s": null, "rework_count": 1, "defects_found": 0, "output_bytes": 39441}
 {"iteration": 1, "phase": "slices", "slice": null, "gate": "pass", "duration_s": null, "rework_count": 1, "defects_found": 0, "output_bytes": 10306}
+{"iteration": 1, "phase": "slice-spec", "slice": "S-002", "gate": "fail", "duration_s": 29051, "rework_count": 1, "defects_found": 0, "output_bytes": 11615}
+{"iteration": 1, "phase": "slice-spec", "slice": "S-002", "gate": "hold", "duration_s": 4118, "rework_count": 2, "defects_found": 0, "output_bytes": 15772}
+{"iteration": 1, "phase": "slice-spec", "slice": "S-002", "gate": "pass", "duration_s": null, "rework_count": 2, "defects_found": 0, "output_bytes": 15772}

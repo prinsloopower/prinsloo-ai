@@ -424,3 +424,36 @@ Rationale: the consistency critique found three versions of the start-up check. 
 - **System schemas** (`pg_catalog`, `information_schema` and `pg_toast*`; `sys` and `INFORMATION_SCHEMA`) are never on the Allow-list. Every account can read them, and they list every Hidden object.
 - **The test Database** connects as a dedicated role, `sqlmcp_reader`, created by the slice that first reads grants (S-002), not as Supabase's `postgres`.
 Alternatives rejected: a once-per-isolate check, which misses later role grants; refusing every endpoint, which would also hide the reason from `/healthz`.
+
+## D-078 — Choices made specifying S-002
+Decided by: model | Date: 2026-10-21 | Phase: slice-spec (S-002)
+Rationale: the slice needs answers the system spec does not give:
+- `list_tables` is a Typed tool that produces no Statements, only catalog Server statements (D-026). The domain model's Typed tool "produces … one or more" Statements when not refused; this is the first exception, queued for the domain model's next revision (Q-030).
+- An MCP request made while the Database account bypasses grants (D-077) is a Tool call refused with a new Refusal class, `unsafe_account`, so R-010's "run or refused" still leaves an Audit record. data-model.md's class list gains it at its next revision (Q-030).
+- The listing stops at 500 tables, sorted by schema then table, and says so with `complete: false`. An optional `schema` input narrows it.
+- `request_text` is validated in the tool, not by the SDK's input schema, so that a bad value is still a Tool call with an Audit record.
+Alternatives rejected: the listing as an MCP resource rather than a tool (resources carry no `request_text`, so they would leave no Request text in the Audit record); a 503 with no Audit record for an unsafe account (it breaks R-010).
+
+## D-079 — Hyperdrive query caching is off for every Cloudflare Deployment
+Decided by: model | Date: 2026-10-21 | Phase: slice-spec (S-002)
+Rationale: Hyperdrive caches read queries for up to 60 s by default. The Allow-list and the account check are reads, so a revoke or a bypassing role could go unseen for a minute, and Agent-written queries (S-003) would return stale rows. The project test Deployment's config is updated with caching disabled. The Deployment kit (S-005) creates Operator configs the same way, and environments.md says so at its next revision (Q-030).
+Alternatives rejected: keeping the cache and stating "within 60 s" (it contradicts R-017's "takes effect without a redeploy" in spirit, and stale query results are wrong for answering questions); a `max_age` of a few seconds (it still makes revocation non-immediate, for little gain on the volumes in operations.md).
+
+## D-080 — Database error classes, their fixed sentences, and which refusals are Tool calls
+Decided by: model | Date: 2026-10-21 | Phase: slice-spec (S-002)
+Rationale: every slice that sends SQL needs the same answer, so it is fixed once here. S-006 adds the MS SQL Server mapping.
+- **PostgreSQL code to `reason_class`:**
+  - SQLSTATE class `08`, or a socket or TLS failure before any reply, is `connection`;
+  - `57014` (query cancelled) and `57P01`–`57P05` are `timeout`;
+  - `42501` is `permission`;
+  - class `23` is `constraint`;
+  - anything else is `other`.
+- **The Agent's sentence for each class.** These are fixed and name nothing (D-005), and each ends with " (reference <Audit record id>)" so an Operator can find the record:
+  - `connection`: "The database could not be reached."
+  - `timeout`: "The database stopped the query before it finished."
+  - `permission`: "The database refused this for lack of permission."
+  - `constraint`: "The database refused the change because it breaks a rule on the data."
+  - `other`: "The database could not complete this."
+- **Which refusals are Tool calls.** A setting that makes the whole Deployment misconfigured (`SERVER_SECRET`, `BOUNDARY`, `IDP_*`, `PUBLIC_URL`) is caught before any MCP method is dispatched. Like a call with no Sign-in (D-044), it is not a Tool call and leaves no Audit record, only `config_invalid`. An unsafe Database account is found inside the Tool call's own catalog statement, so it is a Tool call, refused with `unsafe_account`, and audited (D-078).
+- Refusal sentences also end with the reference.
+Alternatives rejected: passing driver messages through after scrubbing (D-005 prefers rebuilding); auditing config-misconfigured requests (no Staff member's call has run, and the Deployment cannot even read its own settings).
