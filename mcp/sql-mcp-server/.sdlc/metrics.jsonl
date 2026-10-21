@@ -40,3 +40,4 @@
 {"iteration": 1, "phase": "deploy", "slice": "S-001", "gate": "pass", "duration_s": 6998, "rework_count": 0, "defects_found": 0, "output_bytes": 3832}
 {"iteration": 1, "phase": "verify", "slice": "S-001", "gate": "hold", "duration_s": null, "rework_count": 1, "defects_found": 0, "output_bytes": 0}
 {"iteration": 1, "phase": "verify", "slice": "S-001", "gate": "pass", "duration_s": null, "rework_count": 1, "defects_found": 0, "output_bytes": 1591}
+{"iteration": 1, "phase": "retro", "slice": null, "gate": "pass", "duration_s": 77, "rework_count": 0, "defects_found": 0, "output_bytes": 9140}
