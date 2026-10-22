@@ -10,12 +10,20 @@ export interface IdentityProviderSettings {
   scopes: string;
 }
 
+/** Schemas a Deployment may ever show, and tables never shown; narrows the Allow-list (D-075). */
+export interface Boundary {
+  schemas?: string[];
+  exclude: [string, string][];
+}
+
 export interface Config {
   secret: string;
   previousSecret?: string;
   /** Unset until all three IDP_* variables are; Sign-in stays off until then (D-017). */
   identityProvider?: IdentityProviderSettings;
   publicUrl?: string;
+  /** Unset excludes nothing: the Database account's grants alone decide (D-075). */
+  boundary?: Boundary;
 }
 
 export type ConfigResult = { ok: true; config: Config } | { ok: false; variable: string };
@@ -52,6 +60,10 @@ export function readConfig(env: RuntimeVariables): ConfigResult {
   const publicUrl = value(env, "PUBLIC_URL");
   if (publicUrl && !isUrl(publicUrl, ["https:", "http:"])) return { ok: false, variable: "PUBLIC_URL" };
 
+  const boundaryText = value(env, "BOUNDARY");
+  const boundary = boundaryText === undefined ? undefined : parseBoundary(boundaryText);
+  if (boundary === null) return { ok: false, variable: "BOUNDARY" };
+
   const issuer = value(env, "IDP_ISSUER");
   if (issuer && !isUrl(issuer, ["https:"])) return { ok: false, variable: "IDP_ISSUER" };
   const clientId = value(env, "IDP_CLIENT_ID");
@@ -67,5 +79,25 @@ export function readConfig(env: RuntimeVariables): ConfigResult {
         }
       : undefined;
 
-  return { ok: true, config: { secret, previousSecret, identityProvider, publicUrl: publicUrl?.replace(/\/+$/, "") } };
+  return { ok: true, config: { secret, previousSecret, identityProvider, publicUrl: publicUrl?.replace(/\/+$/, ""), boundary } };
+}
+
+const isName = (v: unknown): v is string => typeof v === "string" && v !== "";
+
+/** `{"schemas":[...],"exclude":[[schema, table], ...]}`, both optional; null when malformed. */
+function parseBoundary(text: string): Boundary | null {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    return null;
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
+  const { schemas, exclude } = parsed as Record<string, unknown>;
+  if (schemas !== undefined && !(Array.isArray(schemas) && schemas.every(isName))) return null;
+  if (exclude !== undefined && !(Array.isArray(exclude) && exclude.every((e) => Array.isArray(e) && e.length === 2 && e.every(isName)))) {
+    return null;
+  }
+  const excluded = (exclude ?? []) as [string, string][];
+  return schemas === undefined ? { exclude: excluded } : { schemas: schemas as string[], exclude: excluded };
 }

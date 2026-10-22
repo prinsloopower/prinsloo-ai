@@ -1,11 +1,14 @@
 import { Hono, type Context } from "hono";
 import { readConfig, type RuntimeVariables } from "./config.js";
+import type { Database } from "./engine/database.js";
+import { classifyPostgresError } from "./engine/postgres.js";
 import { handleMcp } from "./mcp.js";
 import { op } from "./oplog.js";
 import { page, SignInBroker, type Staff } from "./signin/broker.js";
 import { IdentityProvider } from "./signin/identity-provider.js";
 import { Tokens } from "./signin/tokens.js";
 import type { Fetch } from "./signin/util.js";
+import { bypassesGrants } from "./visibility.js";
 
 /** What the app needs from the runtime adapter (ADR-001). */
 export interface Deps {
@@ -15,6 +18,10 @@ export interface Deps {
   env?: RuntimeVariables;
   fetch?: Fetch;
   now?: () => number;
+  /** The Database the Tools read; without one, no Tools are offered. */
+  database?: Database;
+  /** The setting naming the Database account in config_invalid lines (D-077). */
+  connectionSetting?: string;
   /** Answers a signed-in MCP request; the SDK handler unless a test swaps it. */
   mcpHandler?: (request: Request, staff: Staff) => Promise<Response>;
 }
@@ -39,7 +46,12 @@ export function createApp(deps: Deps) {
   app.get("/healthz", async (c) => {
     if (!result.ok) return c.json({ status: "degraded", config: "invalid", variable: result.variable }, 503);
     try {
-      await deps.ping();
+      if (deps.database) {
+        // The health-check Server statement is the D-077 account check itself.
+        if (bypassesGrants(await deps.database.accountFlags())) return c.json({ status: "degraded", database: "unsafe" }, 503);
+      } else {
+        await deps.ping();
+      }
       return c.json({ status: "ok", database: "ok" });
     } catch {
       // The driver's message can carry object or host names; report only the outcome (D-005).
@@ -86,7 +98,18 @@ export function createApp(deps: Deps) {
     if (!broker.configured) return blockUnauthenticated(metadata, false);
     const signedIn = await broker.verify(c.req.raw);
     if ("error" in signedIn) return blockUnauthenticated(metadata, signedIn.error === "invalid");
-    return (deps.mcpHandler ?? handleMcp)(c.req.raw, signedIn.staff);
+    if (deps.mcpHandler) return deps.mcpHandler(c.req.raw, signedIn.staff);
+    const tools = deps.database
+      ? {
+          database: deps.database,
+          boundary: config.boundary,
+          deployment: broker.origin(c.req.url),
+          connectionSetting: deps.connectionSetting ?? "HYPERDRIVE",
+          classify: classifyPostgresError,
+          now,
+        }
+      : undefined;
+    return handleMcp(c.req.raw, signedIn.staff, tools);
   };
   app.all("/mcp/*", mcp);
   app.all("/mcp", mcp);
