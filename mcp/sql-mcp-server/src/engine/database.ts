@@ -1,9 +1,13 @@
-/** Whether the Database account holds a grant that reaches every table at once (D-077). */
+/**
+ * Whether the Database account can reach every table at once (D-077, D-081): itself, through any
+ * role it is a member of (with or without inherited rights), or through the session it connected as.
+ */
 export interface AccountFlags {
   superuser: boolean;
   bypassRls: boolean;
   readAllData: boolean;
   writeAllData: boolean;
+  createRole: boolean;
 }
 
 /** One column of a user table the account can reach, and whether SELECT on it is granted. */

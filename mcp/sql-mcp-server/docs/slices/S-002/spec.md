@@ -28,11 +28,11 @@ list_tables
 ## Visibility
 The Visibility resolver (components.md) reads the Allow-list as ADR-006 and D-075 to D-077 describe. On PostgreSQL that is one catalog Server statement per Tool call:
 - user tables (`relkind` `r` or `p`, excluding partitions, which have `relispartition`) in non-system schemas on which the role has `USAGE` (`has_schema_privilege`). A table in a schema without `USAGE` cannot be queried, so it is not on the Allow-list;
-- each column with `has_column_privilege(…, 'SELECT')`, and its type from `format_type`;
-- excluding tables the role owns directly or through membership of the owning role (`pg_has_role(current_user, relowner, 'USAGE')`). Ownership, inherited or not, passes every privilege check, so a revoke could not hide such a table (D-076);
-- joined to one row of `rolsuper`, `rolbypassrls`, `pg_has_role(current_user, 'pg_read_all_data', 'MEMBER')` and the same for `pg_write_all_data`.
+- each column with `has_column_privilege(…, 'SELECT')`, and its type from `format_type` when the type is built in (`pg_catalog`), or `user-defined` otherwise (D-081);
+- excluding tables owned by any role the account is a member of, with or without inherited rights (`pg_has_role(current_user, relowner, 'MEMBER')`). Ownership passes every privilege check or is a `SET ROLE` away, so a revoke could not hide such a table (D-076, D-081);
+- joined to one row of the account flags D-081 defines: membership of any superuser or `BYPASSRLS` role, of `pg_read_all_data` or `pg_write_all_data`, `CREATEROLE`, and a superuser `session_user`.
 
-The result is then narrowed by the Boundary. With `BOUNDARY` set, a table is visible only if its schema is in `schemas` and the table is not in `exclude`. With `BOUNDARY` unset, nothing is excluded.
+The result is then narrowed by the Boundary. With `BOUNDARY` set, a table is visible only if its schema is in `schemas` (matched exactly) and the table is not in `exclude` (matched ignoring letter case, D-081). With `BOUNDARY` unset, nothing is excluded.
 
 ## Account check
 The check runs only for `tools/call`: `initialize`, `tools/list` and the other MCP methods never touch the Database. A `tools/call` first validates its inputs (`request_text`, `schema`), which needs no Database, and then runs the resolver's statement. If any bypass flag is true, the request answers 503 "Deployment misconfigured: Database account bypasses grants (reference <id>)", where `<id>` is the Audit record's `id`. The request writes `config_invalid` (`variable`: `HYPERDRIVE`) and an Audit record whose outcome is a Refusal of class `unsafe_account` (D-078). `/healthz` runs the same flags query and answers 503 `{ "status": "degraded", "database": "unsafe" }`.
@@ -102,19 +102,19 @@ The `sqlmcp_reader` role on the AI Golf App Supabase project, with test tables i
 ## Tasks
 
 ### T-001 — The Boundary setting is read, validated and applied
-Verified by: boundary_setting_parsed_and_validated, invalid_boundary_answers_503
+Verified by: boundary_setting_parsed_and_validated, invalid_boundary_answers_503, boundary_exclusion_ignores_letter_case
 
 ### T-002 — The Allow-list is read from PostgreSQL's grants on every Tool call
-Verified by: resolver_lists_granted_tables_and_columns, resolver_hides_ungranted_tables_and_columns, resolver_excludes_system_schemas_and_owned_tables, resolver_excludes_tables_owned_through_role_membership, resolver_requires_schema_usage, resolver_lists_partitioned_table_once, resolver_applies_boundary, resolver_sees_grant_and_revoke_immediately
+Verified by: resolver_lists_granted_tables_and_columns, resolver_hides_ungranted_tables_and_columns, resolver_excludes_system_schemas_and_owned_tables, resolver_excludes_tables_owned_through_role_membership, resolver_requires_schema_usage, resolver_lists_partitioned_table_once, resolver_hides_names_inside_column_types, resolver_hides_tables_owned_through_noinherit_membership, resolver_applies_boundary, resolver_sees_grant_and_revoke_immediately
 
 ### T-003 — An account that bypasses grants is refused on every Tool call, and /healthz says so
-Verified by: bypass_check_refuses_superuser_bypassrls_and_read_all_data, unsafe_account_answers_503_with_audit_and_op_line, healthz_reports_unsafe_account, account_check_only_on_tool_calls_after_input_validation
+Verified by: bypass_check_refuses_superuser_bypassrls_and_read_all_data, unsafe_account_answers_503_with_audit_and_op_line, healthz_reports_unsafe_account, account_check_only_on_tool_calls_after_input_validation, bypass_check_follows_role_membership_and_session_user, unsafe_op_line_names_tool_call
 
 ### T-004 — list_tables lists exactly the Visible objects
 Verified by: list_tables_registered_alone_with_static_description, list_tables_returns_visible_objects, list_tables_schema_filter_never_confirms_hidden, list_tables_caps_at_500_tables, list_tables_requires_request_text, list_tables_bounds_schema_input
 
 ### T-005 — Every Tool call leaves exactly one Audit record, and nothing else does
-Verified by: audit_record_written_once_per_tool_call, audit_record_fields_and_staff_identity, audit_record_never_holds_listing_or_tokens, no_audit_for_initialize_or_tools_list, no_audit_for_misconfigured_deployment
+Verified by: audit_record_written_once_per_tool_call, audit_record_fields_and_staff_identity, audit_record_never_holds_listing_or_tokens, no_audit_for_initialize_or_tools_list, no_audit_for_misconfigured_deployment, audit_inputs_bounded_and_catalog_read_timed
 
 ### T-006 — A failing catalog statement ends in a Database error that names nothing
 Verified by: database_error_rebuilt_from_class_without_names, refusals_and_errors_carry_audit_reference
@@ -158,3 +158,5 @@ Gate 2, 2026-10-21, critique in fresh context. Verdict: hold (0 blockers, 2 gaps
 - **gap — the stored `request_text` for a missing or oversized value was unstated.**
 
 Hold resolved by the product owner, 2026-10-21: the 503 ends with the reference; a missing `request_text` is stored as `null`, and an oversized one as its first 4,000 characters plus `…[cut]` with `shortened: true`. Passed on the product owner's word, without a third critique.
+
+Amended after the code review (2026-10-22, D-081): the account check follows role membership, `CREATEROLE` and `session_user`; ownership counts membership without inherited rights; only built-in types are named; Boundary exclusions ignore letter case; Audit inputs are bounded and timed from the catalog read; and the `config_invalid` line names the Tool call. Six tests were added, each recorded failing first. Two review nits were accepted: the sort compares UTF-16 code units, and a batched `tools/call` from an unsafe account answers 200 with an audited refusal.

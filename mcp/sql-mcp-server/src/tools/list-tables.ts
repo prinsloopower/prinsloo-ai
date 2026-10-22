@@ -1,4 +1,4 @@
-import { withReference, type Outcome } from "../audit.js";
+import { REQUEST_TEXT_MAX, withReference, type Outcome } from "../audit.js";
 import type { Boundary } from "../config.js";
 import type { Catalog, ReasonClass } from "../engine/database.js";
 import { visibleTables, type VisibleTable } from "../visibility.js";
@@ -9,7 +9,6 @@ export const LIST_TABLES = "list_tables";
 export const LIST_TABLES_DESCRIPTION =
   "Lists the tables and columns you may query in this database. Pass request_text: the Staff member's question in their own words.";
 
-const REQUEST_TEXT_MAX = 4000;
 const SCHEMA_MAX = 128;
 const TABLES_MAX = 500;
 

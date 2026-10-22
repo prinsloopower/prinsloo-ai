@@ -144,4 +144,10 @@ Raised by: slice-spec (S-002) | Blocks: nothing; apply at the next revision of t
 - data-model.md, Audit record: add the Refusal class `unsafe_account` (D-078).
 - environments.md, `HYPERDRIVE`: the config is created with caching disabled (D-079).
 - security.md or data-model.md: the error-class mapping and fixed sentences, and which refusals are Tool calls (D-080).
+- ADR-006, security.md and data-model.md: the account check's membership, `CREATEROLE` and `session_user` cases; ownership through any membership; `user-defined` column types; and Boundary exclusions ignoring letter case (D-081).
 These are left out of the gated documents for now because editing them re-gates the slice list, and that clears the declared slice (S-002) from the pipeline state (Q-028, reflections).
+
+## Q-031 — Does the D-077 account check cover roles the account can switch to?
+Raised by: code-review (S-002) | Blocks: slice-spec for S-003 (Agent-written SQL runs as this account)
+D-077 checks `rolsuper` and `rolbypassrls` of the account itself. Those attributes are not inherited, so an account that is a member of a superuser or BYPASSRLS role (for example `GRANT postgres TO sqlmcp_reader`) passes, and it can `SET ROLE` to that role. An account with `CREATEROLE` can grant itself `pg_read_all_data` before PostgreSQL 16. The check also reads `current_user`, so a superuser that connects with a `role` startup option passes while `session_user` can `RESET ROLE`. Options: refuse membership (`pg_has_role(…, 'MEMBER')`) of any role with `rolsuper` or `rolbypassrls`, refuse `rolcreaterole`, check `session_user` as well, or rely on S-003's query check refusing `SET`/`RESET ROLE` and say so in the Security material.
+Answered by the product owner: see D-081. Refuse every route.

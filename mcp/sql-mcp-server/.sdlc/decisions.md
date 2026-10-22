@@ -458,3 +458,17 @@ Rationale: every slice that sends SQL needs the same answer, so it is fixed once
 - **Which refusals are Tool calls.** A setting that makes the whole Deployment misconfigured (`SERVER_SECRET`, `BOUNDARY`, `IDP_*`, `PUBLIC_URL`) is caught before any MCP method is dispatched. Like a call with no Sign-in (D-044), it is not a Tool call and leaves no Audit record, only `config_invalid`. An unsafe Database account is found inside the Tool call's own catalog statement, so it is a Tool call, refused with `unsafe_account`, and audited (D-078).
 - Refusal sentences also end with the reference.
 Alternatives rejected: passing driver messages through after scrubbing (D-005 prefers rebuilding); auditing config-misconfigured requests (no Staff member's call has run, and the Deployment cannot even read its own settings).
+
+## D-081 — The account check refuses every route to a bypassing role; Boundary names fail closed; answers Q-031
+Decided by: human | Date: 2026-10-22 | Phase: review (S-002)
+Rationale: product owner's answers after the S-002 code review.
+- **Account check (extends D-077).** The Database account is refused if:
+  - it is a member, with or without inherited rights (`pg_has_role(…, 'MEMBER')`), of any role that is a superuser, has `BYPASSRLS`, or is or reaches `pg_read_all_data` or `pg_write_all_data`;
+  - it has `CREATEROLE`;
+  - the `session_user` it connected as is a superuser, even if `current_user` is not.
+
+  Each of these is a route by which `SET ROLE` or `RESET ROLE` reaches every table. S-003 will run the Agent's SQL as this account.
+- **Ownership, conservatively.** A table owned by any role the account is a member of, with or without inherited rights, is never on the Allow-list (`pg_has_role(…, 'MEMBER')`), because the account can `SET ROLE` to the owner.
+- **Boundary letter case.** Exclusions match ignoring letter case, so `"Payroll"` excludes `payroll`. Included schemas match exactly, so a case typo shows less, never more. A mistake in the Boundary always hides rather than reveals.
+- **Column types.** A column's type is shown by name only when it is a built-in type (`pg_catalog`). Any other type is shown as `user-defined`, because a type's name can carry a hidden schema's or table's name (every table has a row type of the same name).
+Alternatives rejected: relying on S-003's Query check to refuse `SET ROLE` (one more place that must never fail); exact Boundary matching everywhere (a case slip in an exclusion would show what it meant to hide).

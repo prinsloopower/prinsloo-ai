@@ -3,9 +3,11 @@ import type { AccountFlags, Catalog, CatalogRow, Database } from "../../src/engi
 /** A Database whose catalog the test writes by hand; counts how often it is read. */
 export class FakeDatabase implements Database {
   rows: CatalogRow[] = [];
-  flags: AccountFlags = { superuser: false, bypassRls: false, readAllData: false, writeAllData: false };
+  flags: AccountFlags = { superuser: false, bypassRls: false, readAllData: false, writeAllData: false, createRole: false };
   failure: unknown;
   catalogReads = 0;
+  /** Runs inside each catalog read, before it answers; lets a test move the clock. */
+  onRead?: () => void;
 
   /** Adds a table; each column is [name, type] (granted) or [name, type, false]. */
   table(schema: string, table: string, columns: [string, string, boolean?][]): this {
@@ -24,6 +26,7 @@ export class FakeDatabase implements Database {
 
   async catalog(): Promise<Catalog> {
     this.catalogReads++;
+    this.onRead?.();
     if (this.failure) throw this.failure;
     return { flags: { ...this.flags }, rows: this.rows.map((r) => ({ ...r })) };
   }

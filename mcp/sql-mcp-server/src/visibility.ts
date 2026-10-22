@@ -15,7 +15,7 @@ const SYSTEM_SCHEMA = /^(pg_catalog|information_schema|pg_toast.*|pg_temp.*|sys|
 
 /** Whether the account holds a grant that reaches every table at once (D-077). */
 export function bypassesGrants(flags: AccountFlags): boolean {
-  return flags.superuser || flags.bypassRls || flags.readAllData || flags.writeAllData;
+  return flags.superuser || flags.bypassRls || flags.readAllData || flags.writeAllData || flags.createRole;
 }
 
 /**
@@ -35,12 +35,13 @@ export function visibleTables(catalog: Catalog, boundary?: Boundary): VisibleTab
     entry.total++;
     if (row.granted) entry.columns.push({ name: row.column, type: row.type });
   }
-  const excluded = new Set((boundary?.exclude ?? []).map(([s, t]) => `${s}\u0000${t}`));
+  // Exclusions ignore letter case and inclusions do not, so a slip always hides more, never less (D-081).
+  const excluded = new Set((boundary?.exclude ?? []).map(([s, t]) => `${s}\u0000${t}`.toLowerCase()));
   const tables: VisibleTable[] = [];
   for (const [key, e] of byTable) {
     if (e.columns.length === 0 || SYSTEM_SCHEMA.test(e.schema)) continue;
     if (boundary?.schemas && !boundary.schemas.includes(e.schema)) continue;
-    if (excluded.has(key)) continue;
+    if (excluded.has(key.toLowerCase())) continue;
     tables.push({ schema: e.schema, table: e.table, columns: e.columns, all_columns: e.columns.length === e.total });
   }
   const order = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);

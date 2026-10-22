@@ -44,8 +44,8 @@ function isListTablesCall(body: unknown): body is { params: { arguments?: Record
 }
 
 function inputsOf(args: Record<string, unknown>): Record<string, unknown> {
-  // A schema name is an identifier, so Redaction keeps it (security.md).
-  return typeof args.schema === "string" ? { schema: args.schema } : {};
+  // A schema name is an identifier, so Redaction keeps it (security.md); the Audit logger bounds it.
+  return "schema" in args ? { schema: args.schema } : {};
 }
 
 async function readCatalog(database: Database): Promise<CatalogRead> {
@@ -77,15 +77,16 @@ export async function handleMcp(request: Request, staff?: Staff, tools?: ToolCon
     // which a tool handler cannot set. So a list_tables call with valid inputs reads the catalog
     // here, once, and the handler uses that read (D-077, D-078).
     let read: CatalogRead | undefined;
+    let readStarted: number | undefined;
     if (isListTablesCall(body)) {
       const args = body.params.arguments ?? {};
       if (validateListTables(args).ok) {
-        const started = tools.now();
+        const started = (readStarted = tools.now());
         read = await readCatalog(tools.database);
         if ("catalog" in read && bypassesGrants(read.catalog.flags)) {
           const id = crypto.randomUUID();
           const answer = answerRefusal("unsafe_account", UNSAFE_ACCOUNT, id);
-          op("config_invalid", { variable: tools.connectionSetting });
+          op("config_invalid", { variable: tools.connectionSetting, id });
           writeAudit({ id, started, ended: tools.now(), deployment: tools.deployment, staff, requestText: args.request_text, tool: LIST_TABLES, inputs: inputsOf(args), outcome: answer.outcome });
           return page(answer.result.content[0]!.text, 503);
         }
@@ -96,7 +97,8 @@ export async function handleMcp(request: Request, staff?: Staff, tools?: ToolCon
       LIST_TABLES,
       { description: LIST_TABLES_DESCRIPTION, inputSchema: { request_text: z.unknown().optional(), schema: z.unknown().optional() } },
       async (args: Record<string, unknown>) => {
-        const started = tools.now();
+        // A catalog read made before dispatch is part of this Tool call's time.
+        const started = readStarted ?? tools.now();
         const id = crypto.randomUUID();
         let answer: ToolAnswer;
         const valid = validateListTables(args);
@@ -107,7 +109,7 @@ export async function handleMcp(request: Request, staff?: Staff, tools?: ToolCon
           if ("error" in r) {
             answer = answerDatabaseError(tools.classify(r.error), id);
           } else if (bypassesGrants(r.catalog.flags)) {
-            op("config_invalid", { variable: tools.connectionSetting });
+            op("config_invalid", { variable: tools.connectionSetting, id });
             answer = answerRefusal("unsafe_account", UNSAFE_ACCOUNT, id);
           } else {
             answer = answerListing(listing(r.catalog, tools.boundary, valid.schema));

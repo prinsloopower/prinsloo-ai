@@ -1,8 +1,10 @@
 import type { ReasonClass } from "./engine/database.js";
 import type { Staff } from "./signin/broker.js";
 
-/** Request text is kept up to this length (data-model.md). */
-const REQUEST_TEXT_MAX = 4000;
+/** Request text is accepted, and kept, up to this length (data-model.md). */
+export const REQUEST_TEXT_MAX = 4000;
+/** A string input is kept up to this length; schema names are never longer (S-002). */
+const INPUT_MAX = 128;
 
 export type Outcome =
   | { kind: "ok"; row_count: number; cut_short: boolean }
@@ -33,6 +35,16 @@ export function writeAudit(entry: AuditEntry): void {
     requestText = `${requestText.slice(0, REQUEST_TEXT_MAX)}…[cut]`;
     shortened = true;
   }
+  // Inputs as received: strings bounded, numbers and booleans as they are, anything else left out.
+  const inputs: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(entry.inputs)) {
+    if (typeof value === "string") {
+      inputs[key] = value.length > INPUT_MAX ? `${value.slice(0, INPUT_MAX)}…[cut]` : value;
+      shortened ||= value.length > INPUT_MAX;
+    } else if (typeof value === "number" || typeof value === "boolean") {
+      inputs[key] = value;
+    }
+  }
   console.log(
     JSON.stringify({
       type: "audit",
@@ -43,7 +55,7 @@ export function writeAudit(entry: AuditEntry): void {
       staff: { sub: entry.staff.sub, name: entry.staff.name, iss: entry.staff.iss },
       request_text: requestText,
       tool: entry.tool,
-      inputs: entry.inputs,
+      inputs,
       conversation_objs: [],
       statements: [],
       outcome: entry.outcome,
