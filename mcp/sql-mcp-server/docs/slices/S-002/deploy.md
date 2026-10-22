@@ -12,7 +12,7 @@ Verified by: npm run smoke -- https://sql-mcp-server.prinsloopower.workers.dev &
 
 Both passed on the deployed Worker, 6/6 and 7/7. `healthz reaches the Database` now runs the D-077/D-081 account check as `sqlmcp_reader` through Hyperdrive and Supabase's pooler, and it reports the account safe.
 
-Rollback: `npx wrangler rollback fdf46ca`'s version, `npx wrangler rollback 8f666e42-0a9b-4bbb-83a4-e39828464114` (S-001). No data changes: the Server writes nothing. Two points:
+Rollback: `npx wrangler rollback 8f666e42-0a9b-4bbb-83a4-e39828464114`, the S-001 version. No data changes: the Server writes nothing. Two points:
 - The Hyperdrive change is outside the Worker version and stays after a rollback. S-001 only pings, so it works as `sqlmcp_reader` too.
 - The `sqlmcp_test` schema and the `sqlmcp_reader` role stay in Supabase unless removed with `DROP SCHEMA sqlmcp_test CASCADE; DROP ROLE sqlmcp_reader;`.
 
