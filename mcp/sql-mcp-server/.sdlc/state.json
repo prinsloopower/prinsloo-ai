@@ -104,7 +104,7 @@
     {
       "id": "S-002",
       "title": "Seeing which tables are available",
-      "status": "built",
+      "status": "deployed",
       "traces": [
         "J-003",
         "R-003",
@@ -128,14 +128,20 @@
           "at": "2026-10-22T02:30:03+00:00"
         },
         "review": {
-          "result": "hold",
-          "by": "model",
-          "at": "2026-10-22T12:13:02+00:00"
+          "result": "pass",
+          "by": "human",
+          "at": "2026-10-22T20:54:36+00:00",
+          "quote": "Close it (Recommended)"
+        },
+        "deploy": {
+          "result": "pass",
+          "by": "script",
+          "at": "2026-10-22T20:57:44+00:00"
         }
       }
     }
   ],
-  "blocked_on": "review: re-review: blocker resolved; 1 gap (flags judged for current_user, not session_user), 1 nit (sort test) - both fixed in the next commit",
+  "blocked_on": null,
   "open_questions": [],
-  "phase": "review"
+  "phase": null
 }
