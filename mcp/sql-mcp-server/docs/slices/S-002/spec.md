@@ -108,10 +108,10 @@ Verified by: boundary_setting_parsed_and_validated, invalid_boundary_answers_503
 Verified by: resolver_lists_granted_tables_and_columns, resolver_hides_ungranted_tables_and_columns, resolver_excludes_system_schemas_and_owned_tables, resolver_excludes_tables_owned_through_role_membership, resolver_requires_schema_usage, resolver_lists_partitioned_table_once, resolver_hides_names_inside_column_types, resolver_hides_tables_owned_through_noinherit_membership, resolver_applies_boundary, resolver_sees_grant_and_revoke_immediately
 
 ### T-003 — An account that bypasses grants is refused on every Tool call, and /healthz says so
-Verified by: bypass_check_refuses_superuser_bypassrls_and_read_all_data, unsafe_account_answers_503_with_audit_and_op_line, healthz_reports_unsafe_account, account_check_only_on_tool_calls_after_input_validation, bypass_check_follows_role_membership_and_session_user, unsafe_op_line_names_tool_call
+Verified by: bypass_check_refuses_superuser_bypassrls_and_read_all_data, unsafe_account_answers_503_with_audit_and_op_line, healthz_reports_unsafe_account, account_check_only_on_tool_calls_after_input_validation, bypass_check_follows_role_membership_and_session_user, bypass_check_judges_the_login_role, unsafe_op_line_names_tool_call
 
 ### T-004 — list_tables lists exactly the Visible objects
-Verified by: list_tables_registered_alone_with_static_description, list_tables_returns_visible_objects, list_tables_schema_filter_never_confirms_hidden, list_tables_caps_at_500_tables, list_tables_requires_request_text, list_tables_bounds_schema_input
+Verified by: list_tables_registered_alone_with_static_description, list_tables_returns_visible_objects, list_tables_schema_filter_never_confirms_hidden, list_tables_caps_at_500_tables, list_tables_requires_request_text, list_tables_bounds_schema_input, sort_is_code_point_not_collation
 
 ### T-005 — Every Tool call leaves exactly one Audit record, and nothing else does
 Verified by: audit_record_written_once_per_tool_call, audit_record_fields_and_staff_identity, audit_record_never_holds_listing_or_tokens, no_audit_for_initialize_or_tools_list, no_audit_for_misconfigured_deployment, audit_inputs_bounded_and_catalog_read_timed
@@ -160,3 +160,5 @@ Gate 2, 2026-10-21, critique in fresh context. Verdict: hold (0 blockers, 2 gaps
 Hold resolved by the product owner, 2026-10-21: the 503 ends with the reference; a missing `request_text` is stored as `null`, and an oversized one as its first 4,000 characters plus `…[cut]` with `shortened: true`. Passed on the product owner's word, without a third critique.
 
 Amended after the code review (2026-10-22, D-081): the account check follows role membership, `CREATEROLE` and `session_user`; ownership counts membership without inherited rights; only built-in types are named; Boundary exclusions ignore letter case; Audit inputs are bounded and timed from the catalog read; and the `config_invalid` line names the Tool call. Six tests were added, each recorded failing first. Two review nits were accepted: the sort compares UTF-16 code units, and a batched `tools/call` from an unsafe account answers 200 with an audited refusal.
+
+Amended after the re-review (2026-10-22): every account flag is judged for the login role (`session_user`), which can always `SET ROLE NONE` back to itself (`bypass_check_judges_the_login_role`). The sort test now uses a pair that a collation-aware comparison would order differently (`sort_is_code_point_not_collation`).

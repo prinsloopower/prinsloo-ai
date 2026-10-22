@@ -16,18 +16,18 @@ export async function pingPostgres(connectionString: string): Promise<void> {
 }
 
 /**
- * Routes to every table at once (D-077, D-081): a superuser or BYPASSRLS role the account is a
- * member of, with or without inherited rights (a member can SET ROLE to it); pg_read_all_data or
- * pg_write_all_data, reached the same way; CREATEROLE; or a superuser session that switched role.
+ * Routes to every table at once (D-077, D-081), judged for the role the connection logged in as
+ * (session_user): it can always SET ROLE NONE back to itself, and it is a member of every role it
+ * can switch to, so its memberships cover current_user's. Membership counts with or without
+ * inherited rights, because a member can SET ROLE to the role.
  */
 const FLAGS_SQL = `
   SELECT
-    EXISTS (SELECT 1 FROM pg_roles r WHERE r.rolsuper AND pg_has_role(current_user, r.oid, 'MEMBER'))
-      OR COALESCE((SELECT s.rolsuper FROM pg_roles s WHERE s.rolname = session_user), false) AS superuser,
-    EXISTS (SELECT 1 FROM pg_roles r WHERE r.rolbypassrls AND pg_has_role(current_user, r.oid, 'MEMBER')) AS bypass_rls,
-    pg_has_role(current_user, 'pg_read_all_data', 'MEMBER') AS read_all_data,
-    pg_has_role(current_user, 'pg_write_all_data', 'MEMBER') AS write_all_data,
-    COALESCE((SELECT c.rolcreaterole FROM pg_roles c WHERE c.rolname = current_user), false) AS create_role`;
+    EXISTS (SELECT 1 FROM pg_roles r WHERE r.rolsuper AND pg_has_role(session_user, r.oid, 'MEMBER')) AS superuser,
+    EXISTS (SELECT 1 FROM pg_roles r WHERE r.rolbypassrls AND pg_has_role(session_user, r.oid, 'MEMBER')) AS bypass_rls,
+    pg_has_role(session_user, 'pg_read_all_data', 'MEMBER') AS read_all_data,
+    pg_has_role(session_user, 'pg_write_all_data', 'MEMBER') AS write_all_data,
+    EXISTS (SELECT 1 FROM pg_roles r WHERE r.rolcreaterole AND pg_has_role(session_user, r.oid, 'MEMBER')) AS create_role`;
 
 /**
  * The Allow-list's source (ADR-006): every column of every user table the account can reach, and

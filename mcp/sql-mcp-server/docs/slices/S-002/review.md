@@ -1,59 +1,38 @@
-# Review — S-002
+# Review — S-002 (re-review after rework)
 
-Reviewed: commit d005923 (diff 4c88366..d005923, `src` and `test`) against the slice spec.
-Tests: `npm test` → 17 files, 114 passed, 0 failed (includes `visibility.int.test.ts` against Docker PostgreSQL 17 on 55432). `npm run typecheck` → clean.
-Both axes were reviewed in one fresh context that did not write the code. Behaviour was also checked by hand against the test PostgreSQL (format_type output, membership of a superuser role, a refused connection's error code).
+Reviewed: rework commit 22faa09 (`src` and `test`) against the slice spec as amended (D-081) and the previous review.
+Tests: `npm test` → 19 files, 120 passed, 0 failed (includes `visibility.int.test.ts` and `review.int.test.ts` against Docker PostgreSQL 17.11 on 55432). `npm run typecheck` → clean.
+Both axes were reviewed in one fresh context that did not write the code. The account check was also probed by hand against the test PostgreSQL with throwaway roles (dropped afterwards).
 
-## blocker — column types can name a Hidden object
-Where: src/engine/postgres.ts:43
+## Previous findings
+
+| Previous finding | Status |
+|---|---|
+| blocker — column types can name a Hidden object | Resolved. Only `pg_catalog` types are named; enums, domains, row types and their arrays become `user-defined` (an array type lives in its element's schema). `resolver_hides_names_inside_column_types` covers a hidden enum, row type and row-type array. |
+| gap — account check passes an account that can become a superuser | Resolved as D-081 words it: membership (MEMBER) of any superuser/BYPASSRLS role, `pg_read_all_data`/`pg_write_all_data`, `CREATEROLE`, and a superuser `session_user`. A remaining route is raised below. |
+| gap — Boundary matching fails open on case | Resolved (D-081): exclusions compare lower-cased, inclusions stay exact, so a slip hides more. |
+| nit — NOINHERIT ownership | Resolved (`'MEMBER'`, tested). |
+| nit — sort test / UTF-16 comparator | Comparator accepted on record (spec amendment note). The test is unchanged and still cannot tell code-point order from collation order; carried below. |
+| nit — batched `tools/call` answers 200 | Accepted on record (spec amendment note). |
+| nit — Audit `ts`/`duration_ms` skip the catalog read | Resolved: timed from the start of the catalog read. |
+| nit — Audit inputs uncapped or dropped | Resolved: strings cut at 128 with `…[cut]`, numbers and booleans kept. |
+| nit — `config_invalid` carries no Tool call id | Resolved on both paths, tested. |
+| nit — 4,000-character limit defined twice | Resolved (one exported constant). |
+
+## gap — the account check reads only `current_user`, so the role the connection signed in as can hold the bypass
+Where: src/engine/postgres.ts:27
 Axis: spec and scope
-`format_type(a.atttypid, a.atttypmod)` qualifies any type outside the search_path with its schema. A granted column whose type is an enum, domain or composite in a schema the account cannot see is listed as e.g. `rv_hidden.secret_status` (reproduced on the test Database). Every table has a composite row type of the same name, so a column typed as another table's row type, or an array of it, puts that hidden table's schema and name in the listing. R-003 and the Hidden object definition say no Hidden object appears in anything the Agent receives, and no test covers a non-built-in type. Fix: emit the type name only when its schema is visible (or `pg_catalog`), and otherwise a neutral name such as `USER-DEFINED` or the base type, with a resolver test that uses a hidden enum and a hidden table's row type.
+Membership, `pg_read_all_data` and `CREATEROLE` are tested for `current_user`; only `rolsuper` is tested for `session_user`. A login role that holds `pg_read_all_data` (or BYPASSRLS membership, or `CREATEROLE`) and lands on a clean role through `ALTER ROLE … SET role = …` or a `-c role=…` option passes with every flag false. Reproduced on PostgreSQL 17: login `pz_lead` with `pg_read_all_data`, default role `rv_reader`, passes the check, and `SET ROLE NONE` then reads `rv_hidden.secret_tbl`. The listing stays correct (it is evaluated as `current_user`), but S-003 runs the Agent's SQL on this connection, and D-081's stated intent is to refuse every `SET ROLE`/`RESET ROLE` route. Fix: test every flag for `session_user`, including membership of a `CREATEROLE` role; `session_user` is necessarily a member of `current_user`, so this also covers the current checks. Test with a non-superuser login holding `pg_read_all_data` and a default `role`.
 
-## gap — the account check passes an account that can become a superuser
-Where: src/engine/postgres.ts:20
-Axis: spec and scope
-The check reads `rolsuper` and `rolbypassrls` of `current_user` only. Those attributes are not inherited, so an account that is a member of `postgres` (or of any superuser or BYPASSRLS role) passes (reproduced: `GRANT postgres TO …` gives all flags false), and so does one with `CREATEROLE`, which before PostgreSQL 16 can grant itself `pg_read_all_data`. The check also uses `current_user`, so a superuser connecting with a `role` startup option passes while `session_user` can `RESET ROLE`. The listing itself stays safe here, because inherited ownership hides the owner's tables, but S-003 runs Agent SQL as this account and will otherwise have to invent the rule. This matches D-077 as written, so it is raised as Q-031.
-
-## gap — Boundary matching fails open on case
-Where: src/visibility.ts:43
-Axis: spec and scope
-`exclude` and `schemas` are compared byte-for-byte with catalog names. An Operator who writes `[["Sales","Payroll"]]`, as they would write an unquoted identifier in SQL, excludes nothing and `sales.payroll` stays listed. For `schemas` the mismatch hides (safe), but for `exclude` it shows a table the Operator meant to hide. MS SQL Server (S-006) is case-insensitive by default, so the matching rule needs deciding now; at minimum `readConfig` should reject or warn on names that cannot match a PostgreSQL unquoted identifier, and the Security material should say names are exact.
-
-## nit — ownership through NOINHERIT membership is not excluded
-Where: src/engine/postgres.ts:55
-Axis: spec and scope
-`pg_has_role(…, 'USAGE')` is false for a NOINHERIT member of the owning role, so such a table is listed when granted. The listing still follows grants, as D-076 intends, but the account can `SET ROLE` to the owner. Matches the spec's wording; S-003's query check must refuse `SET ROLE`. `'MEMBER'` would be the conservative test.
-
-## nit — sort test cannot tell code-point order from collation order
+## nit — sort test still cannot tell code-point order from collation order
 Where: test/listing/listing.test.ts:104
 Axis: spec and scope
-`A_upper` sorts before `big` under code-point order and under any locale collation, so replacing the comparator with `localeCompare` still passes. A pair such as `Zeta`/`alpha` would fail. The comparator at src/visibility.ts:46 also compares UTF-16 code units, not code points, which differs only for astral characters.
+Carried from the previous review: `A_upper` sorts before `big` under either order, so a switch to `localeCompare` would still pass. A `Zeta`/`alpha` pair would catch it.
 
-## nit — a batched `tools/call` with an unsafe account answers 200, not 503
-Where: src/mcp.ts:80
-Axis: spec and scope
-`isListTablesCall` sees only a single JSON-RPC object, and the SDK transport accepts arrays. A batch goes to the handler fallback: still refused, audited and logged, but inside a 200. Nothing leaks.
+Checked and sound: `FLAGS_SQL` cannot error for an ordinary role (`pg_roles` is world-readable and `pg_has_role` with an existing role OID needs no privilege) and always returns one row; no name from a hidden schema reaches the listing through column types, since `pg_catalog` types print unqualified; lower-casing both sides of the exclusion key only ever hides more; Audit input cutting cannot drop the record; `readStarted` is per request and unset for batches; the 503 path and the handler path both time from the read.
 
-## nit — Audit `ts` and `duration_ms` skip the catalog read
-Where: src/mcp.ts:99
-Axis: spec and scope
-When the catalog was read before dispatch, the handler takes `started` afterwards, so `ts` is later than arrival and `duration_ms` leaves out the Database time. data-model.md defines both from arrival.
+Verdict: hold (0 blockers, 1 gap, 1 nit)
 
-## nit — Audit inputs are uncapped, or dropped when not a string
-Where: src/audit.ts:46
-Axis: spec and scope
-A refused 1 MB `schema` is written whole, which can exceed Workers Logs' line size. A non-string `schema` or `request_text` is recorded as absent or `null`, not as received.
+## Previous review
 
-## nit — `config_invalid` for an unsafe account carries no Tool call id
-Where: src/mcp.ts:88
-Axis: standards and naming
-security.md says operational lines name the Tool call `id` when there is one. Without it, an Operator cannot join the line to its Audit record. Same at src/mcp.ts:110.
-
-## nit — the 4,000-character limit is defined twice
-Where: src/tools/list-tables.ts:12
-Axis: standards and naming
-`REQUEST_TEXT_MAX` also appears at src/audit.ts:5. If one changes and the other does not, accepted text could be stored cut.
-
-Checked and sound: the PUBLIC grants and inherited grants used by `has_column_privilege`/`has_schema_privilege`; column-only versus table grants (`all_columns`); partitions (`relispartition` also drops sub-partitions); system schemas excluded both in SQL and in `visibleTables`; a hidden and a missing `schema` give identical answers; driver text never reaches the Agent or a log line; tokens are not logged; one Audit record per call on every path (pre-dispatch 503, invalid input, Database error, listing), none for `initialize`/`tools/list`/misconfigured `BOUNDARY`; the account check runs only on `tools/call` and after input validation. Each integration test fails if its SQL clause is removed (ownership, inherited ownership, USAGE, partition, grant/revoke).
-
-Verdict: fail (1 blocker, 2 gaps, 7 nits)
+Commit d005923, 2026-10-22: Verdict fail (1 blocker, 2 gaps, 7 nits). Blocker: column types named hidden types/tables. Gaps: account check ignored role membership, CREATEROLE and session_user (Q-031); Boundary matching failed open on case. Answered by D-081 and reworked in 22faa09.

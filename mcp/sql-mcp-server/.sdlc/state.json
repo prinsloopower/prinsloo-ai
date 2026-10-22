@@ -113,7 +113,7 @@
       ],
       "rework": {
         "slice-spec": 2,
-        "review": 1
+        "review": 2
       },
       "gates": {
         "slice-spec": {
@@ -128,15 +128,14 @@
           "at": "2026-10-22T02:30:03+00:00"
         },
         "review": {
-          "result": "fail",
+          "result": "hold",
           "by": "model",
-          "at": "2026-10-22T02:36:28+00:00"
+          "at": "2026-10-22T12:13:02+00:00"
         }
       }
     }
   ],
-  "blocked_on": null,
+  "blocked_on": "review: re-review: blocker resolved; 1 gap (flags judged for current_user, not session_user), 1 nit (sort test) - both fixed in the next commit",
   "open_questions": [],
-  "phase": "review",
-  "phase_started_at": "2026-10-22T12:05:37+00:00"
+  "phase": "review"
 }

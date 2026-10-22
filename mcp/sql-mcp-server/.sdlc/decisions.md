@@ -467,6 +467,8 @@ Rationale: product owner's answers after the S-002 code review.
   - it has `CREATEROLE`;
   - the `session_user` it connected as is a superuser, even if `current_user` is not.
 
+  Every one of these is judged for `session_user`, the login role, which can always `SET ROLE NONE` back to itself. Its memberships include `current_user`'s (added after the S-002 re-review).
+
   Each of these is a route by which `SET ROLE` or `RESET ROLE` reaches every table. S-003 will run the Agent's SQL as this account.
 - **Ownership, conservatively.** A table owned by any role the account is a member of, with or without inherited rights, is never on the Allow-list (`pg_has_role(…, 'MEMBER')`), because the account can `SET ROLE` to the owner.
 - **Boundary letter case.** Exclusions match ignoring letter case, so `"Payroll"` excludes `payroll`. Included schemas match exactly, so a case typo shows less, never more. A mistake in the Boundary always hides rather than reveals.
