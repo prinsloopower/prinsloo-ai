@@ -71,3 +71,96 @@ Candidate change: none.
 Evidence: the Bash tool's wrapper failed on four heredocs, and one of them lost the critique findings, so the system-spec gate-1 fail was recorded before its findings were written. PowerShell 5.1 split arguments containing quotes three times: two commit messages and a gate `--quote`. These are environment problems, not process ones.
 Cost: one gate recorded out of order, and about eight retried commands.
 Candidate change: none for the process. Running Python and git through files (`-F`, message files) avoided it.
+
+# Iteration 2 — 2026-10-22
+
+The D-074–D-081 amendment (the Allow-list became the Database account's grants) re-gated discovery through slices. Then one slice, S-002 (listing tables from grants), was specified, built, reviewed, deployed and verified. Figures come from the 17 `metrics.jsonl` lines after iteration 1's retro, which the script still labels iteration 1 (Q-028). Finding counts come from the documents, `docs/slices/S-002/review.md` and `.sdlc/verification/S-002.md`.
+
+## The defect count measures nothing
+Evidence: `defects_found` is 0 on all 17 iteration-2 lines. The S-002 spec alone holds 3 blockers and 6 gaps written by its gates. The code review found 1 blocker and 3 gaps across two rounds, but `review.md` writes findings as `### ` headings without a severity word at the start, so the counter misses those too. This is the same cause as iteration 1: the counter and the critique's output format disagree.
+Cost: for two iterations, no gate's catch rate has been measured, so `improve` can argue only from hand counts.
+Candidate change: make `count_findings` read the critique's bullet format (`- **blocker —`, `- **gap —`) and the review's, and accept `#`-level sections. It recurs, and the damage is real.
+
+## Holds are counted as rework
+Evidence: slice-spec S-002 shows rework 2 after one fail and one hold. Review S-002 shows rework 2 after one fail and one hold. Re-gated upstream phases also carry iteration 1's counters into iteration 2, so discovery reads rework 5 on a pass in which nothing failed.
+Cost: the "two failures means the fault is upstream" rule would have fired on both S-002 phases, which each failed once. Rework figures cannot be compared between iterations.
+Candidate change: count only fails in `rework_count`, and reset counters when an iteration opens (see Q-028). It recurs.
+
+## Duration measures the calendar, not the work
+Evidence: slice-spec S-002's fail shows 29,051 s (8.1 h, overnight) and its hold 4,118 s. Nine of the 17 lines have no duration at all: re-gates, and passes recorded right after a hold.
+Cost: nothing in iteration 2's cost can be read from duration.
+Candidate change: time from the phase's first `next` to the gate within one session, or record active time from the orchestrator. It recurs.
+
+## Re-approving the backlog discards declared slices
+Evidence: the slices gate passed on 2026-10-21 after D-074. `next` then answered "a product-sized iteration builds one slice and none is declared", and S-001's verified record was gone from `state.json`. This is the third time across two iterations.
+Cost: smaller than in iteration 1, because S-001 was finished. It again shaped decisions, though: six wording corrections were parked in Q-030 so that the slice list would not be re-gated while S-002 was declared.
+Candidate change: keep declared slices whose backlog line is unchanged when the backlog is re-gated. It recurs.
+
+## Upstream corrections cascade into re-gates
+Evidence: D-074 amended 16 files and re-gated 8 phases in one approval. Afterwards, Q-030 collected six wording corrections owed by S-002 and the review: the domain's Typed tool, `unsafe_account` in data-model.md, Hyperdrive caching in environments.md, D-080's mapping, and D-081's four rules. None was applied, to avoid another cascade.
+Cost: the system spec and domain model now trail eight decisions (D-078–D-081). S-003, which builds on them, will be specified against documents that are knowingly behind.
+Candidate change: allow a recorded "erratum" amendment that edits a gated document without staling its dependants when only wording traceable to an approved D-### changes. It recurs.
+
+## Each critique round found a deeper layer
+Evidence:
+- The amendment's consistency critique: fail (3 blockers), fail (2 major), then a focused pass.
+- S-002 spec: fail (3 blockers), then hold (2 gaps).
+- S-002 code review: fail, then hold.
+
+The review's blocker, column types naming hidden schemas and tables through `format_type`, came in with the spec's own Visibility text and passed both spec critiques. Its second-round gap, the account check judged for `current_user` rather than the login role, passed three reviewers before the fourth reproduced it.
+Cost: 7 critique and review rounds for one slice plus one amendment, about 10 subagent runs. Two security defects reached code.
+Candidate change: give the slice-spec checklist a "protocol and engine semantics" item. For a security boundary, the spec names the engine behaviour it relies on (privilege inheritance, type printing, `SET ROLE`), and the critique checks each against the engine. It recurs: the S-001 OAuth layers in iteration 1, the PostgreSQL privilege layers here.
+
+## Tests guarding existing behaviour cannot be recorded red
+Evidence: in S-002, `no_audit_for_initialize_or_tools_list` and `sort_is_code_point_not_collation` passed on their first run, and were recorded failing only against deliberate, reverted breaks. Three tests edited after their first record were re-recorded the same way: two because the fake hidden table `staff` collided with the `staff` field. That makes 5 mutation records, after 11 in iteration 1.
+Cost: 16 extra recordings over two iterations, tracked only in D-070 and D-078 prose.
+Candidate change: let `sdlc_lint.py red` take a named mutation (a file and a replacement), apply it, run the test, record the failure with the mutation, and revert, so the record shows what was broken. It recurs.
+
+## The lint fails on Windows
+Evidence: all 37 S-002 red records, and every `next` call since S-001's build, ran through the scratchpad wrapper. Without it, `test_body` still crashes on binary files under `node_modules`.
+Cost: the pipeline depends on a file outside the repository, which another machine or session would not have.
+Candidate change: `read()` tolerates undecodable bytes, and `test_body` skips `node_modules`. It recurs.
+
+## A rejected alias collides with a SQL keyword
+Evidence: "system-spec: uses 'ceiling'" was reported on every lint run in iteration 2, and every gate and reviewer prompt had to say it was a false positive.
+Cost: a standing finding that teaches everyone to skim lint output.
+Candidate change: skip code spans (backticks and fenced blocks) when checking rejected names. It recurs.
+
+## Shell quoting on Windows breaks commands
+Evidence:
+- PowerShell 5.1 split quoted arguments in two commit messages and one gate `--quote`.
+- `${s}` was interpolated inside a search string, and a backtick one-liner was mangled.
+- Each was redone through a file (`git commit -F`, a `.cjs` script, the Edit tool).
+
+Cost: about six retried commands. These are environment problems, not process ones.
+Candidate change: none for the process.
+
+## Secrets passed as arguments land in logs
+Evidence: during S-002's T-007, the generated `sqlmcp_reader` password was passed to `wrangler hyperdrive update` as an argument through `npx`. npm's debug log for that run (`npm-cache/_logs/…-debug-0.log`) recorded it in plain text, and it was found and deleted (deploy.md).
+Cost: a database password on disk for about two minutes. It was found only because it was looked for.
+Candidate change: the deploy skill's guidance should pass secrets on standard input or through environment variables, never as arguments, and check npm's logs after any command that handled one. Proposed now on one occurrence, because the damage was real.
+
+## Bulk edits to documents by script are fragile
+Evidence: a scripted section replacement in `domain-model.md` deleted its whole `# Critique findings` history (72 lines), because the single-`#` heading was not a section boundary. It was restored from git. The same pass left `adr.md` with mixed line endings (127 CRLF, 10 LF) until it was normalised. The architecture documents are CRLF and every other document is LF.
+Cost: two repairs, and a deletion of gated history that a diff check happened to catch.
+Candidate change: none yet. If it recurs, normalise every document's line endings once and have edits go through a tool that edits by anchor rather than by section split.
+
+## Cross-cutting critiques leave no gate record
+Evidence: the D-074 amendment's three consistency critiques (fail, fail, focused pass) appear nowhere in `metrics.jsonl`. They covered no single phase, so the only record is the 8 passes logged afterwards with one quote.
+Cost: the costliest review of iteration 2 is invisible to the metrics, and to any `improve` argument about it.
+Candidate change: none yet. If amendments recur, the pipeline needs an `amendment` gate kind that records against the decision.
+
+## What nobody decided
+Evidence: no `D-###` remains `Decided by: model`. D-077 was confirmed in the amendment approval, and D-078 to D-080 in one sentence at S-002's verification.
+Cost: none measured. Batch confirmation recurs, which records consent rather than review.
+Candidate change: none.
+
+## What stayed open
+Evidence:
+- Q-007 (the cost of the analyst queue) has been open since discovery, through both iterations, and blocks nothing.
+- Q-022 (the Azure test environment) blocks S-006.
+- Q-029 (Created-object ownership on SQL Server) blocks S-012.
+- Q-024, Q-028 and Q-030 are open process or wording items.
+
+Cost: Q-007 has blocked nothing for two iterations.
+Candidate change: close Q-007 as "no metric this release" by a D-###, at the next PRD revision.
