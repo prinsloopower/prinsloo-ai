@@ -426,7 +426,7 @@ Rationale: the consistency critique found three versions of the start-up check. 
 Alternatives rejected: a once-per-isolate check, which misses later role grants; refusing every endpoint, which would also hide the reason from `/healthz`.
 
 ## D-078 — Choices made specifying S-002
-Decided by: model | Date: 2026-10-21 | Phase: slice-spec (S-002)
+Decided by: human (confirmed 2026-10-22 at the S-002 verification gate) | Date: 2026-10-21 | Phase: slice-spec (S-002)
 Rationale: the slice needs answers the system spec does not give:
 - `list_tables` is a Typed tool that produces no Statements, only catalog Server statements (D-026). The domain model's Typed tool "produces … one or more" Statements when not refused; this is the first exception, queued for the domain model's next revision (Q-030).
 - An MCP request made while the Database account bypasses grants (D-077) is a Tool call refused with a new Refusal class, `unsafe_account`, so R-010's "run or refused" still leaves an Audit record. data-model.md's class list gains it at its next revision (Q-030).
@@ -436,12 +436,12 @@ Rationale: the slice needs answers the system spec does not give:
 Alternatives rejected: the listing as an MCP resource rather than a tool (resources carry no `request_text`, so they would leave no Request text in the Audit record); a 503 with no Audit record for an unsafe account (it breaks R-010).
 
 ## D-079 — Hyperdrive query caching is off for every Cloudflare Deployment
-Decided by: model | Date: 2026-10-21 | Phase: slice-spec (S-002)
+Decided by: human (confirmed 2026-10-22 at the S-002 verification gate) | Date: 2026-10-21 | Phase: slice-spec (S-002)
 Rationale: Hyperdrive caches read queries for up to 60 s by default. The Allow-list and the account check are reads, so a revoke or a bypassing role could go unseen for a minute, and Agent-written queries (S-003) would return stale rows. The project test Deployment's config is updated with caching disabled. The Deployment kit (S-005) creates Operator configs the same way, and environments.md says so at its next revision (Q-030).
 Alternatives rejected: keeping the cache and stating "within 60 s" (it contradicts R-017's "takes effect without a redeploy" in spirit, and stale query results are wrong for answering questions); a `max_age` of a few seconds (it still makes revocation non-immediate, for little gain on the volumes in operations.md).
 
 ## D-080 — Database error classes, their fixed sentences, and which refusals are Tool calls
-Decided by: model | Date: 2026-10-21 | Phase: slice-spec (S-002)
+Decided by: human (confirmed 2026-10-22 at the S-002 verification gate) | Date: 2026-10-21 | Phase: slice-spec (S-002)
 Rationale: every slice that sends SQL needs the same answer, so it is fixed once here. S-006 adds the MS SQL Server mapping.
 - **PostgreSQL code to `reason_class`:**
   - SQLSTATE class `08`, or a socket or TLS failure before any reply, is `connection`;

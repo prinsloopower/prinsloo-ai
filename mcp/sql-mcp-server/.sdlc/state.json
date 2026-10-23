@@ -104,7 +104,7 @@
     {
       "id": "S-002",
       "title": "Seeing which tables are available",
-      "status": "deployed",
+      "status": "verified",
       "traces": [
         "J-003",
         "R-003",
@@ -137,6 +137,12 @@
           "result": "pass",
           "by": "script",
           "at": "2026-10-22T20:57:44+00:00"
+        },
+        "verify": {
+          "result": "pass",
+          "by": "human",
+          "at": "2026-10-23T01:42:28+00:00",
+          "quote": "Pass S-002, confirm D-078 to D-080, and commit."
         }
       }
     }
