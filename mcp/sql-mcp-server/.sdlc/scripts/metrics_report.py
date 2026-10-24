@@ -24,7 +24,7 @@ def load(root, iteration=None):
     if not path.is_file():
         return []
     rows = []
-    for line in path.read_text().splitlines():
+    for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
         line = line.strip()
         if not line:
             continue
@@ -39,13 +39,20 @@ def load(root, iteration=None):
 
 def summarise(rows):
     by_phase, totals = defaultdict(lambda: defaultdict(int)), defaultdict(int)
+    latest = {}
     for r in rows:
         p = by_phase[r.get("phase", "?")]
-        for k in ("duration_s", "rework_count", "defects_found", "output_bytes"):
+        for k in ("duration_s", "defects_found", "output_bytes"):
             p[k] += r.get(k) or 0
             totals[k] += r.get(k) or 0
+        # rework_count is a running count per phase and slice; its latest value is the total.
+        key = (r.get("phase", "?"), r.get("slice"))
+        latest[key] = max(latest.get(key, 0), r.get("rework_count") or 0)
         p[r.get("gate", "none")] += 1
         totals["phases"] += 1
+    for (phase, _), n in latest.items():
+        by_phase[phase]["rework_count"] += n
+        totals["rework_count"] += n
     return by_phase, totals
 
 

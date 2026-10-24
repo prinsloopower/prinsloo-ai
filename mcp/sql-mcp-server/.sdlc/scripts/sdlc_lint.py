@@ -16,7 +16,7 @@ Usage:  sdlc_lint.py [--root .] [--json]            the checks
 Exit:   0 clean, 1 findings, 2 pipeline not initialised.
 """
 
-import argparse, datetime as dt, hashlib, json, re, subprocess, sys
+import argparse, datetime as dt, hashlib, json, locale, re, subprocess, sys
 from pathlib import Path
 
 try:  # do not traceback when piped into head or grep
@@ -29,6 +29,7 @@ ID = re.compile(r"\b([RJQDS]-\d{3}|ADR-\d{3}|T-\d{3})\b")
 TRACES = re.compile(r"^\s*Traces:\s*(.+?)\s*$", re.MULTILINE)
 HEADING = re.compile(r"^#{1,6}\s+.*$", re.MULTILINE)
 ALIASES = re.compile(r"^\s*Aliases:\s*(.+)$", re.MULTILINE)
+CRITIQUE_HEADING = re.compile(r"^##+\s*Critique findings", re.MULTILINE)
 
 # Lines each declared element must carry, per phase. See CONTRACT.md.
 # "declares" is an ID prefix, or "hN" meaning every heading at depth N.
@@ -133,7 +134,7 @@ def code_corpus(root):
     for p in root.rglob("*"):
         if p.is_file() and not SKIP_DIRS & set(p.parts):
             try:
-                parts.append(p.read_text(errors="ignore"))
+                parts.append(p.read_text(**UTF8))
             except OSError:
                 pass
     return "\n".join(parts)
@@ -151,36 +152,157 @@ def rejected_names(text):
 
 
 def blocks(text):
-    """(heading, body) for each markdown section."""
-    parts = re.split(r"^(#{1,6}\s+.*)$", text, flags=re.MULTILINE)
+    """(heading, body) for each markdown section of the artifact itself —
+    not of any `Critique findings` section appended after it.
+
+    Every caller uses this to find an artifact's own declared elements
+    (an R-###, a T-###, a domain term) and check what each one's body
+    carries. A finding heading like `### blocker — T-014 doesn't...` is a
+    markdown section too, and names T-014 same as a real one would — so
+    left in, it becomes a second, bodiless "declaration" of T-014 that
+    fails every `requires` check the real one already passed (see
+    `_own_content`, which this delegates to).
+    """
+    parts = re.split(r"^(#{1,6}\s+.*)$", _own_content(text), flags=re.MULTILINE)
     return list(zip(parts[1::2], parts[2::2]))
 
 
+UTF8 = {"encoding": "utf-8", "errors": "replace"}
+
+
 def read(path):
-    """Text of a file, or of every .md under a directory, concatenated."""
+    """Text of a file, or of every .md under a directory, concatenated. Always
+    UTF-8, whatever the platform default; an undecodable byte becomes U+FFFD
+    rather than stopping the pipeline."""
     if path.is_dir():
-        return "".join(f.read_text() for f in sorted(path.rglob("*.md")))
-    return path.read_text() if path.is_file() else ""
+        return "".join(f.read_text(**UTF8) for f in sorted(path.rglob("*.md")))
+    return path.read_text(**UTF8) if path.is_file() else ""
+
+
+def _own_content(text):
+    """This document's own text, with any appended `Critique findings`
+    section(s) removed.
+
+    A finding heading such as `### blocker — R-006 bakes...` names an ID
+    inside prose explaining what's wrong with it — it is not a fresh
+    declaration of that ID, and a `### gap — ...` heading naming two IDs
+    is not a Traces: line claiming to derive from them. Left unstripped,
+    `HEADING` and `ID` match those headings same as any structural one,
+    so a critiqued artifact would declare its own requirements a second
+    time via the write-up of what's wrong with them — surfacing as a
+    duplicate "no Source line" finding, or a real ID looking untraced
+    because the second, heading-only "declaration" is the one with no
+    downstream reference. Everything before the first such heading is
+    the artifact; take only that.
+    """
+    return CRITIQUE_HEADING.split(text)[0]
+
+
+CODE = re.compile(r"```.*?```|`[^`\n]*`", re.DOTALL)
+HISTORY = re.compile(r"^#+\s*Critique findings.*?(?=^# |\Z)", re.DOTALL | re.MULTILINE)
+
+
+def prose(text):
+    """Text with code spans, fenced blocks and Critique findings sections removed:
+    an identifier such as T-SQL's CEILING, or a review quoting a name it is
+    discussing, is not a use of the domain word a rejected alias forbids."""
+    return CODE.sub(" ", HISTORY.sub(" ", text))
 
 
 def declared_ids(text):
     """IDs introduced by this document — those appearing in a heading."""
-    return {m for h in HEADING.findall(text) for m in ID.findall(h)}
+    return {m for h in HEADING.findall(_own_content(text)) for m in ID.findall(h)}
 
 
 def referenced_ids(text):
     """IDs this document claims to derive from."""
-    return {m for line in TRACES.findall(text) for m in ID.findall(line)}
+    return {m for line in TRACES.findall(_own_content(text)) for m in ID.findall(line)}
 
 
-def upstream_hash(root, phases, phase):
-    """Hash of every dependency's output, in declared order."""
+def legacy_text(path):
+    """A file decoded as releases before UTF-8 reading did: the platform's
+    default encoding, with universal newlines."""
+    raw = path.read_bytes().decode(locale.getpreferredencoding(False), "replace")
+    return raw.replace("\r\n", "\n").replace("\r", "\n")
+
+
+def upstream_hash(root, phases, phase, legacy=False):
+    """Hash of every dependency's output, in declared order. `legacy` decodes as
+    releases before UTF-8 reading did, so hashes stored then still match until
+    the phase is next gated."""
     h = hashlib.sha256()
     for dep in phase["depends_on"]:
         out = phases[dep].get("output")
         if out:
-            h.update(read(root / out).encode())
+            text = read(root / out)
+            if legacy:
+                p = root / out
+                files = sorted(p.rglob("*.md")) if p.is_dir() else [p] if p.is_file() else []
+                text = "".join(legacy_text(f) for f in files)
+            h.update(text.encode())
     return "sha256:" + h.hexdigest()[:16]
+
+
+VERIFIED_BY_PAREN = re.compile(r"\([^()]*\)")
+
+
+def stale_verified_by(root, sid, text):
+    """Findings for one slice's Verified-by tests: unnamed in the code,
+    never shown able to fail, or edited since it was shown able to fail.
+
+    Shared by the general lint pass, which only calls this once a slice
+    has reached `built` or later (a spec is allowed to be ahead of code
+    nobody has written yet), and by the build gate itself, which calls it
+    unconditionally — the gate recording `build`'s own pass is the one
+    place that knows the code is built right now, regardless of what
+    `state.json` still says a slice's status is at that exact moment
+    (mid-rebuild, after a review failure rolled it back).
+    """
+    findings = []
+    corpus = None
+    reds = None
+    for line in re.findall(r"^\s*Verified by:\s*(.+)$", text, re.MULTILINE):
+        if line.strip().lower().startswith("manual"):
+            continue
+        # A parenthetical after a name is commentary ("(Playwright,
+        # `tests/ui/`)"), not a second name — strip it before splitting on
+        # commas, or a comma inside the parenthetical reads as one.
+        line = VERIFIED_BY_PAREN.sub("", line)
+        for raw in line.split(","):
+            raw = raw.strip().strip("`.")
+            if not raw or " " in raw:
+                continue
+            # A pytest node-id (path::test_name) names its file for
+            # readability. The file's own source never repeats that path
+            # immediately before the test's own definition, so a literal
+            # match against the corpus — and the red ledger, keyed the
+            # same way `sdlc_lint.py red --test <name>` records it —
+            # uses only the name after the last "::", not the node-id
+            # whole.
+            item = raw.rsplit("::", 1)[-1] if "::" in raw else raw
+            if corpus is None:
+                corpus = code_corpus(root)
+            if item not in corpus:
+                findings.append(f"{sid}: Verified by names {raw}, which "
+                                f"does not appear anywhere in the code")
+                continue
+            # The name existing proves only that someone typed it. What
+            # shows the test checks anything is having seen it fail.
+            if reds is None:
+                reds = red_records(root)
+            red = reds.get(item)
+            if not red:
+                findings.append(f"{sid}: {raw} was never recorded failing, "
+                                f"so nothing shows it can")
+            elif red.get("digest"):
+                now = test_body(root, item)
+                # A digest recorded before UTF-8 reading still counts if it matches then.
+                if now and now[1] != red["digest"] \
+                        and (test_body(root, item, legacy=True) or now)[1] != red["digest"]:
+                    findings.append(f"{sid}: {raw} changed after it was "
+                                    f"recorded failing — the failure that "
+                                    f"was observed was a different test")
+    return findings
 
 
 def lint(root):
@@ -189,8 +311,8 @@ def lint(root):
     if not pipeline_path.is_file() or not state_path.is_file():
         return None, ["pipeline not initialised: .sdlc/pipeline.json or state.json missing"]
 
-    pipeline = json.loads(pipeline_path.read_text())
-    state = json.loads(state_path.read_text())
+    pipeline = json.loads(pipeline_path.read_text(**UTF8))
+    state = json.loads(state_path.read_text(**UTF8))
     phases = {p["id"]: p for p in pipeline["phases"]}
     artifacts = state.get("artifacts", {})
     findings = []
@@ -206,7 +328,8 @@ def lint(root):
 
         if status == "approved" and phase["depends_on"]:
             current = upstream_hash(root, phases, phase)
-            if record.get("hash") and record["hash"] != current:
+            if record.get("hash") and record["hash"] != current \
+                    and record["hash"] != upstream_hash(root, phases, phase, legacy=True):
                 deps = ", ".join(phase["depends_on"])
                 findings.append(f"{pid}: STALE — upstream changed ({deps})")
 
@@ -283,11 +406,9 @@ def lint(root):
     # Not in `texts`: their path carries a placeholder, so they are read by glob
     # and checked separately. They feed the code, so drift matters most here.
     slices_dir = root / "docs" / "slices"
-    corpus = None                       # built only if a task names a test
-    reds = None                         # likewise for the red ledger
     upstream = set().union(*(set(sentences(t)) for t in texts.values())) if texts else set()
     for spec in sorted(slices_dir.glob("*/spec.md")) if slices_dir.is_dir() else []:
-        sid, text = spec.parent.name, spec.read_text()
+        sid, text = spec.parent.name, spec.read_text(**UTF8)
 
         if not line_token("Delivers:").search(text):
             findings.append(f"{sid}: no Delivers line — nothing states what a "
@@ -299,7 +420,7 @@ def lint(root):
                     findings.append(f"{sid}: {tid} has no Verified by line")
 
         for name in sorted(rejected):
-            if re.search(rf"\b{re.escape(name)}\b", text, re.I):
+            if re.search(rf"\b{re.escape(name)}\b", prose(text), re.I):
                 findings.append(f"{sid}: uses '{name}', a name the domain model "
                                 f"rejected")
 
@@ -307,38 +428,16 @@ def lint(root):
         # have been written. Before that the spec is ahead of the code by design.
         built = next((s.get("status") for s in state.get("slices", [])
                       if s.get("id") == sid), "planned")
-        for line in (re.findall(r"^\s*Verified by:\s*(.+)$", text, re.MULTILINE)
-                     if built in BUILT_ON else []):
-            if line.strip().lower().startswith("manual"):
-                continue
-            for item in line.split(","):
-                item = item.strip().strip("`.")
-                if not item or " " in item:
-                    continue
-                if corpus is None:
-                    corpus = code_corpus(root)
-                if item not in corpus:
-                    findings.append(f"{sid}: Verified by names {item}, which "
-                                    f"does not appear anywhere in the code")
-                    continue
-                # The name existing proves only that someone typed it. What
-                # shows the test checks anything is having seen it fail.
-                if reds is None:
-                    reds = red_records(root)
-                red = reds.get(item)
-                if not red:
-                    findings.append(f"{sid}: {item} was never recorded failing, "
-                                    f"so nothing shows it can")
-                elif red.get("digest"):
-                    now = test_body(root, item)
-                    if now and now[1] != red["digest"]:
-                        findings.append(f"{sid}: {item} changed after it was "
-                                        f"recorded failing — the failure that "
-                                        f"was observed was a different test")
+        if built in BUILT_ON:
+            findings.extend(stale_verified_by(root, sid, text))
 
         for dup, _, kind in restatements(set(sentences(text)), upstream):
             findings.append(f"{sid}: {kind} restatement of upstream — "
                             f"\"{dup[:60]}…\"")
+
+        issue = critique_format_issue(sid, text)
+        if issue:
+            findings.append(issue)
 
     # --- a deployment records how to undo itself ---------------------------
     for s in state.get("slices", []):
@@ -348,14 +447,14 @@ def lint(root):
         if not doc.is_file():
             findings.append(f"{s['id']}: marked {s['status']} with no deploy.md")
             continue
-        body = doc.read_text()
+        body = doc.read_text(**UTF8)
         for tok in ("Verified by:", "Rollback:", "Try it:"):
             if not line_token(tok).search(body):
                 findings.append(f"{s['id']}: deploy.md has no '{tok.rstrip(':')}' line")
 
     # --- reviews cite code that exists -------------------------------------
     for review in sorted(slices_dir.glob("*/review.md")) if slices_dir.is_dir() else []:
-        sid, text = review.parent.name, review.read_text()
+        sid, text = review.parent.name, review.read_text(**UTF8)
         if not line_token("Verdict:").search(text):
             findings.append(f"{sid}: review.md has no Verdict line")
         for where in re.findall(r"^\s*Where:\s*(\S+)", text, re.MULTILINE):
@@ -381,7 +480,7 @@ def lint(root):
                 seen.setdefault(line.lstrip("# ").strip().lower(), set()).add(current)
 
         for prop in sorted(proposals.glob("*.md")):
-            for heading, body in blocks(prop.read_text()):
+            for heading, body in blocks(prop.read_text(**UTF8)):
                 if heading_depth(heading) != 2:
                     continue
                 name = heading.lstrip("# ").strip()
@@ -389,6 +488,14 @@ def lint(root):
                 if not cited:
                     findings.append(f"proposals/{prop.name}: '{name}' has no "
                                     f"Recurrence line")
+                    continue
+                if cited[0].strip().lower() == "human-authorized":
+                    quoted = re.findall(r"^\s*Quote:\s*(.+)$", body, re.MULTILINE)
+                    if not quoted or not quoted[0].strip():
+                        findings.append(f"proposals/{prop.name}: '{name}' claims "
+                                        f"human-authorized with no Quote line — a "
+                                        f"bypass needs the person's own words, the "
+                                        f"same as a blocking gate")
                     continue
                 for obs in (c.strip() for c in cited[0].split(";") if c.strip()):
                     n = len(seen.get(obs.lower(), set()))
@@ -408,18 +515,33 @@ def lint(root):
         for dup, _, kind in restatements(sorted(mine), theirs):
             findings.append(f"{pid}: {kind} restatement of upstream — \"{dup[:60]}…\"")
 
+    # --- critique findings written where count_findings can't see them -----
+    for pid in phases:
+        issue = critique_format_issue(pid, texts.get(pid, ""))
+        if issue:
+            findings.append(issue)
+
     # --- naming drift: a rejected name reappearing downstream --------------
     order = [p["id"] for p in pipeline["phases"]]
     if "domain" in order:
         for pid in order[order.index("domain") + 1:]:
             for name in sorted(rejected):
-                if re.search(rf"\b{re.escape(name)}\b", texts.get(pid, ""), re.I):
+                if re.search(rf"\b{re.escape(name)}\b", prose(texts.get(pid, "")), re.I):
                     findings.append(
                         f"{pid}: uses '{name}', a name the domain model rejected")
 
     # --- slices reach implementation ---------------------------------------
+    # Only where a discovery phase ran at the size a slice was actually built
+    # under does an R-### exist for it to trace to. A patch-sized slice traces
+    # nothing by construction, not by omission — and stays exempt even after
+    # the product grows a discovery phase in a later, larger iteration; the
+    # size that governed it at build time doesn't change in hindsight. A slice
+    # with no recorded size_at_creation predates this field and is checked
+    # against the iteration's current size, same as before.
+    sizes = pipeline.get("sizes", {})
     for s in state.get("slices", []):
-        if not s.get("traces"):
+        built_under = s.get("size_at_creation", state.get("size"))
+        if "discovery" in sizes.get(built_under, {}).get("phases", []) and not s.get("traces"):
             findings.append(f"{s['id']}: no requirements traced")
 
     # --- the drift that already bit us once --------------------------------
@@ -475,8 +597,20 @@ SLICE_DONE = {"slice-spec": "specified", "build": "built", "review": "reviewed",
 
 def load(root):
     base = root / ".sdlc"
-    return (json.loads((base / "pipeline.json").read_text()),
-            json.loads((base / "state.json").read_text()))
+    pipeline = json.loads((base / "pipeline.json").read_text(**UTF8))
+    state = json.loads((base / "state.json").read_text(**UTF8))
+    # `wait` marks the instant control passed to the human. Whatever call
+    # comes next — from any command, not just `next` — is the resume: fold
+    # the elapsed span into this phase's paused time and clear the marker,
+    # so duration_s can later subtract it without a separate resume call.
+    waiting_since = state.pop("waiting_since", None)
+    if waiting_since:
+        now = dt.datetime.now(dt.timezone.utc).replace(microsecond=0).isoformat()
+        paused = int((dt.datetime.fromisoformat(now)
+                      - dt.datetime.fromisoformat(waiting_since)).total_seconds())
+        state["phase_paused_s"] = state.get("phase_paused_s", 0) + max(paused, 0)
+        save(root, state)
+    return pipeline, state
 
 
 def save(root, state):
@@ -491,13 +625,19 @@ def entry(pipeline, pid):
     return None
 
 
-def inputs_for(pipeline, phase, root, size=None):
+def inputs_for(pipeline, phase, root, size=None, slice_id=None):
     """Dependency outputs, by role. Roles resolve to paths here and nowhere else.
 
     A smaller size skips phases this one depends on — `slices` depends on the
     PRD, and a feature-sized iteration never writes one. Handing over a path to
     a file that will never exist invites the phase to invent its contents, so
     those dependencies are reported as skipped instead.
+
+    A dependency's declared output can itself carry `{slice}` — the previous
+    phase in the same per-slice loop, such as `build` depending on
+    `slice-spec` — and has to be resolved against this slice before the
+    existence check, or it is checked against the literal template path,
+    which never exists, and a produced, approved artifact reads as skipped.
     """
     ran = set(size["phases"]) if size else None
     present, skipped = {}, []
@@ -505,6 +645,8 @@ def inputs_for(pipeline, phase, root, size=None):
         out = (entry(pipeline, d) or {}).get("output")
         if out is None:
             continue          # produces code, not a document to be read
+        if slice_id:
+            out = out.replace("{slice}", slice_id)
         if (ran is not None and d not in ran) or not (root / out).exists():
             skipped.append(d)
         else:
@@ -517,7 +659,7 @@ def describe(pipeline, phase, root, size=None, slice_id=None):
     if out and slice_id:
         out = out.replace("{slice}", slice_id)
     gate = phase.get("gate")
-    inputs, skipped = inputs_for(pipeline, phase, root, size)
+    inputs, skipped = inputs_for(pipeline, phase, root, size, slice_id)
     return {
         "action": "run",
         "phase": phase["id"],
@@ -607,10 +749,16 @@ def adopt_slices(root, state, out):
     The backlog is a document; the slice loop runs off state. Without this the
     phases that build anything are skipped for want of a list, and the
     iteration reports itself complete having produced nothing.
+
+    A slice already in state but not declared in this backlog is not stale —
+    it is usually a smaller-sized iteration's work, built before any backlog
+    existed. Replacing state outright with only what this document declares
+    would drop it, gates and all, the moment a later backlog is adopted.
     """
     text = read(root / out)
     known = {s["id"]: s for s in state.get("slices", [])}
     found = []
+    declared = set()
     for head in re.findall(r"^##\s+(S-\d+)\s*[—-]\s*(.+)$", text, re.MULTILINE):
         sid, title = head[0], head[1].strip()
         block = re.split(rf"^##\s+{sid}\b.*$", text, flags=re.MULTILINE)[1]
@@ -620,20 +768,35 @@ def adopt_slices(root, state, out):
             "id": sid, "title": title, "status": "planned",
             "traces": [t.strip() for t in traces.group(1).split(",")]
                       if traces else [],
+            "size_at_creation": state.get("size"),
         })
+        declared.add(sid)
+    found.extend(s for sid, s in known.items() if sid not in declared)
     state["slices"] = found
     return [s["id"] for s in found]
 
 
-def add_slice(root, sid, title, traces):
+def add_slice(root, sid, title, traces, brief=None):
     pipeline, state = load(root)
     if any(x["id"] == sid for x in state.setdefault("slices", [])):
         return {"error": f"{sid} already exists"}, 2
     state["slices"].append({"id": sid, "title": title, "status": "planned",
                             "traces": [t.strip() for t in traces.split(",")]
-                                      if traces else []})
+                                      if traces else [],
+                            "size_at_creation": state.get("size")})
     save(root, state)
-    return {"added": sid, "next": next_step(root, pipeline, state)}, 0
+    brief_path = None
+    if brief:
+        inputs_dir = root / "inputs"
+        inputs_dir.mkdir(exist_ok=True)
+        brief_path = f"inputs/{sid}-request.md"
+        (root / brief_path).write_text(
+            f"# {sid} — the request as the human stated it\n\n{brief.strip()}\n",
+            encoding="utf-8")
+    result = {"added": sid, "next": next_step(root, pipeline, state)}
+    if brief_path:
+        result["recorded_brief"] = brief_path
+    return result, 0
 
 
 def record_gate(root, pid, result, by, note, slice_id, quote, tokens):
@@ -649,8 +812,10 @@ def record_gate(root, pid, result, by, note, slice_id, quote, tokens):
 
     now = dt.datetime.now(dt.timezone.utc).replace(microsecond=0).isoformat()
     started = state.pop("phase_started_at", None)
-    duration = int((dt.datetime.fromisoformat(now)
-                    - dt.datetime.fromisoformat(started)).total_seconds()) if started else None
+    paused = state.pop("phase_paused_s", 0)
+    duration = (max(int((dt.datetime.fromisoformat(now)
+                    - dt.datetime.fromisoformat(started)).total_seconds()) - paused, 0)
+                if started else None)
 
     record = {"result": result, "by": by, "at": now}
     if quote:
@@ -660,11 +825,52 @@ def record_gate(root, pid, result, by, note, slice_id, quote, tokens):
         sl = next((x for x in state.setdefault("slices", []) if x["id"] == slice_id), None)
         if sl is None:
             return {"error": f"no slice '{slice_id}' in state"}, 2
+        if result == "pass" and phase.get("gate") == "tests":
+            # A green suite proves a test written red-then-green. It proves
+            # nothing about a test that was red-recorded once and then
+            # edited — a rewrap, a strengthened assertion, a merge into
+            # another test — without being shown able to fail again in its
+            # new form. The test command's exit code can't tell the two
+            # apart; the red ledger can. Called directly, not through the
+            # general lint pass — that pass only checks a slice already at
+            # `built` or later, but a rebuild after a review failure sits at
+            # `specified` (rolled back) right up until this call's own
+            # status update below, and this is the one place that knows the
+            # code is built regardless of what state.json still says.
+            spec_path = root / "docs" / "slices" / slice_id / "spec.md"
+            stale = ([f for f in stale_verified_by(root, slice_id, read(spec_path))
+                      if "recorded failing" in f]
+                     if spec_path.exists() else [])
+            if stale:
+                return {"error": "red ledger is stale for this slice — "
+                                  "re-record red against the current source "
+                                  "before this gate can pass",
+                        "findings": stale}, 2
         rework = sl.setdefault("rework", {})
         if result == "pass":
             sl["status"] = SLICE_DONE[pid]
-        else:
+        elif result == "fail":
+            # A hold is the gate working, not the phase failing (gates.md).
             rework[pid] = rework.get(pid, 0) + 1
+            if result == "fail" and spec.get("runner") == "output-verdict":
+                # A verdict gate judges the *preceding* phase's output — its
+                # own skill is explicitly barred from revising it (code-review:
+                # "you are reviewing code you did not write"). Retrying this
+                # phase would just run the same judgement against the same,
+                # unrevised work forever. Roll the slice back to before the
+                # phase that produced what failed, so `next` offers the one
+                # phase whose skill can actually act on the finding.
+                #
+                # One hop back lands on the failing phase's own predecessor's
+                # DONE state — which is the status the slice is *already* at
+                # (the predecessor already passed to get here), so `next`
+                # would just offer this same verdict phase again. Two hops
+                # back — the state as of *before* the predecessor ran — is
+                # what actually makes the predecessor's own phase come up
+                # next.
+                order = [p["id"] for p in pipeline["slice_phases"]]
+                i = order.index(pid) - 2
+                sl["status"] = SLICE_DONE[order[i]] if i >= 0 else "planned"
         sl.setdefault("gates", {})[pid] = record
         n_rework = rework.get(pid, 0)
     else:
@@ -672,11 +878,15 @@ def record_gate(root, pid, result, by, note, slice_id, quote, tokens):
         n_rework = art.get("rework", 0)
         if result == "pass":
             art["status"] = "approved"
-            art["hash"] = upstream_hash(root, {p["id"]: p for p in pipeline["phases"]},
-                                        phase) if phase.get("depends_on") else None
+            # A dependency can sit in any phase list: improve depends on retro,
+            # which is an iteration phase, not one of `phases`.
+            every = {p["id"]: p for key in ("phases", "slice_phases", "iteration_phases",
+                                            "on_demand_phases") for p in pipeline.get(key, [])}
+            art["hash"] = upstream_hash(root, every, phase) if phase.get("depends_on") else None
         else:
             art["status"] = "draft"
-            n_rework = art["rework"] = n_rework + 1
+            if result == "fail":
+                n_rework = art["rework"] = n_rework + 1
         art["gate"] = record
         if result == "pass" and phase.get("adopts") == "slices":
             adopt_slices(root, state, phase["output"])
@@ -696,7 +906,7 @@ def record_gate(root, pid, result, by, note, slice_id, quote, tokens):
         "gate": result,
         "duration_s": duration,
         "rework_count": n_rework,
-        "defects_found": count_findings(target),
+        "defects_found": count_findings(target, on_pass=result == "pass"),
         "output_bytes": (len(read(target)) if target and target.exists() else 0),
     }
     if tokens is not None:
@@ -710,15 +920,65 @@ def record_gate(root, pid, result, by, note, slice_id, quote, tokens):
 
 
 SEVERITY = re.compile(r"^\s*#{1,6}\s*(blocker|gap)\b", re.MULTILINE | re.IGNORECASE)
+_MENTIONS_SEVERITY = re.compile(r"\b(blocker|gap)\b", re.IGNORECASE)
 
 
-def count_findings(target):
-    """Blockers and gaps written into the artifact by its gate."""
+def _critique_section(text):
+    """Split an artifact into (has-a-wrapper-heading, the part that counts).
+
+    The `critique` skill wraps its findings under a literal `## Critique
+    findings` heading, appended alongside whatever the artifact already
+    held — so only text after that heading counts, or an earlier
+    revision's now-resolved findings would count twice. `code-review`
+    needs no such wrapper (its own SKILL.md specifies severity headings
+    directly, and it revises the whole artifact each round rather than
+    appending to it), so where no wrapper heading exists, the whole
+    document is what counts instead of nothing.
+    """
+    part = CRITIQUE_HEADING.split(text)
+    return (len(part) > 1), (part[-1] if len(part) > 1 else text)
+
+
+VERDICT_COUNTS = re.compile(r"Verdict:\W*(\w+)[^\n(]*\((\d+) blockers?(?:, (\d+) gaps?)?", re.IGNORECASE)
+
+
+def count_findings(target, on_pass=False):
+    """Blockers and gaps the latest gate reported: the counts on the last
+    Verdict line in the artifact, which the critique and the code review both
+    write, whatever form their findings take. Without one, the headings under
+    the last Critique findings section. On a pass, only a Verdict line that is
+    itself a pass counts (gaps deferred under auto_defer); one left by an
+    earlier hold or fail was recorded when that gate was."""
     if not target or not target.exists():
         return 0
     text = read(target)
-    part = re.split(r"^##+\s*Critique findings", text, flags=re.MULTILINE)
-    return len(SEVERITY.findall(part[-1])) if len(part) > 1 else 0
+    verdicts = VERDICT_COUNTS.findall(text)
+    if verdicts:
+        word, blockers, gaps = verdicts[-1]
+        if on_pass and word.lower() != "pass":
+            return 0
+        return int(blockers) + int(gaps or 0)
+    _, section = _critique_section(text)
+    return len(SEVERITY.findall(section))
+
+
+def critique_format_issue(pid, text):
+    """None, or a finding string, when a Critique findings section exists
+    but doesn't use the heading level `count_findings` can see.
+
+    A slip here is invisible by construction: the gate still records
+    whatever result was passed to it, and `count_findings` silently reads
+    0 defects for the round from then on, with nothing else pointing at
+    why — this is the one place that mismatch gets said out loud.
+    """
+    has_wrapper, section = _critique_section(text)
+    if not has_wrapper or VERDICT_COUNTS.search(text):
+        return None
+    if _MENTIONS_SEVERITY.search(section) and not SEVERITY.search(section):
+        return (f"{pid}: Critique findings section mentions blocker/gap but "
+                f"none are written as headings (### blocker — ...) — "
+                f"defects_found will silently read 0 for this round")
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -732,7 +992,7 @@ DEF = re.compile(r"^\s*(?:async\s+)?(?:def|function|func|fn|it|test|describe|"
                  r"public|private|sub)\b|^\s*\w+\s*[:=]\s*(?:async\s*)?\(")
 
 
-def test_body(root, name):
+def test_body(root, name, legacy=False):
     """The source of one test, as (path, digest).
 
     Located by name, then taken to the next definition at the same indent or
@@ -744,11 +1004,13 @@ def test_body(root, name):
     "cannot find it" and "it does not exist" have to be treated the same.
     """
     for path in sorted(root.rglob("*")):
+        if "node_modules" in path.parts:
+            continue
         if not path.is_file() or not any(
                 part in ("test", "tests", "spec", "__tests__")
                 for part in path.parts) or path.suffix in (".pyc", ".json"):
             continue
-        lines = read(path).splitlines()
+        lines = (legacy_text(path) if legacy else read(path)).splitlines()
         start = next((i for i, l in enumerate(lines)
                       if re.search(rf"\b{re.escape(name)}\b", l)), None)
         if start is None:
@@ -766,7 +1028,7 @@ def test_body(root, name):
     return None
 
 
-def record_red(root, task, test, slice_id):
+def record_red(root, task, test, slice_id, mutate=None):
     pipeline, _ = load(root)
     template = pipeline.get("commands", {}).get("test_one")
     if not template:
@@ -775,8 +1037,26 @@ def record_red(root, task, test, slice_id):
                          "{test} where the test's name goes."}, 2
 
     cmd = template.replace("{test}", test)
-    proc = subprocess.run(cmd, shell=True, cwd=root, capture_output=True,
-                          text=True, timeout=600)
+    original = None
+    if mutate:
+        # A test guarding behaviour that is already right passes as written. It is
+        # shown able to fail by breaking that behaviour once, here, and the file is
+        # put back whatever happens; the record names the break.
+        target, old, new = (root / mutate[0]).resolve(), mutate[1], mutate[2]
+        if root.resolve() not in target.parents or not target.is_file():
+            return {"error": f"--mutate: {mutate[0]} is not a file in this project"}, 2
+        original = target.read_bytes()
+        text = original.decode("utf-8")
+        if text.count(old) != 1:
+            return {"error": f"--mutate: {mutate[0]} must contain the old text exactly "
+                             f"once; found {text.count(old)}"}, 2
+        target.write_bytes(text.replace(old, new).encode("utf-8"))
+    try:
+        proc = subprocess.run(cmd, shell=True, cwd=root, capture_output=True,
+                              text=True, encoding="utf-8", errors="replace", timeout=600)
+    finally:
+        if original is not None:
+            target.write_bytes(original)
     if proc.returncode == 0:
         return {"error": f"{test} passed. A test that has never been seen to "
                          f"fail has not been shown to check anything — write "
@@ -791,12 +1071,22 @@ def record_red(root, task, test, slice_id):
                          f"otherwise record as red.",
                 "exit": proc.returncode}, 2
 
+    output = (proc.stdout or "") + (proc.stderr or "")
+    if test not in output:
+        # A runner that fails before reaching the test (a bad command, a file that
+        # does not load) exits non-zero too, and never prints the test's name.
+        return {"error": f"the test command failed, but its output never names "
+                         f"{test}, so the failure was not the test's. Run the "
+                         f"command and fix what it reports.",
+                "command": cmd, "exit": proc.returncode, "output": output[-400:]}, 2
+
     record = {
         "slice": slice_id, "task": task, "test": test,
         "exit": proc.returncode, "command": cmd,
         "at": dt.datetime.now(dt.timezone.utc).replace(microsecond=0).isoformat(),
         "file": located[0],
         "digest": located[1],
+        **({"mutation": {"file": mutate[0], "old": mutate[1], "new": mutate[2]}} if mutate else {}),
     }
     with (root / ".sdlc" / "red.jsonl").open("a") as f:
         f.write(json.dumps(record) + "\n")
@@ -835,11 +1125,11 @@ def init(root, product):
     (root / "docs").mkdir(exist_ok=True)
 
     for name in ("CONTRACT.md", "pipeline.json"):
-        (base / name).write_text((assets / name).read_text())
+        (base / name).write_text((assets / name).read_text(**UTF8), encoding="utf-8")
     for f in sorted((assets / "reference").glob("*.md")):
-        (base / "reference" / f.name).write_text(f.read_text())
+        (base / "reference" / f.name).write_text(f.read_text(**UTF8), encoding="utf-8")
     for f in sorted(Path(__file__).resolve().parent.glob("*.py")):
-        (base / "scripts" / f.name).write_text(f.read_text())
+        (base / "scripts" / f.name).write_text(f.read_text(**UTF8), encoding="utf-8")
     for name in REGISTERS:
         (base / name).touch()
 
@@ -867,6 +1157,8 @@ def main():
 
     sub.add_parser("next", help="what runs now, as JSON")
 
+    sub.add_parser("wait", help="mark that the phase clock is paused for the human")
+
     g = sub.add_parser("gate", help="record a gate result and advance")
     g.add_argument("phase")
     g.add_argument("--result", required=True, choices=["pass", "hold", "fail"])
@@ -887,6 +1179,10 @@ def main():
     sl.add_argument("id", help="S-###")
     sl.add_argument("--title", required=True)
     sl.add_argument("--traces", default="", help="R-### ids, comma separated")
+    sl.add_argument("--brief", default=None,
+                    help="the human's problem statement, verbatim — written to "
+                         "inputs/, since a patch-sized iteration has no "
+                         "discovery phase to record it otherwise")
 
     c = sub.add_parser("commands", help="set the commands the gates run")
     c.add_argument("--test", default=None, help="runs the whole suite")
@@ -898,9 +1194,22 @@ def main():
     r.add_argument("task", help="T-###")
     r.add_argument("--test", required=True, help="the test's name in the code")
     r.add_argument("--slice", dest="slice_id", required=True)
+    r.add_argument("--mutate", nargs=3, metavar=("FILE", "OLD", "NEW"),
+                   help="for a test guarding behaviour already right: break FILE by "
+                        "replacing OLD (exactly once) with NEW, record the failure, restore")
 
     args = ap.parse_args()
     root = args.root
+
+    if args.cmd == "wait":
+        # load() itself resolves any wait already open, so this both closes
+        # a stale one (should not normally happen) and opens the new one.
+        pipeline, state = load(root)
+        state["waiting_since"] = (dt.datetime.now(dt.timezone.utc)
+                                  .replace(microsecond=0).isoformat())
+        save(root, state)
+        print(json.dumps({"waiting": True}))
+        return 0
 
     if args.cmd == "next":
         pipeline, state = load(root)
@@ -909,6 +1218,7 @@ def main():
             state["phase"] = step["phase"]
             state["phase_started_at"] = (dt.datetime.now(dt.timezone.utc)
                                          .replace(microsecond=0).isoformat())
+            state["phase_paused_s"] = 0
             save(root, state)
         _, findings = lint(root)
         step["findings"] = findings
@@ -926,13 +1236,13 @@ def main():
         return code
 
     if args.cmd == "slice":
-        result, code = add_slice(root, args.id, args.title, args.traces)
+        result, code = add_slice(root, args.id, args.title, args.traces, args.brief)
         print(json.dumps(result, indent=2))
         return code
 
     if args.cmd == "commands":
         path = root / ".sdlc" / "pipeline.json"
-        pipeline = json.loads(path.read_text())
+        pipeline = json.loads(path.read_text(**UTF8))
         cmds = pipeline.setdefault("commands", {})
         for key, val in (("test", args.test), ("test_one", args.test_one),
                          ("lint", args.lint)):
@@ -946,7 +1256,7 @@ def main():
         return 0
 
     if args.cmd == "red":
-        result, code = record_red(root, args.task, args.test, args.slice_id)
+        result, code = record_red(root, args.task, args.test, args.slice_id, args.mutate)
         print(json.dumps(result, indent=2))
         return code
 

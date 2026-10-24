@@ -37,6 +37,22 @@ judgement on someone else's work — the code review — so gating it with anoth
 review would only add a second opinion about the first. No phase gates its own
 artifact.
 
+Recording is not gating. Every `Verdict:` line this phase produces — `fail`
+included — still goes through `sdlc_lint.py gate review --result <verdict>`
+the moment it is stated, before any fix is made. A `fail` here rolls the slice
+back two phases the same as any other `fail` does, to the one before whichever
+produced the reviewed artifact — typically `build` — which is where the fix
+belongs. Fixing the finding and re-running the same critique without ever
+calling the script skips the phase past its own gate silently: the round was
+real, but `metrics.jsonl` shows a phase that never failed, and the slice's
+recorded state never actually returned to `build`.
+
+A `human` gate on a phase whose `skill` is `null` — `verify` is the only one —
+skips the critique step. Nothing authors that phase's artifact in advance for
+critique to check; the human's own statement is the content, not something
+written ahead of them and then reviewed. There is deliberately no checklist
+for it under `critique/references/` — go straight to the person.
+
 `commands` holds `test` (the whole suite), `test_one` (a single test, with
 `{test}` where its name goes) and `lint`. `test_one` is what records a test
 failing before its code exists; without it the build step cannot show that its
