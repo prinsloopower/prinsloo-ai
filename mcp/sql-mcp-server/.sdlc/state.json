@@ -202,7 +202,7 @@
     {
       "id": "S-003",
       "title": "Answering a question from the data",
-      "status": "reviewed",
+      "status": "deployed",
       "traces": [
         "J-004",
         "J-008",
@@ -233,6 +233,11 @@
           "result": "pass",
           "by": "model",
           "at": "2026-10-25T21:27:27+00:00"
+        },
+        "deploy": {
+          "result": "pass",
+          "by": "script",
+          "at": "2026-10-25T23:52:59+00:00"
         }
       }
     },
