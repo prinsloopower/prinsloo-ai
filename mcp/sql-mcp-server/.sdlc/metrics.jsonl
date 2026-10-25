@@ -70,3 +70,4 @@
 {"iteration": 1, "phase": "slice-spec", "slice": "S-003", "gate": "pass", "duration_s": null, "rework_count": 4, "defects_found": 0, "output_bytes": 65542}
 {"iteration": 1, "phase": "build", "slice": "S-003", "gate": "pass", "duration_s": 3105, "rework_count": 0, "defects_found": 0, "output_bytes": 0}
 {"iteration": 1, "phase": "review", "slice": "S-003", "gate": "hold", "duration_s": 87, "rework_count": 0, "defects_found": 11, "output_bytes": 10305}
+{"iteration": 1, "phase": "review", "slice": "S-003", "gate": "fail", "duration_s": null, "rework_count": 1, "defects_found": 7, "output_bytes": 8737}

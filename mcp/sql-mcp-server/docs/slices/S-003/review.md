@@ -1,147 +1,160 @@
 # Review — S-003
 
-Reviewed: commits d53ede9, 1410f27 and 9505fea (`git diff 19c6faa..9505fea`) against the slice spec. The two axes ran in separate fresh contexts, neither seeing the other's findings, and are merged here with attribution. Two findings were raised on both axes and are merged into one each, noted where they appear.
-Tests: `npm test` → 32 files, 191 passed, 0 failed, against Docker PostgreSQL 17 on 55432. `npm run typecheck` → clean. Both axes ran both commands.
+## Review 1 (2026-10-25)
+
+Reviewed: commits d53ede9, 1410f27 and 9505fea against the slice spec, on two axes in separate fresh contexts. Tests: `npm test` → 32 files, 191 passed. Verdict: hold (0 blockers, 11 gaps, 12 nits).
+
+The product owner chose to fix all eleven gaps in this slice, and to strip comments under Redaction (D-087). The rework is commit a5298a3. Review 2 confirmed every gap resolved. These were the gaps:
+- a plan-step socket error treated as a Refusal;
+- a failure after the fetch recorded as unsent;
+- PostgreSQL specifics in Engine-neutral places;
+- `checkQuery` misnamed;
+- tool-name branching in the MCP endpoint;
+- a singular Statement in the Audit logger;
+- untyped Refusal classes;
+- a second `SYSTEM_SCHEMA`;
+- a misnamed domain-constraint test;
+- comments kept under Redaction;
+- D-084's constructs never run.
+
+Its Where lines cited `src/query/check.ts` and `src/query/redact.ts`. Those are now `src/engine/postgres-structure.ts` and `src/engine/postgres-redact.ts`.
+
+## Review 2 (2026-10-25)
+
+Reviewed: the whole slice, `git diff 19c6faa..a5298a3`, with the rework `git show a5298a3`. Both axes ran in separate fresh contexts and are merged here with attribution. One finding was raised on both axes and is merged into one, noted where it appears.
+Tests: `npm test` → 33 files, 195 passed, 0 failed, against Docker PostgreSQL 17 on 55432. `npm run typecheck` → clean. Both axes ran both commands.
 
 Each axis verified:
-- **Spec and scope:**
-  - the Delivers path end to end;
-  - every task T-001 to T-011 and T-014, with every named test present;
-  - no Hidden-object leak path in the walker's qualifier resolution;
-  - R-004's single read-only SELECT;
-  - D-038 as narrowed by D-083 and D-085;
-  - the catalog readability walk;
-  - nothing outside the slice's tasks.
-  T-012 and T-013 are manual and still open.
-- **Standards and naming:** no rejected domain-model alias in new code, tests or docs; no credentials; no result values in Audit records.
+- **Spec and scope**, with a temporary probe since deleted:
+  - about 55 structural queries, with no route to a hidden column found;
+  - about 25 Redaction inputs;
+  - the new tests would fail if their behaviour broke.
+- **Standards and naming:** no stale reference to the old names or to `src/query/` is left in `src`, `test` or the Security material.
 
-## gap — A broken-pipe socket error during planning is treated as a plan Refusal
-Where: src/engine/postgres.ts:283
-Axis: standards and naming
-`sqlstate()` is a second copy of the error-code reading in `classifyPostgresError` (postgres.ts:292), without its network-code handling. Its test, `/^[0-9A-Z]{5}$/`, also matches Node's `EPIPE`. So a broken pipe during `EXPLAIN` comes back as `plan_refused`: the Agent is told to check its names, and the Audit record says `query_check`, where D-080 and D-086 make it a `connection` Database error. The plan step should ask `classifyPostgresError(error) === "connection"`.
-
-## gap — A failure after the query ran is recorded as never sent
-Where: src/engine/postgres.ts:210
-Axis: standards and naming; also raised on spec and scope (as a nit)
-The last-resort `catch` returns `sent: false`. That includes a failure of the `TYPE_NAMES_SQL` Server statement, which runs after the cursor's `FETCH` succeeded. `answerQuery` then records `submitted_sql` and no Statement. That contradicts the spec ("A Database error during execution still records the Statement"), D-086, R-010 and the `QueryOutcome` doc comment. An Operator tracing the call reads "refused before sending" for SQL that ran.
-
-## gap — PostgreSQL specifics sit in Engine-neutral places, and the shared parse sentence names PostgreSQL
-Where: src/tools/query.ts:21
-Axis: standards and naming
-D-082 fixes the parse sentence as "…it is not valid <Engine name>.", but `QUERY_REFUSALS` hardcodes "PostgreSQL". `tools/query.ts`, `ToolContext.parser` (src/mcp.ts:41) and `Deps.parser` (src/app.ts:25) are typed to `PgParser` and the PostgreSQL `checkQuery`. `src/query/check.ts` and `src/query/redact.ts` walk libpg_query trees, but live outside `src/engine/`. Until this diff, Engine specifics stayed behind the Engine adapter (components.md). S-007 will either fork `tools/query.ts` or edit the shared sentence, and D-082 says both Engines share it.
-
-## gap — `checkQuery` is named for the whole Query check but runs only its size and structure steps
-Where: src/query/check.ts:547
-Axis: standards and naming
-In the domain model, the Query check includes the plan layer, which lives in `PostgresDatabase.query`. `checkQuery` returns `ok: true` after steps 1 and 2, and only a doc comment says so. S-007's adapter, or a later Typed tool trusting the name, could skip the plan backstop. A name like `checkStructure` would say what it does.
-
-## gap — The MCP endpoint branches on the tool name in many places, and validates inputs three times
-Where: src/mcp.ts:123
-Axis: standards and naming
-These all branch on the tool name:
-- `toolCallOf` (line 49);
-- `validInputs` (62);
-- the `toolCall` body (129);
-- `inputsOf`;
-- `auditedSql` (96).
-
-The list_tables runner then validates a third time (155), and `toolCall`'s `run` and `answer` are typed `QueryAnswer` even for list_tables. Each Typed tool in S-010 to S-012 adds another branch to each of these. A per-tool `{ validate, inputs, run }` record would stop that.
-
-## gap — The Audit logger takes one Statement, though the format and Typed tools need a list
-Where: src/audit.ts:26
-Axis: standards and naming
-`AuditEntry.statement?` is singular. The same `{ sql, rows, ms }` shape is declared again at src/tools/query.ts:69, and the line-cap loop (audit.ts:58–87) handles exactly two SQL strings. The record format is `statements: [...]`, and a Typed tool produces one or more Statements (domain model). The first Typed tool slice will reshape the entry and the cap loop, and may miss the second declaration.
-
-## gap — Reason names in code differ from the logged `reason_class` values, which are untyped
-Where: src/tools/query.ts:19
-Axis: standards and naming
-- **Names:** `RefusalReason` uses `hidden`, `plan` and `plan_unaccounted`. The record logs `hidden_object` and `query_check`.
-- **Outcome kinds:** `plan_refused` and `error` stand where the Audit outcome says `refusal` and `database_error`.
-- **Types:** `reasonClass` is a bare `string`, unlike the Database error `ReasonClass` union.
-
-D-082 fixes the class values for both Engines, and S-007 will copy this table. Nothing would catch a misspelt `reason_class`. A `RefusalClass` union would.
-
-## gap — A second, narrower `SYSTEM_SCHEMA`
-Where: src/query/check.ts:105
-Axis: standards and naming
-src/visibility.ts:14 already defines `SYSTEM_SCHEMA`, including MS SQL Server's `sys` and `INFORMATION_SCHEMA`. check.ts declares its own narrower copy under the same name. When S-007 adds MS SQL Server schemas, the listing and the Query check can disagree about which schemas are system schemas.
-
-## gap — `domain_constraints_run_as_written` asserts that the constraint does not run
-Where: test/query/types.int.test.ts:85
-Axis: standards and naming; also raised on spec and scope (as a nit)
-The test, its comment and D-086 all show that PostgreSQL does not apply a domain's `CHECK` to the Agent's literal. The test name, the spec's Verified by line (spec.md:249) and its Proven by line (spec.md:192) all say the opposite, and no Q-### asks for the spec to be corrected. A Security reviewer reading the test list, or S-007's author, will take the name as proof that domain constraints run.
-
-## gap — Redaction keeps SQL comments, so values written in a comment are logged with Redaction on
-Where: src/query/redact.ts:21
+## blocker — Redaction throws on SQL the lexer cannot finish, so the call writes no Audit record
+Where: src/engine/postgres-redact.ts:34
 Axis: spec and scope
-`normalize` keeps comments, and the "no literal left" check looks only for leftover literal nodes. Verified with a probe: `SELECT o.id FROM sales.orders o -- note ann@example.com` and `/* card 4111 */` are logged unchanged with Redaction on. Agents often annotate SQL with the values they filter on. R-011 makes keeping values the Operator's choice, and here a value survives it. The spec's rule does not mention comments, and S-007's T-SQL redaction will meet the same question. There are two fixes: strip comments before normalising, or log SQL containing a comment by its length only. Either needs a D-###.
+`withoutComments` calls `parser.scan`. On a lexer error, `_wasm_scan` returns error text, not JSON, so `JSON.parse` (src/engine/pg-parser.ts:161) throws a `SyntaxError`, which is not a `ParseError`, and `redactSql` rethrows it. The throw comes from `auditSql` (src/mcp.ts:101–105), so `writeAudit` never runs. Reproduced through the MCP harness with `SELECT o.id FROM sales.orders o WHERE o.total = 'secret-unterminated`: HTTP 200, the Agent gets `Unexpected token 'u'… is not valid JSON`, and there are zero Audit lines. `/* unterminated`, `$$x` and a `U&'…'` literal with a control character fail the same way. This breaks "every `query` call writes exactly one Audit record" (R-010) and D-080's sentence and reference. Before the rework, this input was logged as `<unparsed>`.
 
-## gap — D-084's Proven by lines are checked only structurally, never run
-Where: test/query/structure.test.ts:153
+## gap — With Redaction on, any query using an ORDER BY or GROUP BY ordinal loses its SQL
+Where: src/engine/postgres-redact.ts:56
 Axis: spec and scope
-The spec says two things are run:
-- over a `timestamptz` `created_at`, `date_trunc('day', o.created_at AT TIME ZONE 'Africa/Johannesburg')` puts a 22:30 UTC Monday order on Tuesday;
-- `ARRAY[1, 2, 3]`, `= ANY (ARRAY[1, 2])` and `ARRAY(SELECT … LIMIT 3)` run and come back as `{1,2,3}`.
+`normalize` leaves `GROUP BY 1` and `ORDER BY 1` as constants, so the "no literal left" rule logs `SELECT o.id FROM sales.orders o GROUP BY 1` as `<unparsed: 42 chars>`. Ordinals are supported constructs, and common in Agent-written aggregates, so the Operator loses the SQL J-008 needs. No decision weighs this, and S-007's T-SQL redaction will meet the same question.
 
-`query_check_accepts_at_time_zone_and_array_constructors` only asserts that the structural layer accepts them, using `now()` rather than a column. The engine fixture already holds the 22:30 UTC order (test/query/engine.int.test.ts:25), but no test reads it. A regression in the time-zone result (R-012) or the array text form would pass CI.
+## gap — 14 files rewritten with CRLF line endings in an LF codebase
+Where: src/app.ts:1
+Axis: standards and naming; also raised on spec and scope (as a nit)
+Before this slice, every file under `src/` and `test/` was LF, and the rework committed 14 of them as CRLF:
+- src/app.ts, src/worker.ts, src/engine/postgres-queries.ts, src/engine/postgres-redact.ts;
+- test/signin/helpers.ts;
+- nine files under test/query/;
+- docs/security-material/queries.md.
 
-## nit — `AuditEntry` is close to the rejected alias "audit log entry"
-Where: src/audit.ts:14
+There is no `.gitattributes`, and `core.autocrlf` is false. test/signin/helpers.ts shows 687 changed lines for 7 real ones, and src/app.ts 279 for 9. The real edits to S-001/S-002 code are hidden in the churn, and `git blame` now points at a5298a3.
+
+## gap — The answer shape is declared twice, and the Engine-neutral one holds a single Statement
+Where: src/mcp.ts:46
 Axis: standards and naming
-It dates from S-002, and this diff extends it. The agreed term is Audit record.
+`ToolCallAnswer` repeats `QueryAnswer` (src/tools/query.ts:66). Its `statement` is singular, while the logger now takes `statements: StatementRecord[]`. A Typed tool produces one or more Statements, so S-010 has to reshape this type in two places.
 
-## nit — The plan sentence is written out twice
-Where: src/tools/query.ts:37
+## gap — `queries` is a plural name for one QueryEngine, which goes by three names
+Where: src/mcp.ts:38
 Axis: standards and naming
-`plan` and `plan_unaccounted` must stay identical (D-082), but they are two literals that can drift apart.
+The same object goes by three names:
+- `ToolContext.queries` and `Deps.queries` (src/app.ts:25);
+- `postgresQueries` and `nodeQueries`;
+- `QueryContext.engine` (src/tools/query.ts:56).
 
-## nit — The statement-shape and byte-length checks are repeated
-Where: src/query/redact.ts:28
+`engine` also collides with the domain term Engine. S-007 will copy the pattern as `mssqlQueries`. One name, `queryEngine`, would agree with the type.
+
+## gap — The Request text check and its sentence are copied into the query tool
+Where: src/tools/query.ts:48
 Axis: standards and naming
-`isOneSelect` repeats check.ts:556–559, and the UTF-8 byte-length test appears in redact.ts, check.ts and audit.ts.
+`validateQuery` repeats `validateListTables`'s `request_text` test and its exact sentence (src/tools/list-tables.ts:20–21). Every Tool needs a Request text (ADR-011), so each Typed tool would add another copy.
+
+## gap — The Security material uses the rejected alias "the person asking"
+Where: docs/security-material/queries.md:78
+Axis: standards and naming
+"…pass that notice on to the person asking (J-004)." "Person asking" is a rejected alias of Staff member (domain-model.md:23). This line is in the document a Security reviewer reads, and the lint does not scan the Security material.
+
+## nit — A failed parser load is cached for the isolate's lifetime
+Where: src/app.ts:116
+Axis: spec and scope
+`queries ??= loadQueries()` keeps a rejected promise, so every later `query` call fails in `auditSql`, again with no Audit record.
+
+## nit — An `N'…'` literal is logged as an identifier
+Where: src/engine/postgres-redact.ts:23
+Axis: spec and scope
+`= n'nat'` is logged as `= n$1`. No value leaks, but the logged SQL misstates the query.
+
+## nit — D-087's "inputs checked once" is inexact
+Where: src/mcp.ts:176
+Axis: spec and scope; also raised on standards and naming
+`prepare` runs before dispatch (line 158) and again in the handler. It is deliberate, so that the catalog is read once.
+
+## nit — A doc comment stranded by the refactor, and stray blank lines
+Where: src/engine/postgres.ts:296
+Axis: standards and naming; also raised on spec and scope
+`classifyPostgresError`'s doc comment now sits above `errorCode`. Double blank lines are left at postgres.ts:292–293 and src/engine/postgres-structure.ts:59–60.
+
+## nit — `visibleKey` exists, but the key is still built by hand
+Where: src/visibility.ts:61
+Axis: standards and naming
+The key is written out by hand at visibility.ts:61 and :71, and at src/engine/postgres.ts:183 and :285.
+
+## nit — "ceiling" in a new comment
+Where: src/config.ts:37
+Axis: standards and naming
+"ceiling" is a rejected alias of Boundary.
+
+## nit — `typeNames` is protected only so a test subclass can override it
+Where: src/engine/postgres.ts:212
+Axis: standards and naming
+Elsewhere, test seams are constructor parameters.
+
+## nit — Two imports from the same module
+Where: src/app.ts:4
+Axis: standards and naming
+This also happens at test/signin/helpers.ts:5.
+
+## nit — The structural tests are still named `query_check_*`
+Where: test/query/structure.test.ts:10
+Axis: standards and naming
+They call `checkStructure` only. They are cited in the spec's Verified by lines.
+
+## nit — Redaction is applied in the MCP endpoint, but components.md places it in the Audit logger
+Where: src/mcp.ts:56
+Axis: standards and naming
+The reason, that Redaction needs the Engine's parser, is not recorded.
+
+## nit — The Audit logger keeps its own byte-length helper
+Where: src/audit.ts:46
+Axis: standards and naming
+It is carried over from review 1.
 
 ## nit — Test helpers copied from listing.test.ts
 Where: test/query/mcp-helpers.ts:25
 Axis: standards and naming
-`resultOf`, the audit-line and op-line filters, `ToolResult` and `ASK` duplicate test/listing/listing.test.ts:26–36.
+It is carried over from review 1.
 
-## nit — `plan_refused.code` is set and never read
-Where: src/engine/database.ts:53
+## nit — `plan_refused.code` is read only by tests
+Where: src/engine/database.ts:83
 Axis: standards and naming
-Only the extended-protocol test reads it.
+It is carried over from review 1.
 
 ## nit — `reg_type_columns_and_domains_refused` contains no domain
 Where: test/query/types.test.ts:17
 Axis: standards and naming
-The fake catalog cannot express a domain. That case is in types.int.test.ts.
+It is carried over from review 1.
 
-## nit — `star` is a new name for `all_columns`-and-readable
-Where: src/query/check.ts:30
+## nit — The `star` case names what `all_columns` names
+Where: src/engine/database.ts:42
 Axis: standards and naming
-`visibleObjects` also builds Visible objects outside src/visibility.ts, where `visibleTables` lives.
-
-## nit — `literalFree` reads as a pure check but also fills `params`
-Where: src/query/redact.ts:133
-Axis: standards and naming
-
-## nit — The Engine adapter times with `Date.now()`, not the injected clock
-Where: src/engine/postgres.ts:189
-Axis: standards and naming
-Statement `ms` cannot be controlled in tests.
-
-## nit — Cleanup errors are swallowed without a stated reason
-Where: src/engine/postgres.ts:213
-Axis: standards and naming
-`ROLLBACK` and `end()` errors are dropped here and at line 172. S-002's `rows()` lets `end()` errors propagate.
-
-## nit — The validated `sql` is ignored in favour of a cast
-Where: src/mcp.ts:165
-Axis: standards and naming
-`answerQuery(args.sql as string, …)` casts instead of using the value `validateQuery` returned.
+It is carried over from review 1. D-087 keeps the case names.
 
 ## nit — The Proven by join example runs over the test's own fixture
 Where: test/query/engine.int.test.ts:114
 Axis: spec and scope
-The spec names S-002's `sqlmcp_reader` fixture. The test runs the same query shape over `qe_sales`, with exact counts. Only T-013's live run uses the real fixture.
+It is carried over from review 1. T-013's live run uses the real fixture.
 
-Verdict: hold (0 blockers, 11 gaps, 12 nits)
+Verdict: fail (1 blocker, 6 gaps, 17 nits)

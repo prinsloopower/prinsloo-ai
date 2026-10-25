@@ -202,7 +202,7 @@
     {
       "id": "S-003",
       "title": "Answering a question from the data",
-      "status": "built",
+      "status": "specified",
       "traces": [
         "J-004",
         "J-008",
@@ -214,7 +214,8 @@
       ],
       "size_at_creation": "product",
       "rework": {
-        "slice-spec": 4
+        "slice-spec": 4,
+        "review": 1
       },
       "gates": {
         "slice-spec": {
@@ -229,9 +230,9 @@
           "at": "2026-10-25T17:08:55+00:00"
         },
         "review": {
-          "result": "hold",
+          "result": "fail",
           "by": "model",
-          "at": "2026-10-25T18:53:53+00:00"
+          "at": "2026-10-25T19:23:09+00:00"
         }
       }
     },
@@ -347,7 +348,7 @@
       "size_at_creation": "product"
     }
   ],
-  "blocked_on": "review: Code review: 0 blockers, 11 gaps, 12 nits (docs/slices/S-003/review.md)",
+  "blocked_on": null,
   "open_questions": [],
   "phase": "review"
 }
