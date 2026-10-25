@@ -202,7 +202,7 @@
     {
       "id": "S-003",
       "title": "Answering a question from the data",
-      "status": "specified",
+      "status": "built",
       "traces": [
         "J-004",
         "J-008",
@@ -222,6 +222,11 @@
           "by": "human",
           "at": "2026-10-25T16:15:14+00:00",
           "quote": "Approve all three (Recommended)"
+        },
+        "build": {
+          "result": "pass",
+          "by": "script",
+          "at": "2026-10-25T17:08:55+00:00"
         }
       }
     },
@@ -339,7 +344,5 @@
   ],
   "blocked_on": null,
   "open_questions": [],
-  "phase": "build",
-  "phase_started_at": "2026-10-25T16:17:10+00:00",
-  "phase_paused_s": 0
+  "phase": null
 }
