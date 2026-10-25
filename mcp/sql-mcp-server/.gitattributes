@@ -1,0 +1,3 @@
+# Source stays LF on every platform (S-003 review).
+*.ts text eol=lf
+*.jsonc text eol=lf
