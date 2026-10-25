@@ -1,7 +1,7 @@
-import { isRequestText, REQUEST_TEXT_REFUSAL, type RefusalClass } from "../audit.js";
+import type { RefusalClass } from "../audit.js";
 import type { Database, QueryEngine, ReasonClass, RefusalCase } from "../engine/database.js";
 import type { VisibleObjects } from "../visibility.js";
-import { answerDatabaseError, answerRefusal, type ToolAnswer } from "./list-tables.js";
+import { answerDatabaseError, answerRefusal, isRequestText, REQUEST_TEXT_REFUSAL, type ToolAnswer } from "./answer.js";
 
 export const QUERY = "query";
 

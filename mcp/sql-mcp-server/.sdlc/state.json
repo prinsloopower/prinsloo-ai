@@ -350,5 +350,7 @@
   ],
   "blocked_on": null,
   "open_questions": [],
-  "phase": "review"
+  "phase": "build",
+  "phase_started_at": "2026-10-25T21:19:22+00:00",
+  "phase_paused_s": 0
 }

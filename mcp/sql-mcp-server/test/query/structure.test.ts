@@ -93,6 +93,9 @@ describe("S-003 Query check: structure", () => {
         "SELECT CAST('x' AS regtype)",
         "SELECT regclass 'x'",
         "SELECT '1'::\"char\"",
+        "SELECT 'a'::text('ann@example.com')",
+        "SELECT CAST('a' AS pg_catalog.varchar('ann@example.com'))",
+        "SELECT 1::numeric(12, 'x')",
       ],
       "unsupported",
     );
@@ -183,6 +186,15 @@ describe("S-003 Query check: structure", () => {
       ],
       "unsupported",
     );
+  });
+
+  it("deeply_nested_query_refused_as_query_check", async () => {
+    // Within 64 KiB, but nested deeper than the walk can follow.
+    const deep = "SELECT o.id FROM sales.orders o WHERE o.id = o.id" + "+o.id".repeat(10_000);
+    expect(new TextEncoder().encode(deep).length).toBeLessThan(65_536);
+    expect(await verdict(deep)).toBe("unsupported");
+    // The walk still works afterwards.
+    expect(await verdict("SELECT o.id FROM sales.orders o")).toBe("ok");
   });
 
   it("query_check_bounds_query_size", async () => {

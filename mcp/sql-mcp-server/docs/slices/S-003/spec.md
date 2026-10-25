@@ -184,6 +184,8 @@ This slice writes `docs/security-material/queries.md` (D-067). It covers:
 - A table whose row-level security policy calls a function, as Supabase's `auth.uid()` policies do, can be queried. The rows returned are those the policy allows.
 - A granted table `p`, whose policy reads a granted `m`, whose own policy reads a granted `o`, can be queried.
 - Every probe in this spec, including each one named in its Critique findings, gives the Agent the same answer, apart from the reference, in two Databases. In one the hidden table or column exists, and in the other it does not. No user-defined function or operator runs in either, as their counters show. The only exceptions are policy functions (D-083), and casts and domain constraints on user-defined column types (D-085). No probe in the suite may use them to tell the two Databases apart.
+- A query nested deeper than the parser or the walk can follow, within 64 KiB, is refused as `query_check`, not ended as a fault.
+- If Redaction itself fails, the SQL is kept by its length, and a `server_fault` line names the Tool call.
 - If the PostgreSQL parser fails to load, the `query` call ends in a Database error of class `other`, with a `server_fault` line that names no detail and one Audit record. The next call loads it again.
 - With the account made a superuser, a valid `query` call answers 503 with the misconfigured text and the reference. It writes one `config_invalid` line and one Audit record with outcome `refusal`/`unsafe_account`.
 - On a test table with a column `kind` of an enum type:
@@ -210,7 +212,7 @@ This slice writes `docs/security-material/queries.md` (D-067). It covers:
 - Every `query` call writes exactly one Audit record, carrying `staff` and the `request_text` as received:
   - a run query has one `statements` entry, with its `rows` and `ms`;
   - a refused one has `submitted_sql` and no `statements`.
-- With Redaction on, `SELECT o.id FROM sqlmcp_test.orders o WHERE o.id = 42 AND o.note = 'x'` is logged as `SELECT o.id FROM sqlmcp_test.orders o WHERE o.id = ? AND o.note = ?`. With it off, it is logged exactly as sent. A refused `SELEC 1`, with Redaction on, has `submitted_sql` `<unparsed: 7 chars>`. With Redaction on, `SELECT o.id -- note ann@example.com` keeps no part of its comment, while a quoted identifier containing `--` is kept. `GROUP BY 1 ORDER BY 2 DESC` keeps its ordinals. SQL the lexer cannot finish, such as an unterminated literal or comment, is `<unparsed: N chars>`, and its Tool call still leaves one Audit record. A refused `COPY (SELECT 1) TO '/tmp/x'`, `PREPARE p AS SELECT 'x'` and `NOTIFY c, 'x'` each have `submitted_sql` `<unparsed: N chars>`, and none of their literals appears in the record.
+- With Redaction on, `SELECT o.id FROM sqlmcp_test.orders o WHERE o.id = 42 AND o.note = 'x'` is logged as `SELECT o.id FROM sqlmcp_test.orders o WHERE o.id = ? AND o.note = ?`. With it off, it is logged exactly as sent. A refused `SELEC 1`, with Redaction on, has `submitted_sql` `<unparsed: 7 chars>`. With Redaction on, `SELECT o.id -- note ann@example.com` keeps no part of its comment, while a quoted identifier containing `--` is kept. `GROUP BY 1 ORDER BY 2 DESC` keeps its ordinals, but `ORDER BY 5551234`, which names no output column, is logged by its length. A string written as a type modifier, as in `'a'::text('ann@example.com')`, is refused by the structural step and never logged. SQL the lexer cannot finish, such as an unterminated literal or comment, is `<unparsed: N chars>`, and its Tool call still leaves one Audit record. A refused `COPY (SELECT 1) TO '/tmp/x'`, `PREPARE p AS SELECT 'x'` and `NOTIFY c, 'x'` each have `submitted_sql` `<unparsed: N chars>`, and none of their literals appears in the record.
 - An Audit record whose SQL and Request text would exceed 64 KiB is cut to fit, with `shortened: true`.
 - No Audit record holds a value from a result row.
 - Live, on the project test Deployment, through Hyperdrive, which the Docker tests do not use:
@@ -242,7 +244,7 @@ Verified by: query_parser_parses_and_normalises_in_workerd, worker_bundle_under_
 Verified by: row_limit_setting_parsed_and_validated, redaction_setting_parsed_and_validated, invalid_row_limit_or_redaction_answers_503
 
 ### T-003 — The structural layer accepts one supported SELECT and refuses everything else
-Verified by: query_check_accepts_every_supported_construct, query_check_refuses_writes_and_role_changes, query_check_refuses_more_than_one_statement, query_check_refuses_data_modifying_ctes, query_check_refuses_locking_into_and_tablesample, query_check_refuses_unlisted_functions_and_value_functions, query_check_refuses_system_catalogs, query_check_casts_only_to_listed_types, query_check_refuses_schemas_other_than_pg_catalog, query_check_refuses_unqualified_tables, query_check_accepts_listed_expression_nodes, query_check_accepts_at_time_zone_and_array_constructors, query_check_refuses_unlisted_node_types, query_check_bounds_query_size
+Verified by: query_check_accepts_every_supported_construct, query_check_refuses_writes_and_role_changes, query_check_refuses_more_than_one_statement, query_check_refuses_data_modifying_ctes, query_check_refuses_locking_into_and_tablesample, query_check_refuses_unlisted_functions_and_value_functions, query_check_refuses_system_catalogs, query_check_casts_only_to_listed_types, query_check_refuses_schemas_other_than_pg_catalog, query_check_refuses_unqualified_tables, query_check_accepts_listed_expression_nodes, query_check_accepts_at_time_zone_and_array_constructors, query_check_refuses_unlisted_node_types, query_check_bounds_query_size, deeply_nested_query_refused_as_query_check
 
 ### T-004 — Every table and column a query names is a Visible object, and no probe tells hidden from missing
 Verified by: hidden_and_missing_tables_refused_alike, hidden_and_missing_columns_refused_alike, boundary_excluded_table_refused, unqualified_columns_natural_and_using_refused, order_by_output_alias_accepted, bare_names_in_aggregate_and_window_order_refused, column_existence_probes_refused_alike, table_column_alias_lists_and_join_aliases_refused, subquery_columns_must_be_output_names, function_columns_only_through_alias_list, star_only_over_fully_visible_tables, query_refusals_never_echo_names
@@ -263,7 +265,7 @@ Verified by: query_execution_error_classed_without_driver_text, query_statement_
 Verified by: tools_list_has_query_and_list_tables, query_description_static_with_row_limit, query_requires_request_text_and_sql, query_unsafe_account_answers_503_with_audit, query_engine_load_retried_after_failure
 
 ### T-010 — Every query Tool call leaves one Audit record with its SQL, redacted when Redaction is on
-Verified by: query_audit_records_statement_rows_and_timing, query_audit_records_submitted_sql_for_refusals, redaction_replaces_every_literal, redaction_off_keeps_sql_as_submitted, unparsed_sql_logged_by_length, non_select_sql_logged_by_length_only, audit_record_capped_at_64_kib, query_audit_never_holds_result_values, redaction_strips_comments
+Verified by: query_audit_records_statement_rows_and_timing, query_audit_records_submitted_sql_for_refusals, redaction_replaces_every_literal, redaction_off_keeps_sql_as_submitted, unparsed_sql_logged_by_length, non_select_sql_logged_by_length_only, audit_record_capped_at_64_kib, query_audit_never_holds_result_values, redaction_strips_comments, redaction_failure_writes_server_fault_line
 
 ### T-011 — A Security reviewer can read what an Agent-written query may do and what it leaves behind
 Verified by: manual. `docs/security-material/queries.md` is read against the Security material section above, and every point is present, each pointing to its rule or decision.
@@ -404,3 +406,10 @@ Amended after the second code review (2026-10-25, docs/slices/S-003/review.md re
 - **Line endings** are LF again, with `.gitattributes`.
 - **Names and shapes:** one answer shape with a list of Statements, one Request text check, and `queryEngine` as the single name.
 - `query_execution_error_classed_without_driver_text` and `reg_and_composite_types_refused_at_any_depth` were re-recorded after their bodies changed.
+
+Amended after the third code review (2026-10-25, docs/slices/S-003/review.md review 3, D-089):
+- **Type modifiers** must be whole numbers, both in the structural step and under Redaction (`query_check_casts_only_to_listed_types`, `redaction_replaces_every_literal`).
+- **Ordinals** are kept only within the select list.
+- **Deep nesting:** a query nested too deep to read is refused (`deeply_nested_query_refused_as_query_check`).
+- **Redaction failures** write a `server_fault` line (`redaction_failure_writes_server_fault_line`).
+- **Naming a Server fault** in the domain model is raised as Q-036.

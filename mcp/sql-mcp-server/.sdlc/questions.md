@@ -160,6 +160,7 @@ Answered by the product owner, 2026-10-25: add both now. See D-084.
 ## Q-033 — System-spec and data-model wording owed by S-003
 Raised by: slice-spec (S-003) | Blocks: nothing; apply at the next revision of the system spec
 - security.md, Query check: the Agent's query runs with `search_path` pinned to `pg_catalog`, and tables must be schema-qualified. `reg*` casts and schema-qualified functions, operators and types outside `pg_catalog` are refused. Plan-stage failures are Refusals with one shared sentence (D-082).
+- data-model.md, Audit record: `submitted_sql` is kept for every Agent-written query that was not sent, refused or ended before sending, not for refusals only (D-089). Logged SQL kept by its length reads `<unparsed: N chars>`.
 - data-model.md, Audit record: `inputs` is `{}` for `query`, because the SQL is in `statements` or `submitted_sql`. A Statement's `rows` is the count returned to the Agent (D-082).
 - security.md, Redaction rule: the normaliser's `$n` placeholders are written as `?` (D-082).
 - security.md, Query check: columns must be qualified, `NATURAL`/`USING` joins are refused, casts name only an allow-list of built-in types, and a column whose type reaches a `reg*` type or a composite, at any depth, cannot be read (D-085). Partitions, inheritance children and row-level security policy tables are read under the named table's grant (D-082).
@@ -176,3 +177,15 @@ Answered by the product owner, 2026-10-25: trust conversions like policies. See 
 ## Q-035 — How does S-007 parse T-SQL's AT TIME ZONE?
 Raised by: amendment critique (D-084) | Blocks: slice-spec for S-007
 security.md now lists `AT TIME ZONE` for MS SQL Server (D-084). ADR-005 and the Redaction rule use `node-sql-parser`'s T-SQL AST, and version 5.4.0 cannot parse it: it reads `AT` as an alias and stops at `TIME`. Unless that changes, S-007's structural layer refuses a construct security.md supports, and its Redaction logs such SQL as `<unparsed>`. Options: a newer or patched parser; a narrow pre-parse rewrite whose correctness the plan check (SHOWPLAN) backs; or dropping `AT TIME ZONE` from the MS SQL Server column. T-SQL also takes Windows time-zone names (`'South Africa Standard Time'`), not IANA names, which S-004's and S-008's benchmark questions must allow for.
+
+## Q-036 — What is a fault in the Server's own work called, and how is it recorded?
+Raised by: code-review (S-003, review 3) | Blocks: nothing; affects the domain model, data-model.md and S-010
+The domain model gives a Tool call three outcomes: it runs, it ends in a Refusal, or it ends in a Database error, defined as the Database rejecting a Statement the Server sent. Since S-003's second rework, a fault inside the Server's own work during a Tool call has a fourth kind of ending, though nothing was sent. The example is the PostgreSQL parser failing to load. It is recorded as a Database error of class `other` (D-089):
+- the Agent is told "The database could not complete this.";
+- the Audit record says `database_error`;
+- a `server_fault` line is written, and operations.md alerts on it.
+
+An Operator tracing the record (J-008) may look at the Database first. The options are:
+- accept this, and add the case to the Database error definition;
+- add a fourth outcome, such as Server fault, with its own sentence, Audit `kind` and data-model entry;
+- class it as a Refusal.

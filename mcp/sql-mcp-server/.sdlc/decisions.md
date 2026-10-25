@@ -601,3 +601,17 @@ Rationale: review 2 failed on one blocker. These are the choices made fixing it 
 - **Accepted as they are:**
   - an `N'…'` literal is logged as `n$1`, because `normalize` writes it that way and the re-parse reads it as an identifier. No value is kept;
   - `typeNames` stays a protected method, so a test subclass can make it fail after the fetch.
+
+## D-089 — Choices made in S-003's third rework
+Decided by: model | Date: 2026-10-25 | Phase: build (S-003, after review 3)
+Rationale: review 3 failed on one blocker: a string written as a type modifier survived Redaction. The fix and the gaps:
+- **Type modifiers are whole numbers.** The structural step refuses any other constant in a type's modifiers, so `'a'::text('ann@example.com')` never reaches the Database or the log. Redaction allows only whole numbers there, as a second guard.
+- **Ordinals name output columns.** An ordinal is kept under Redaction only when it is between 1 and the SELECT's number of output columns, where a set operation's are its leftmost SELECT's. Any other number there is a value.
+- **Deep nesting is a Refusal.** A query nested deeper than the parser's tree can be read back, or than the walk can follow, is refused as `unsupported` (`query_check`), within the 64 KiB limit. It is not ended as a Server fault. Redaction of such SQL can still fail, and then falls back with a `server_fault` line (below).
+- **A Redaction failure is reported.** If Redaction throws, the SQL is kept as `<unparsed: N chars>`, and a `server_fault` line names the Tool, the id and `step: "redaction"`, never the error's text. One builder in the Audit logger, `unparsedSql`, writes that marker for every Engine.
+- **A Server fault stays a Database error of class `other`** until Q-036 is answered.
+- **`submitted_sql` covers every unsent query**, whether refused or ended before sending. The code, the Security material and Q-033's data-model item say so.
+- **Shared answers live in `src/tools/answer.ts`:** the answer shape, the Refusal and Database error answers, and the Request text check.
+- **Blame and line endings.** `.git-blame-ignore-revs` lists the line-ending commit, and `.gitattributes` also pins the slice's own documents to LF.
+- **Re-recorded:** `query_check_casts_only_to_listed_types` and `redaction_replaces_every_literal`, after their bodies grew, each recorded failing first.
+Alternatives rejected: refusing all type modifiers (it would refuse `numeric(12,2)` and `varchar(5)`); a fixed recursion depth limit in the walk (the stack's own limit already bounds it, and the size limit bounds the input).

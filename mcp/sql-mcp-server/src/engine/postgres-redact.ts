@@ -1,3 +1,4 @@
+import { unparsedSql } from "../audit.js";
 import { ParseError, type PgParser } from "./pg-parser.js";
 import { onlySelect, QUERY_MAX_BYTES, utf8Length } from "./postgres-structure.js";
 
@@ -10,7 +11,7 @@ import { onlySelect, QUERY_MAX_BYTES, utf8Length } from "./postgres-structure.js
  */
 export function redactSql(sql: string, parser: PgParser, on: boolean): string {
   if (!on) return sql;
-  const unparsed = `<unparsed: ${sql.length} chars>`;
+  const unparsed = unparsedSql(sql);
   if (utf8Length(sql) > QUERY_MAX_BYTES) return unparsed;
   try {
     // Comments can carry values as literals do, and `normalize` keeps them.
@@ -45,32 +46,49 @@ function withoutComments(sql: string, parser: PgParser): string {
 
 /**
  * Each placeholder's byte offset, or undefined when a literal value is left. Two kinds of constant
- * are not values, and may stay (D-088): a type's modifiers (`numeric(12,2)`), and the ordinals of
- * `GROUP BY 1` and `ORDER BY 2`, which name output columns.
+ * are not values, and may stay (D-088, D-089): a type's whole-number modifiers (`numeric(12,2)`),
+ * and an ordinal of `GROUP BY` or the SELECT's own `ORDER BY` that names one of its output columns.
  */
 function placeholdersIfLiteralFree(tree: unknown): number[] | undefined {
   const offsets: number[] = [];
-  const isOrdinal = (n: unknown) => Boolean(n && typeof n === "object" && "A_Const" in n && "ival" in ((n as { A_Const: object }).A_Const ?? {}));
-  const visit = (node: unknown, constAllowed: boolean): boolean => {
+  const intOf = (n: unknown): number | undefined => {
+    const c = n && typeof n === "object" && "A_Const" in n ? (n as { A_Const: { ival?: { ival?: number } } }).A_Const : undefined;
+    return c?.ival ? (c.ival.ival ?? 0) : undefined;
+  };
+  // How many output columns a SELECT has: a set operation's are its leftmost SELECT's.
+  const outputs = (select: Record<string, unknown>): number =>
+    Array.isArray(select.targetList) ? select.targetList.length : select.larg ? outputs(select.larg as Record<string, unknown>) : 0;
+  const isOrdinal = (n: unknown, count: number) => {
+    const i = intOf(n);
+    return i !== undefined && i >= 1 && i <= count;
+  };
+  const visit = (node: unknown, wholeNumbersAllowed: boolean): boolean => {
     if (!node || typeof node !== "object") return true;
-    if (Array.isArray(node)) return node.every((n) => visit(n, constAllowed));
-    for (const [k, v] of Object.entries(node as Record<string, unknown>)) {
-      if (k === "A_Const" && !constAllowed) return false;
+    if (Array.isArray(node)) return node.every((n) => visit(n, wholeNumbersAllowed));
+    const obj = node as Record<string, unknown>;
+    for (const [k, v] of Object.entries(obj)) {
+      if (k === "A_Const") {
+        if (!wholeNumbersAllowed || !("ival" in (v as object))) return false;
+        continue;
+      }
       if (k === "ParamRef") offsets.push((v as { location: number }).location);
+      if (k === "typmods") {
+        if (!visit(v, true)) return false;
+        continue;
+      }
       if (k === "groupClause" && Array.isArray(v)) {
-        if (!v.every((item) => visit(item, isOrdinal(item)))) return false;
+        if (!v.every((item) => isOrdinal(item, outputs(obj)) || visit(item, false))) return false;
         continue;
       }
       // Only the SELECT's own ORDER BY takes ordinals; in a window's or an aggregate's, a number is a constant.
       if (k === "sortClause" && Array.isArray(v)) {
         for (const item of v) {
           const sort = (item as { SortBy?: { node?: unknown } }).SortBy;
-          if (!sort) return false;
-          if (!visit(sort.node, isOrdinal(sort.node))) return false;
+          if (!sort || !(isOrdinal(sort.node, outputs(obj)) || visit(sort.node, false))) return false;
         }
         continue;
       }
-      if (!visit(v, constAllowed || k === "typmods")) return false;
+      if (!visit(v, false)) return false;
     }
     return true;
   };

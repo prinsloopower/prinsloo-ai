@@ -1,3 +1,5 @@
-# Source stays LF on every platform (S-003 review).
+# Source and the documents slices write stay LF on every platform (S-003 review).
 *.ts text eol=lf
 *.jsonc text eol=lf
+docs/security-material/*.md text eol=lf
+docs/slices/**/*.md text eol=lf

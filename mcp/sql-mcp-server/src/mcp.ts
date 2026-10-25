@@ -2,21 +2,13 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import { ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import * as z from "zod";
-import { writeAudit, type StatementRecord } from "./audit.js";
+import { unparsedSql, writeAudit, type StatementRecord } from "./audit.js";
 import type { Boundary } from "./config.js";
 import type { Catalog, Database, QueryEngine, ReasonClass } from "./engine/database.js";
 import { op } from "./oplog.js";
 import { page, type Staff } from "./signin/broker.js";
-import {
-  answerDatabaseError,
-  answerListing,
-  answerRefusal,
-  LIST_TABLES,
-  LIST_TABLES_DESCRIPTION,
-  listing,
-  validateListTables,
-  type ToolAnswer,
-} from "./tools/list-tables.js";
+import { answerDatabaseError, answerRefusal, type ToolAnswer } from "./tools/answer.js";
+import { answerListing, LIST_TABLES, LIST_TABLES_DESCRIPTION, listing, validateListTables } from "./tools/list-tables.js";
 import { answerQuery, QUERY, queryDescription, validateQuery } from "./tools/query.js";
 import { bypassesGrants, visibleObjects } from "./visibility.js";
 
@@ -58,7 +50,7 @@ interface ToolSpec {
    * The SQL the Audit record keeps for this call, redacted when Redaction is on (R-011). Redaction
    * happens here, not in the Audit logger, because it needs the Engine's parser (D-088).
    */
-  auditSql?(args: Record<string, unknown>, answer: ToolAnswer, faulted: boolean): Promise<{ statements?: StatementRecord[]; submittedSql?: string }>;
+  auditSql?(args: Record<string, unknown>, answer: ToolAnswer, faulted: boolean, id: string): Promise<{ statements?: StatementRecord[]; submittedSql?: string }>;
 }
 
 /** The Tools a Deployment offers. */
@@ -102,17 +94,19 @@ function toolSpecs(tools: ToolContext): Map<string, ToolSpec> {
       // A query's SQL is recorded as its Statement or submitted SQL instead (D-082).
       inputs: () => ({}),
       // The Statement it was sent as, or else the SQL as submitted, however the call was refused (D-086).
-      async auditSql(args, answer, faulted) {
+      async auditSql(args, answer, faulted, id) {
         const submitted = answer.submittedSql ?? (typeof args.sql === "string" && args.sql ? args.sql : undefined);
         // Whatever goes wrong while redacting, the Tool call still leaves its Audit record (R-010):
         // the SQL is then kept by its length only.
         const redact = async (sql: string) => {
-          // After a fault in the Server's own work, the engine is not loaded again within the same Tool call.
-          if (faulted) return tools.redaction ? `<unparsed: ${sql.length} chars>` : sql;
+          // After a fault in the Server's own work, the query engine is not loaded again within the same Tool call.
+          if (faulted) return tools.redaction ? unparsedSql(sql) : sql;
           try {
             return (await queryEngine()).redact(sql, tools.redaction);
           } catch {
-            return tools.redaction ? `<unparsed: ${sql.length} chars>` : sql;
+            // A fault in Redaction itself: the Operator is told, the SQL is kept by its length (D-089).
+            op("server_fault", { path: "/mcp", tool: QUERY, id, step: "redaction" });
+            return tools.redaction ? unparsedSql(sql) : sql;
           }
         };
         if (answer.statements?.length) {
@@ -162,7 +156,7 @@ export async function handleMcp(request: Request, staff?: Staff, tools?: ToolCon
     const audit = async (name: string, spec: ToolSpec, args: Record<string, unknown>, id: string, started: number, answer: ToolAnswer, faulted = false) =>
       writeAudit({
         id, started, ended: tools.now(), deployment: tools.deployment, staff, requestText: args.request_text, tool: name,
-        inputs: spec.inputs(args), outcome: answer.outcome, ...(spec.auditSql ? await spec.auditSql(args, answer, faulted) : {}),
+        inputs: spec.inputs(args), outcome: answer.outcome, ...(spec.auditSql ? await spec.auditSql(args, answer, faulted, id) : {}),
       });
 
     // The account check needs the catalog, and an unsafe account must answer with an HTTP 503,

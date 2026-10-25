@@ -47,7 +47,7 @@ The Agent's SQL can name only built-in functions, operators and cast targets:
 
 Whatever a superuser installs into `pg_catalog`, such as an extension's operators or casts between built-in types, is trusted like the built-ins.
 
-Two things the database administrator writes do run inside an Agent's query, and are **trusted like grants**:
+Two things the Database administrator writes do run inside an Agent's query, and are **trusted like grants**:
 - **Row-level security policies** on a Visible table run as written, along with every function they call, `SECURITY DEFINER` ones included (D-083). Supabase policies calling `auth.uid()` work as they do for any other client.
 - **Casts and domain `CHECK` constraints on user-defined column types.** A column of an enum, domain or extension type brings its type's casts with it, implicit ones included, and they run as their owner wrote them, `SECURITY DEFINER` included (D-085). In practice, PostgreSQL resolves the Agent's literals next to a domain column to the domain's base type, so a domain's `CHECK` does not run on them.
 
@@ -79,7 +79,7 @@ A query returns at most the Row limit of rows. When more match, the result says 
 
 Values come back as JSON for booleans, small integers and floats, and as PostgreSQL prints them for everything else, so totals, large counts and timestamps are exact. **Every row returned is sent to the AI provider** that runs the Agent, Anthropic or OpenAI, under the organisation's agreement with them (D-036).
 
-The Server sets no time limit on a query (D-003). The database's own `statement_timeout`, if the database administrator sets one for the account, ends a long query, and the Agent is told "The database stopped the query before it finished."
+The Server sets no time limit on a query (D-003). The database's own `statement_timeout`, if the Database administrator sets one for the account, ends a long query, and the Agent is told "The database stopped the query before it finished."
 
 ## What a query's Audit record holds
 
@@ -88,10 +88,10 @@ In addition to what every Audit record holds (visibility.md):
 | holds | never holds |
 |---|---|
 | the Statement that ran: its SQL, the rows returned, and the time from the cursor's opening to its last fetch | any value the query returned, or its column names |
-| for a refused query, the SQL as submitted | the database driver's error text |
+| for a query that was never sent, refused or ended before sending, the SQL as submitted | the database driver's error text |
 | the outcome: answered (with its row count and whether it was cut short), refused (with its class), or database error (with its class) | |
 
-With Redaction on, the default, comments are removed from logged SQL, because an Agent may write values into them, and every literal becomes `?`. The ordinals of `GROUP BY 1` and `ORDER BY 2` stay, because they name output columns, not values. `WHERE o.id = 42 AND o.note = 'x'` is logged as `WHERE o.id = ? AND o.note = ?`. Only a single SELECT is logged that way: anything else, such as a refused `COPY`, `PREPARE` or `CREATE TABLE … AS`, and anything that does not parse, is logged as `<unparsed: N chars>`, because PostgreSQL's normaliser keeps literals in some statement types. The Request text is never redacted: if the person typed a customer's name into their question, it is in the record.
+With Redaction on, the default, comments are removed from logged SQL, because an Agent may write values into them, and every literal becomes `?`. The ordinals of `GROUP BY 1` and `ORDER BY 2` stay, because they name output columns, not values. `WHERE o.id = 42 AND o.note = 'x'` is logged as `WHERE o.id = ? AND o.note = ?`. Only a single SELECT is logged that way: anything else, such as a refused `COPY`, `PREPARE` or `CREATE TABLE … AS`, and anything that does not parse, is logged as `<unparsed: N chars>`, because PostgreSQL's normaliser keeps literals in some statement types. The Request text is never redacted: if the Staff member typed a customer's name into their Question, it is in the record.
 
 A record is at most 64 KiB. Longer SQL is cut, marked `…[cut]`, and the record says `shortened: true`.
 

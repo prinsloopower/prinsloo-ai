@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { redactSql } from "../../src/engine/postgres-redact.js";
-import { captureConsole } from "../signin/helpers.js";
+import { captureConsole, harness, signIn } from "../signin/helpers.js";
 import { queryDatabase } from "./catalog.js";
-import { ASK, auditLines, callQuery, resultOf, signedIn } from "./mcp-helpers.js";
-import { nodeParser } from "./node-parser.js";
+import { ASK, auditLines, callQuery, opLinesOf, resultOf, signedIn } from "./mcp-helpers.js";
+import { nodeParser, nodeQueryEngine } from "./node-parser.js";
 
 const SQL = "SELECT o.id FROM sales.orders o WHERE o.id = 42 AND o.total = 'x'";
 const REDACTED = "SELECT o.id FROM sales.orders o WHERE o.id = ? AND o.total = ?";
@@ -67,6 +67,18 @@ describe("S-003 Audit records for Agent-written queries", () => {
     expect(redactSql("SELECT o.id, count(*) FROM sales.orders o WHERE o.total > 5 GROUP BY 1 ORDER BY 2 DESC, 1", parser, true)).toBe(
       "SELECT o.id, count(*) FROM sales.orders o WHERE o.total > ? GROUP BY 1 ORDER BY 2 DESC, 1",
     );
+    // A number past the select list names no column, so it is a value, and the SQL is kept by its length.
+    for (const sql of ["SELECT o.id FROM sales.orders o ORDER BY 5551234", "SELECT o.id FROM sales.orders o GROUP BY 2", "SELECT o.id FROM sales.orders o ORDER BY -1"]) {
+      expect(redactSql(sql, parser, true), sql).toBe(`<unparsed: ${sql.length} chars>`);
+    }
+    // Only a whole number is a type modifier; anything else written there is a value.
+    for (const sql of [
+      "SELECT o.id FROM sales.orders o WHERE o.total = 'a'::text('ann@example.com')",
+      "SELECT CAST('a' AS pg_catalog.varchar('ann@example.com'))",
+      "SELECT 'a'::numeric(12, 'x')",
+    ]) {
+      expect(redactSql(sql, parser, true), sql).toBe(`<unparsed: ${sql.length} chars>`);
+    }
   });
 
   it("redaction_strips_comments", async () => {
@@ -77,6 +89,20 @@ describe("S-003 Audit records for Agent-written queries", () => {
     for (const value of ["ann@example.com", "4111", "kept"]) expect(logged).not.toContain(value);
     // Redaction off keeps comments, as it keeps every literal.
     expect(redactSql("SELECT 1 -- note", parser, false)).toBe("SELECT 1 -- note");
+  });
+
+  it("redaction_failure_writes_server_fault_line", async () => {
+    // A query engine whose Redaction fails: the SQL is kept by its length, and the Operator is told.
+    const broken = async () => ({ ...(await nodeQueryEngine()), redact: () => { throw new Error("redaction bug at /internal/path"); } });
+    const h = await harness({}, { realMcp: true, database: queryDatabase(), queryEngine: broken });
+    const token = (await signIn(h)).access_token;
+    const lines = await captureConsole(async () => {
+      await resultOf(await callQuery(h, token, { request_text: ASK, sql: SQL }));
+    });
+    const [record] = auditLines(lines);
+    expect(record!.statements).toEqual([{ sql: `<unparsed: ${SQL.length} chars>`, rows: 0, ms: 0 }]);
+    expect(opLinesOf(lines)).toContainEqual(expect.objectContaining({ event: "server_fault", tool: "query", id: record!.id }));
+    expect(lines.join("\n")).not.toContain("/internal/path");
   });
 
   it("redaction_off_keeps_sql_as_submitted", async () => {

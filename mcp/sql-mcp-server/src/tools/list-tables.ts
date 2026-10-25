@@ -1,7 +1,7 @@
-import { isRequestText, REQUEST_TEXT_REFUSAL, withReference, type Outcome, type RefusalClass, type StatementRecord } from "../audit.js";
 import type { Boundary } from "../config.js";
-import type { Catalog, ReasonClass } from "../engine/database.js";
+import type { Catalog } from "../engine/database.js";
 import { visibleTables, type VisibleTable } from "../visibility.js";
+import { isRequestText, REQUEST_TEXT_REFUSAL, type ToolAnswer } from "./answer.js";
 
 export const LIST_TABLES = "list_tables";
 
@@ -24,15 +24,6 @@ export function validateListTables(args: Record<string, unknown>): Validated {
   return schema === undefined ? { ok: true, requestText } : { ok: true, requestText, schema };
 }
 
-/** The Agent's sentence for each Database error class (D-080). */
-export const DATABASE_ERROR_SENTENCE: Record<ReasonClass, string> = {
-  connection: "The database could not be reached.",
-  timeout: "The database stopped the query before it finished.",
-  permission: "The database refused this for lack of permission.",
-  constraint: "The database refused the change because it breaks a rule on the data.",
-  other: "The database could not complete this.",
-};
-
 export interface Listing {
   tables: VisibleTable[];
   complete: boolean;
@@ -44,30 +35,10 @@ export function listing(catalog: Catalog, boundary: Boundary | undefined, schema
   return { tables: all.slice(0, TABLES_MAX), complete: all.length <= TABLES_MAX };
 }
 
-/** What a Tool call answers, and the SQL its Audit record keeps, unredacted here. */
-export interface ToolAnswer {
-  result: { content: { type: "text"; text: string }[]; structuredContent?: Record<string, unknown>; isError?: boolean };
-  outcome: Outcome;
-  /** Every Statement the Tool call sent (data-model.md). */
-  statements?: StatementRecord[];
-  /** The SQL of an Agent-written query that was refused, or failed before it was sent. */
-  submittedSql?: string;
-}
-
 export function answerListing(l: Listing): ToolAnswer {
   const body = { tables: l.tables, complete: l.complete };
   return {
     result: { content: [{ type: "text", text: JSON.stringify(body) }], structuredContent: body },
     outcome: { kind: "ok", row_count: l.tables.length, cut_short: !l.complete },
   };
-}
-
-export function answerRefusal(reasonClass: RefusalClass, sentence: string, id: string): ToolAnswer {
-  const text = withReference(sentence, id);
-  return { result: { content: [{ type: "text", text }], isError: true }, outcome: { kind: "refusal", reason_class: reasonClass, reason: text } };
-}
-
-export function answerDatabaseError(reasonClass: ReasonClass, id: string): ToolAnswer {
-  const text = withReference(DATABASE_ERROR_SENTENCE[reasonClass], id);
-  return { result: { content: [{ type: "text", text }], isError: true }, outcome: { kind: "database_error", reason_class: reasonClass, reason: text } };
 }

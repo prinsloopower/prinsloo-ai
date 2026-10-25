@@ -389,7 +389,11 @@ class Walker {
     only(t, ["names", "typmods", "typemod", "arrayBounds"]);
     if (list(t.arrayBounds).length) throw new Refused("unsupported");
     if (!CAST_TYPES.has(builtinName(t.names))) throw new Refused("unsupported");
-    for (const m of list(t.typmods)) if (unwrap(m)[0] !== "A_Const") throw new Refused("unsupported");
+    // A type modifier is a whole number (`numeric(12,2)`); anything else written there is a value.
+    for (const m of list(t.typmods)) {
+      const [mt, c] = unwrap(m);
+      if (mt !== "A_Const" || !("ival" in c)) throw new Refused("unsupported");
+    }
   }
 
   expr(item: unknown, scope: Scope): void {
@@ -514,6 +518,8 @@ export function checkStructure(sql: string, parser: PgParser, visible: VisibleOb
     tree = parser.parse(sql);
   } catch (e) {
     if (e instanceof ParseError) return { ok: false, refusal: "not_parsed" };
+    // A tree nested deeper than JavaScript can read back: refused like any construct the walk cannot read.
+    if (e instanceof RangeError) return { ok: false, refusal: "unsupported" };
     throw e;
   }
   const select = onlySelect(tree);
@@ -523,6 +529,8 @@ export function checkStructure(sql: string, parser: PgParser, visible: VisibleOb
     walker.select(select, undefined);
   } catch (e) {
     if (e instanceof Refused) return { ok: false, refusal: e.refusal };
+    // Nested deeper than the walk can follow, within the size limit: refused like any construct it cannot read.
+    if (e instanceof RangeError) return { ok: false, refusal: "unsupported" };
     throw e;
   }
   return { ok: true, tables: walker.tables };

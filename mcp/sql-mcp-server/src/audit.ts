@@ -3,10 +3,6 @@ import type { Staff } from "./signin/broker.js";
 
 /** Request text is accepted, and kept, up to this length (data-model.md). */
 export const REQUEST_TEXT_MAX = 4000;
-/** Every Tool takes a Request text (ADR-011); one outside these bounds is refused with this sentence. */
-export const REQUEST_TEXT_REFUSAL = "The request was not accepted: request_text must be 1–4,000 characters.";
-export const isRequestText = (v: unknown): v is string => typeof v === "string" && v.length >= 1 && v.length <= REQUEST_TEXT_MAX;
-
 /** A string input is kept up to this length; schema names are never longer (S-002). */
 const INPUT_MAX = 128;
 
@@ -40,9 +36,12 @@ export interface AuditRecord {
   outcome: Outcome;
   /** Every Statement the Tool call sent; Server statements are not among them (D-026). */
   statements?: StatementRecord[];
-  /** A refused Agent-written query's SQL, already redacted when Redaction is on. */
+  /** An Agent-written query's SQL when it was not sent: refused, or ended before sending. Already redacted when Redaction is on. */
   submittedSql?: string;
 }
+
+/** Logged SQL that is kept by its length only: what Redaction writes when it cannot vouch for the text (security.md). */
+export const unparsedSql = (sql: string) => `<unparsed: ${sql.length} chars>`;
 
 /** An Audit record's line stays within this many bytes (operations.md). */
 const LINE_MAX = 64 * 1024;
