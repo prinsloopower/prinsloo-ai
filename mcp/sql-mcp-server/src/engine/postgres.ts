@@ -1,5 +1,5 @@
 import pg from "pg";
-import type { AccountFlags, Catalog, Database, ReasonClass } from "./database.js";
+import type { AccountFlags, Catalog, Database, NamedTable, QueryOutcome, ReasonClass } from "./database.js";
 
 /** Connecting gives up after this long (security.md). */
 const CONNECT_MS = 5000;
@@ -36,19 +36,20 @@ const FLAGS_SQL = `
  * every privilege check or is a SET ROLE away, so neither is read (D-076, D-081). Partitions are read
  * through their parent. Only built-in types are named: any other type's name can carry a hidden
  * schema's or table's name (every table has a row type of its own name).
+ *
+ * A column is readable by Agent-written queries unless its type reaches a `reg*` type or a
+ * composite, following domains, array elements, ranges and multiranges at any depth (D-082, D-085).
  */
 const CATALOG_SQL = `
-  WITH me AS (${FLAGS_SQL})
-  SELECT me.superuser, me.bypass_rls, me.read_all_data, me.write_all_data, me.create_role,
-         t.schema_name, t.table_name, t.column_name, t.column_type, t.granted
-  FROM me
-  LEFT JOIN LATERAL (
+  WITH RECURSIVE me AS (${FLAGS_SQL}),
+  cols AS (
     SELECT n.nspname AS schema_name,
            c.relname AS table_name,
            a.attname AS column_name,
            CASE WHEN ty.typnamespace = 'pg_catalog'::regnamespace
                 THEN format_type(a.atttypid, a.atttypmod) ELSE 'user-defined' END AS column_type,
            has_column_privilege(c.oid, a.attnum, 'SELECT') AS granted,
+           a.atttypid,
            a.attnum
     FROM pg_class c
     JOIN pg_namespace n ON n.oid = c.relnamespace
@@ -61,7 +62,34 @@ const CATALOG_SQL = `
       AND n.nspname NOT LIKE 'pg\\_temp%'
       AND has_schema_privilege(n.oid, 'USAGE')
       AND NOT pg_has_role(current_user, c.relowner, 'MEMBER')
-  ) t ON true
+  ),
+  reach(root, oid) AS (
+    SELECT DISTINCT atttypid, atttypid FROM cols
+    UNION
+    SELECT r.root, next.oid
+    FROM reach r
+    JOIN pg_type ty ON ty.oid = r.oid
+    CROSS JOIN LATERAL (
+      SELECT NULLIF(ty.typbasetype, 0)
+      UNION ALL SELECT NULLIF(ty.typelem, 0)
+      UNION ALL SELECT rg.rngsubtype FROM pg_range rg WHERE rg.rngtypid = ty.oid
+      UNION ALL SELECT rg.rngtypid FROM pg_range rg WHERE rg.rngmultitypid = ty.oid
+    ) next(oid)
+    WHERE next.oid IS NOT NULL
+  ),
+  unreadable AS (
+    SELECT DISTINCT r.root
+    FROM reach r
+    JOIN pg_type ty ON ty.oid = r.oid
+    WHERE ty.typtype = 'c'
+       OR (ty.typnamespace = 'pg_catalog'::regnamespace AND ty.typname IN
+           ('regclass', 'regtype', 'regproc', 'regprocedure', 'regoper', 'regoperator', 'regnamespace', 'regrole', 'regconfig', 'regdictionary', 'regcollation'))
+  )
+  SELECT me.superuser, me.bypass_rls, me.read_all_data, me.write_all_data, me.create_role,
+         t.schema_name, t.table_name, t.column_name, t.column_type, t.granted,
+         t.atttypid IS NOT NULL AND NOT EXISTS (SELECT 1 FROM unreadable u WHERE u.root = t.atttypid) AS readable
+  FROM me
+  LEFT JOIN cols t ON true
   ORDER BY t.schema_name, t.table_name, t.attnum`;
 
 interface FlagsRow {
@@ -78,6 +106,7 @@ interface CatalogQueryRow extends FlagsRow {
   column_name: string | null;
   column_type: string | null;
   granted: boolean | null;
+  readable: boolean | null;
 }
 
 const flagsOf = (r: FlagsRow): AccountFlags => ({
@@ -92,7 +121,7 @@ const flagsOf = (r: FlagsRow): AccountFlags => ({
 export class PostgresDatabase implements Database {
   constructor(private readonly connectionString: string) {}
 
-  private async query<T>(sql: string): Promise<T[]> {
+  private async rows<T>(sql: string): Promise<T[]> {
     const client = new pg.Client({ connectionString: this.connectionString, connectionTimeoutMillis: CONNECT_MS });
     await client.connect();
     try {
@@ -103,26 +132,157 @@ export class PostgresDatabase implements Database {
   }
 
   async ping(): Promise<void> {
-    await this.query("SELECT 1");
+    await this.rows("SELECT 1");
   }
 
   async accountFlags(): Promise<AccountFlags> {
-    const [row] = await this.query<FlagsRow>(FLAGS_SQL);
+    const [row] = await this.rows<FlagsRow>(FLAGS_SQL);
     if (!row) throw Object.assign(new Error("account not found"), { code: "42501" });
     return flagsOf(row);
   }
 
   async catalog(): Promise<Catalog> {
-    const rows = await this.query<CatalogQueryRow>(CATALOG_SQL);
+    const rows = await this.rows<CatalogQueryRow>(CATALOG_SQL);
     const [first] = rows;
     if (!first) throw Object.assign(new Error("account not found"), { code: "42501" });
     return {
       flags: flagsOf(first),
       rows: rows
         .filter((r) => r.schema_name !== null)
-        .map((r) => ({ schema: r.schema_name!, table: r.table_name!, column: r.column_name!, type: r.column_type!, granted: r.granted === true })),
+        .map((r) => ({ schema: r.schema_name!, table: r.table_name!, column: r.column_name!, type: r.column_type!, granted: r.granted === true, readable: r.readable === true })),
     };
   }
+
+  /**
+   * The plan and execution layers of the Query check (ADR-005, S-003). On one connection, inside a
+   * read-only transaction that is always rolled back, with `search_path` pinned to `pg_catalog`: plan
+   * the query, account for every relation the plan reads, then fetch at most `rowLimit + 1` rows
+   * through a cursor, so the query's text is never rewritten. Every statement goes over the extended
+   * protocol, which accepts one statement only.
+   */
+  async query(sql: string, named: NamedTable[], rowLimit: number): Promise<QueryOutcome> {
+    const client = new pg.Client({ connectionString: this.connectionString, connectionTimeoutMillis: CONNECT_MS });
+    const send = <R extends unknown[] = unknown[]>(text: string, values?: unknown[], types?: pg.CustomTypesConfig) =>
+      client.query<R>({ text, values, types, rowMode: "array", queryMode: "extended" } as pg.QueryArrayConfig);
+    try {
+      await client.connect();
+      await send("BEGIN READ ONLY");
+      await send("SET LOCAL search_path = pg_catalog");
+    } catch (error) {
+      await client.end().catch(() => {});
+      return { kind: "error", error, sent: false, ms: 0 };
+    }
+    try {
+      let plan: unknown;
+      try {
+        plan = (await send(`EXPLAIN (VERBOSE, FORMAT JSON) ${sql}`)).rows[0]?.[0];
+      } catch (error) {
+        const code = sqlstate(error);
+        if (!code || code.startsWith("08")) return { kind: "error", error, sent: false, ms: 0 };
+        return { kind: "plan_refused", unaccounted: false, code };
+      }
+      const accounted = new Set(
+        (await send<[string, string]>(ACCOUNTED_SQL, [named.map((t) => t.schema), named.map((t) => t.table)])).rows.map(([s, t]) => `${s}\u0000${t}`),
+      );
+      if (planRelations(plan).some((r) => !accounted.has(r))) return { kind: "plan_refused", unaccounted: true };
+
+      const started = Date.now();
+      let result: pg.QueryArrayResult;
+      try {
+        await send(`DECLARE sqlmcp_query NO SCROLL CURSOR FOR ${sql}`);
+        result = await send(`FETCH FORWARD ${rowLimit + 1} FROM sqlmcp_query`, undefined, VALUE_TYPES);
+      } catch (error) {
+        return { kind: "error", error, sent: true, ms: Date.now() - started };
+      }
+      const ms = Date.now() - started;
+      const names = result.fields.length
+        ? (await send<[string]>(TYPE_NAMES_SQL, [result.fields.map((f) => f.dataTypeID), result.fields.map((f) => f.dataTypeModifier)])).rows.map(([n]) => n)
+        : [];
+      return {
+        kind: "ok",
+        run: {
+          columns: result.fields.map((f, i) => ({ name: f.name, type: names[i] ?? "user-defined" })),
+          rows: result.rows.slice(0, rowLimit),
+          cutShort: result.rows.length > rowLimit,
+          ms,
+        },
+      };
+    } catch (error) {
+      return { kind: "error", error, sent: false, ms: 0 };
+    } finally {
+      await client.query("ROLLBACK").catch(() => {});
+      await client.end().catch(() => {});
+    }
+  }
+}
+
+/**
+ * The relations a query's plan may read, given the tables it names: those tables, their partitions
+ * and inheritance descendants, the tables their row-level security policies read, and the base
+ * tables of views those policies read, followed to the end of the chain. PostgreSQL reads all of
+ * them under the named table's grant (D-082, D-083).
+ */
+const ACCOUNTED_SQL = `
+  WITH RECURSIVE named AS (
+    SELECT c.oid
+    FROM unnest($1::text[], $2::text[]) AS u(schema_name, table_name)
+    JOIN pg_namespace n ON n.nspname = u.schema_name
+    JOIN pg_class c ON c.relnamespace = n.oid AND c.relname = u.table_name
+  ),
+  reach(oid) AS (
+    SELECT oid FROM named
+    UNION
+    SELECT x.oid
+    FROM reach r
+    CROSS JOIN LATERAL (
+      SELECT i.inhrelid FROM pg_inherits i WHERE i.inhparent = r.oid
+      UNION ALL
+      SELECT d.refobjid FROM pg_policy p
+      JOIN pg_depend d ON d.classid = 'pg_policy'::regclass AND d.objid = p.oid AND d.refclassid = 'pg_class'::regclass
+      WHERE p.polrelid = r.oid
+      UNION ALL
+      SELECT d.refobjid FROM pg_rewrite w
+      JOIN pg_depend d ON d.classid = 'pg_rewrite'::regclass AND d.objid = w.oid AND d.refclassid = 'pg_class'::regclass
+      WHERE w.ev_class = r.oid AND d.refobjid <> r.oid
+    ) x(oid)
+  )
+  SELECT n.nspname, c.relname FROM reach r JOIN pg_class c ON c.oid = r.oid JOIN pg_namespace n ON n.oid = c.relnamespace`;
+
+/** Result column types, named as `list_tables` names them (D-081): built-in by `format_type`, any other `user-defined`. */
+const TYPE_NAMES_SQL = `
+  SELECT CASE WHEN t.typnamespace = 'pg_catalog'::regnamespace THEN format_type(t.oid, NULLIF(u.mod, -1)) ELSE 'user-defined' END
+  FROM unnest($1::oid[], $2::int4[]) WITH ORDINALITY AS u(type_oid, mod, ord)
+  LEFT JOIN pg_type t ON t.oid = u.type_oid
+  ORDER BY u.ord`;
+
+/** D-082's value forms: booleans, 16- and 32-bit integers and floats as JSON, everything else as PostgreSQL prints it. */
+const VALUE_TYPES: pg.CustomTypesConfig = {
+  getTypeParser: ((oid: number) => {
+    if (oid === 16) return (v: string) => v === "t";
+    if (oid === 21 || oid === 23) return (v: string) => Number(v);
+    if (oid === 700 || oid === 701) return (v: string) => (/^-?(NaN|Infinity)$/.test(v) ? v : Number(v));
+    return (v: string) => v;
+  }) as pg.CustomTypesConfig["getTypeParser"],
+};
+
+/** Every `Schema`/`Relation Name` pair an `EXPLAIN (VERBOSE, FORMAT JSON)` plan reads. */
+function planRelations(plan: unknown): string[] {
+  const found: string[] = [];
+  const visit = (node: unknown) => {
+    if (!node || typeof node !== "object") return;
+    if (Array.isArray(node)) return node.forEach(visit);
+    const n = node as Record<string, unknown>;
+    if (typeof n["Relation Name"] === "string" && typeof n.Schema === "string") found.push(`${n.Schema}\u0000${n["Relation Name"]}`);
+    visit(n.Plan);
+    visit(n.Plans);
+  };
+  visit(plan);
+  return found;
+}
+
+function sqlstate(error: unknown): string | undefined {
+  const code = typeof error === "object" && error !== null && "code" in error ? String((error as { code: unknown }).code) : "";
+  return /^[0-9A-Z]{5}$/.test(code) ? code : undefined;
 }
 
 const NETWORK_CODES = new Set(["ECONNREFUSED", "ECONNRESET", "ETIMEDOUT", "ENOTFOUND", "EHOSTUNREACH", "EPIPE", "EAI_AGAIN"]);

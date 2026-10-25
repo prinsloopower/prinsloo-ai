@@ -5,7 +5,10 @@ import * as z from "zod";
 import { writeAudit } from "./audit.js";
 import type { Boundary } from "./config.js";
 import type { Catalog, Database, ReasonClass } from "./engine/database.js";
+import type { PgParser } from "./engine/pg-parser.js";
 import { op } from "./oplog.js";
+import { visibleObjects } from "./query/check.js";
+import { redactSql } from "./query/redact.js";
 import { page, type Staff } from "./signin/broker.js";
 import {
   answerDatabaseError,
@@ -17,6 +20,7 @@ import {
   validateListTables,
   type ToolAnswer,
 } from "./tools/list-tables.js";
+import { answerQuery, QUERY, queryDescription, validateQuery, type QueryAnswer } from "./tools/query.js";
 import { bypassesGrants } from "./visibility.js";
 
 export const SERVER_INFO = { name: "sql-mcp-server", version: "0.0.1" };
@@ -33,20 +37,29 @@ export interface ToolContext {
   connectionSetting: string;
   classify: (error: unknown) => ReasonClass;
   now: () => number;
+  /** The Engine's parser for the Query check; without one the query tool is not offered (D-086). */
+  parser?: () => Promise<PgParser>;
+  rowLimit: number;
+  redaction: boolean;
 }
 
 type CatalogRead = { catalog: Catalog } | { error: unknown };
 
-function isListTablesCall(body: unknown): body is { params: { arguments?: Record<string, unknown> } } {
-  if (!body || typeof body !== "object" || Array.isArray(body)) return false;
-  const b = body as { method?: unknown; params?: { name?: unknown } };
-  return b.method === "tools/call" && b.params?.name === LIST_TABLES;
+/** The Tool a `tools/call` names, when it is one of ours. */
+function toolCallOf(body: unknown): { name: string; args: Record<string, unknown> } | undefined {
+  if (!body || typeof body !== "object" || Array.isArray(body)) return undefined;
+  const b = body as { method?: unknown; params?: { name?: unknown; arguments?: Record<string, unknown> } };
+  if (b.method !== "tools/call" || (b.params?.name !== LIST_TABLES && b.params?.name !== QUERY)) return undefined;
+  return { name: b.params.name, args: b.params.arguments ?? {} };
 }
 
-function inputsOf(args: Record<string, unknown>): Record<string, unknown> {
+function inputsOf(tool: string, args: Record<string, unknown>): Record<string, unknown> {
   // A schema name is an identifier, so Redaction keeps it (security.md); the Audit logger bounds it.
-  return "schema" in args ? { schema: args.schema } : {};
+  // A query's SQL is recorded as its Statement or submitted SQL instead (D-082).
+  return tool === LIST_TABLES && "schema" in args ? { schema: args.schema } : {};
 }
+
+const validInputs = (tool: string, args: Record<string, unknown>) => (tool === QUERY ? validateQuery(args).ok : validateListTables(args).ok);
 
 async function readCatalog(database: Database): Promise<CatalogRead> {
   try {
@@ -74,36 +87,48 @@ export async function handleMcp(request: Request, staff?: Staff, tools?: ToolCon
     server.server.setRequestHandler(ListToolsRequestSchema, () => ({ tools: [] }));
   } else {
     // The account check needs the catalog, and an unsafe account must answer with an HTTP 503,
-    // which a tool handler cannot set. So a list_tables call with valid inputs reads the catalog
-    // here, once, and the handler uses that read (D-077, D-078).
+    // which a tool handler cannot set. So a Tool call with valid inputs reads the catalog here,
+    // once, and the handler uses that read (D-077, D-078).
+    /**
+     * The SQL a `query` Tool call's Audit record keeps, redacted when Redaction is on (R-011):
+     * the Statement it was sent as, or else the SQL as submitted, however the call was refused.
+     */
+    const auditedSql = async (name: string, args: Record<string, unknown>, answer: QueryAnswer) => {
+      if (name !== QUERY || !tools.parser) return {};
+      const redact = async (sql: string) => redactSql(sql, await tools.parser!(), tools.redaction);
+      if (answer.statement) return { statement: { ...answer.statement, sql: await redact(answer.statement.sql) } };
+      const submitted = answer.submittedSql ?? (typeof args.sql === "string" && args.sql ? args.sql : undefined);
+      return submitted === undefined ? {} : { submittedSql: await redact(submitted) };
+    };
+
     let read: CatalogRead | undefined;
     let readStarted: number | undefined;
-    if (isListTablesCall(body)) {
-      const args = body.params.arguments ?? {};
-      if (validateListTables(args).ok) {
-        const started = (readStarted = tools.now());
-        read = await readCatalog(tools.database);
-        if ("catalog" in read && bypassesGrants(read.catalog.flags)) {
-          const id = crypto.randomUUID();
-          const answer = answerRefusal("unsafe_account", UNSAFE_ACCOUNT, id);
-          op("config_invalid", { variable: tools.connectionSetting, id });
-          writeAudit({ id, started, ended: tools.now(), deployment: tools.deployment, staff, requestText: args.request_text, tool: LIST_TABLES, inputs: inputsOf(args), outcome: answer.outcome });
-          return page(answer.result.content[0]!.text, 503);
-        }
+    const call = toolCallOf(body);
+    if (call && validInputs(call.name, call.args)) {
+      const started = (readStarted = tools.now());
+      read = await readCatalog(tools.database);
+      if ("catalog" in read && bypassesGrants(read.catalog.flags)) {
+        const id = crypto.randomUUID();
+        const answer = answerRefusal("unsafe_account", UNSAFE_ACCOUNT, id);
+        op("config_invalid", { variable: tools.connectionSetting, id });
+        writeAudit({
+          id, started, ended: tools.now(), deployment: tools.deployment, staff, requestText: call.args.request_text, tool: call.name,
+          inputs: inputsOf(call.name, call.args), outcome: answer.outcome, ...(await auditedSql(call.name, call.args, answer)),
+        });
+        return page(answer.result.content[0]!.text, 503);
       }
     }
 
-    server.registerTool(
-      LIST_TABLES,
-      { description: LIST_TABLES_DESCRIPTION, inputSchema: { request_text: z.unknown().optional(), schema: z.unknown().optional() } },
+    /** One Tool call: input checks, the catalog read and account check, then the tool's own work, and its Audit record. */
+    const toolCall = (name: string, run: (args: Record<string, unknown>, catalog: Catalog, id: string) => Promise<QueryAnswer>) =>
       async (args: Record<string, unknown>) => {
         // A catalog read made before dispatch is part of this Tool call's time.
         const started = readStarted ?? tools.now();
         const id = crypto.randomUUID();
-        let answer: ToolAnswer;
-        const valid = validateListTables(args);
-        if (!valid.ok) {
-          answer = answerRefusal("invalid_input", valid.sentence, id);
+        let answer: QueryAnswer;
+        const invalid = name === QUERY ? validateQuery(args) : validateListTables(args);
+        if (!invalid.ok) {
+          answer = answerRefusal("invalid_input", invalid.sentence, id);
         } else {
           const r = read ?? (await readCatalog(tools.database));
           if ("error" in r) {
@@ -112,13 +137,42 @@ export async function handleMcp(request: Request, staff?: Staff, tools?: ToolCon
             op("config_invalid", { variable: tools.connectionSetting, id });
             answer = answerRefusal("unsafe_account", UNSAFE_ACCOUNT, id);
           } else {
-            answer = answerListing(listing(r.catalog, tools.boundary, valid.schema));
+            answer = await run(args, r.catalog, id);
           }
         }
-        writeAudit({ id, started, ended: tools.now(), deployment: tools.deployment, staff, requestText: args.request_text, tool: LIST_TABLES, inputs: inputsOf(args), outcome: answer.outcome });
+        writeAudit({
+          id, started, ended: tools.now(), deployment: tools.deployment, staff, requestText: args.request_text, tool: name,
+          inputs: inputsOf(name, args), outcome: answer.outcome, ...(await auditedSql(name, args, answer)),
+        });
         return answer.result;
-      },
+      };
+
+    server.registerTool(
+      LIST_TABLES,
+      { description: LIST_TABLES_DESCRIPTION, inputSchema: { request_text: z.unknown().optional(), schema: z.unknown().optional() } },
+      toolCall(LIST_TABLES, async (args, catalog): Promise<ToolAnswer> => {
+        const valid = validateListTables(args);
+        return answerListing(listing(catalog, tools.boundary, valid.ok ? valid.schema : undefined));
+      }),
     );
+
+    const parser = tools.parser;
+    if (parser) {
+      server.registerTool(
+        QUERY,
+        { description: queryDescription(tools.rowLimit), inputSchema: { request_text: z.unknown().optional(), sql: z.unknown().optional() } },
+        toolCall(QUERY, async (args, catalog, id) =>
+          answerQuery(args.sql as string, {
+            parser: await parser(),
+            database: tools.database,
+            visible: visibleObjects(catalog, tools.boundary),
+            rowLimit: tools.rowLimit,
+            classify: tools.classify,
+            id,
+          }),
+        ),
+      );
+    }
   }
 
   const transport = new WebStandardStreamableHTTPServerTransport({

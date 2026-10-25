@@ -1,4 +1,4 @@
-import type { AccountFlags, Catalog, CatalogRow, Database } from "../../src/engine/database.js";
+import type { AccountFlags, Catalog, CatalogRow, Database, NamedTable, QueryOutcome } from "../../src/engine/database.js";
 
 /** A Database whose catalog the test writes by hand; counts how often it is read. */
 export class FakeDatabase implements Database {
@@ -9,9 +9,11 @@ export class FakeDatabase implements Database {
   /** Runs inside each catalog read, before it answers; lets a test move the clock. */
   onRead?: () => void;
 
-  /** Adds a table; each column is [name, type] (granted) or [name, type, false]. */
-  table(schema: string, table: string, columns: [string, string, boolean?][]): this {
-    for (const [column, type, granted] of columns) this.rows.push({ schema, table, column, type, granted: granted ?? true });
+  /** Adds a table; each column is [name, type] (granted), [name, type, false], or [name, type, granted, readable]. */
+  table(schema: string, table: string, columns: [string, string, boolean?, boolean?][]): this {
+    for (const [column, type, granted, readable] of columns) {
+      this.rows.push({ schema, table, column, type, granted: granted ?? true, readable: readable ?? true });
+    }
     return this;
   }
 
@@ -29,6 +31,15 @@ export class FakeDatabase implements Database {
     this.onRead?.();
     if (this.failure) throw this.failure;
     return { flags: { ...this.flags }, rows: this.rows.map((r) => ({ ...r })) };
+  }
+
+  /** Every query sent to the Engine adapter, which a test answers with `queryOutcome`. */
+  queries: { sql: string; named: NamedTable[]; rowLimit: number }[] = [];
+  queryOutcome: QueryOutcome = { kind: "ok", run: { columns: [], rows: [], cutShort: false, ms: 0 } };
+
+  async query(sql: string, named: NamedTable[], rowLimit: number): Promise<QueryOutcome> {
+    this.queries.push({ sql, named, rowLimit });
+    return this.queryOutcome;
   }
 }
 

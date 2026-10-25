@@ -22,7 +22,16 @@ export interface AuditEntry {
   tool: string;
   inputs: Record<string, unknown>;
   outcome: Outcome;
+  /** The Statement an Agent-written query was sent as, its SQL already redacted when Redaction is on. */
+  statement?: { sql: string; rows: number; ms: number };
+  /** A refused Agent-written query's SQL, already redacted when Redaction is on. */
+  submittedSql?: string;
 }
+
+/** An Audit record's line stays within this many bytes (operations.md). */
+const LINE_MAX = 64 * 1024;
+const CUT = "…[cut]";
+const bytes = (s: string) => new TextEncoder().encode(s).length;
 
 /**
  * Writes one Audit record per Tool call to standard output, which the Host log facility keeps
@@ -45,7 +54,9 @@ export function writeAudit(entry: AuditEntry): void {
       inputs[key] = value;
     }
   }
-  console.log(
+  // The SQL strings, in record order: the Statement's, then the submitted SQL's.
+  const sql = [entry.statement?.sql, entry.submittedSql];
+  const build = () =>
     JSON.stringify({
       type: "audit",
       v: 1,
@@ -57,12 +68,24 @@ export function writeAudit(entry: AuditEntry): void {
       tool: entry.tool,
       inputs,
       conversation_objs: [],
-      statements: [],
+      statements: entry.statement ? [{ ...entry.statement, sql: sql[0] }] : [],
+      ...(sql[1] === undefined ? {} : { submitted_sql: sql[1] }),
       outcome: entry.outcome,
       duration_ms: Math.max(0, entry.ended - entry.started),
       shortened,
-    }),
-  );
+    });
+  // Over the line cap, the longest SQL string is cut, again if need be, until the record fits.
+  let line = build();
+  while (bytes(line) > LINE_MAX) {
+    const i = (sql[0]?.length ?? -1) >= (sql[1]?.length ?? -1) ? 0 : 1;
+    const longest = sql[i];
+    if (longest === undefined || longest.length <= CUT.length) break;
+    const body = longest.endsWith(CUT) ? longest.slice(0, -CUT.length) : longest;
+    sql[i] = body.slice(0, Math.max(0, body.length - (bytes(line) - LINE_MAX) - CUT.length)) + CUT;
+    shortened = true;
+    line = build();
+  }
+  console.log(line);
 }
 
 /** Every message about a refused or failed Tool call names its Audit record (D-080). */

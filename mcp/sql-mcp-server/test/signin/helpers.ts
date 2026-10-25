@@ -2,6 +2,7 @@ import { base64url, exportJWK, generateKeyPair, SignJWT, UnsecuredJWT } from "jo
 import { vi } from "vitest";
 import { createApp } from "../../src/app.js";
 import type { Database } from "../../src/engine/database.js";
+import type { PgParser } from "../../src/engine/pg-parser.js";
 
 export const ORIGIN = "https://sql.example.com";
 export const RESOURCE = `${ORIGIN}/mcp`;
@@ -152,7 +153,10 @@ export interface Harness {
 }
 
 /** One app over a fake Identity provider. `realMcp` swaps the spy handler for the SDK one. */
-export async function harness(envOver: Env = {}, opts: { realMcp?: boolean; clock?: Clock; database?: Database } = {}): Promise<Harness> {
+export async function harness(
+  envOver: Env = {},
+  opts: { realMcp?: boolean; clock?: Clock; database?: Database; parser?: () => Promise<PgParser> } = {},
+): Promise<Harness> {
   const clock = opts.clock ?? new Clock();
   const env = baseEnv(envOver);
   const idp = await FakeIdentityProvider.create(clock, env.IDP_ISSUER ?? ISSUER);
@@ -163,6 +167,7 @@ export async function harness(envOver: Env = {}, opts: { realMcp?: boolean; cloc
     fetch: idp.fetch,
     now: clock.now,
     ...(opts.database ? { database: opts.database } : {}),
+    ...(opts.parser ? { parser: opts.parser } : {}),
     ...(opts.realMcp
       ? {}
       : {

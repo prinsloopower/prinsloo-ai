@@ -547,3 +547,27 @@ Amended 2026-10-25 by the product owner, after the amendment critique:
 - **Domain constraints are trusted.** Domain `CHECK` constraints, which run when the Agent's literal is converted to a domain, are trusted with casts ("Yes, trust them").
 - **`reg*` is checked at any depth.** The type is looked through at any depth, for `reg*` as for composites.
 Alternatives rejected: refusing such columns (most enum questions unanswerable); admitting a type only when it has no user-written casts (more surface to prove, and the critiques found holes at each layer).
+
+## D-086 — Choices made building S-003
+Decided by: model | Date: 2026-10-25 | Phase: build (S-003)
+Rationale: the spec left these open, or building showed one of its statements to be inexact:
+- **The parser on Workers.** `@libpg-query/parser` is loaded from a compiled WebAssembly module through Emscripten's `instantiateWasm` hook. The Worker imports the `.wasm` file, and Node compiles it from disk. The package's own entry point is not used, because it instantiates on import through Node's file system. Its glue reads `__filename` and `__dirname`, which Workers lack, so `wrangler.jsonc` defines both at build time. The bundle is 585 KiB gzipped.
+- **The query tool needs a parser.** `query` is registered only when the app is given a parser, as no Tool is registered without a Database (D-078). The Worker always gives one, and S-002's tests, which give none, keep their recorded failures.
+- **Redaction keeps type modifiers.** "No literal left" ignores the constants in a type's modifiers (`numeric(12,2)`), which are part of the type, not values. `normalize` replaces every other literal, `NULL` and `true` included. `?` replaces each `$n` at the byte offsets the re-parse gives, so a quoted identifier containing `$1` is left alone.
+- **The submitted SQL of every refused query is kept.** That covers SQL refused for an invalid `request_text` or an unsafe account, not only SQL the Query check refused, so R-010's attempted SQL is always traceable. A connection failure before the query was sent is a Database error, logged with the submitted SQL and no Statement.
+- **Plan-stage failures.** An `EXPLAIN` failure with no SQLSTATE, or class `08`, is a lost connection, and so a Database error, not a Refusal.
+- **Domains in results.** PostgreSQL describes a domain column's values by the domain's base type, so `query` types a domain over `integer` as `integer`, returns its values as numbers, and differs from `list_tables`, which names the column `user-defined`. The row description is the only source the spec allows.
+- **Domain constraints on the Agent's literals.** PostgreSQL resolves `coalesce`, `ARRAY[…]` and comparisons over a domain column and a literal to the base type. A domain's `CHECK` therefore does not run on the Agent's literals in any accepted construct. The S-003 spec's line ("the constraint runs as defined") is met by PostgreSQL's own rules, and the test proves the query runs without invoking the constraint.
+- **Accepted value functions.** `CURRENT_TIMESTAMP(n)` is accepted with `current_date` and `current_timestamp`. `FETCH … WITH TIES` is refused as a construct not listed. `ONLY` is accepted.
+- **Subquery and CTE output names** are an explicit `AS`, a column-alias list, a qualified column's name, or an expanded `alias.*`. A function's output, such as `count(*)`, has no readable name until it is given one with `AS`.
+- **The probe suite and `*`.** `SELECT *` over a partly granted table is refused because `all_columns` is false, which `list_tables` already shows (S-002). The suite therefore leaves out `*` over such a table: its answer differs between the two Databases by design, not by leak.
+- **Tests corrected after their first record**, each recorded failing again:
+  - `query_check_refuses_unlisted_node_types`: its `WITH TIES` line lacked the `ORDER BY` that PostgreSQL's grammar requires, so it tested a parse error. It was re-recorded against a break that accepts `WITH TIES`.
+  - `user_defined_type_columns_readable`: a domain column's expected type was corrected while the test still failed.
+  - `user_defined_casts_run_as_written` and `domain_constraints_run_as_written`: the fixture's cast recursed into itself, and a domain constraint cannot run on a literal (above). They were re-recorded against breaks that make enum or domain columns unreadable.
+- **Tests guarding behaviour already present** were recorded against a named break:
+  - `column_existence_probes_refused_alike` and `hidden_object_probe_suite_answers_identically`: bare names let through;
+  - `query_refusals_never_echo_names`: the query appended to a Refusal;
+  - `query_audit_never_holds_result_values`: the answer logged;
+  - `probe_suite_never_runs_user_functions`: operators in `SubLink`s left unchecked.
+Alternatives rejected: patching the package to load on Workers (a fork to maintain); registering `query` with a parser loaded from Node's file system in tests (S-002's recorded tests would change).

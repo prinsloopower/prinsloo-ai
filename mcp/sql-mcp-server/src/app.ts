@@ -73,6 +73,9 @@ export function createApp(deps: Deps) {
   const config = result.config;
   const fetchFn: Fetch = deps.fetch ?? ((input, init) => fetch(input, init));
   const now = deps.now ?? Date.now;
+  // Loaded on the first query, then kept for the isolate or process (ADR-005).
+  let parser: Promise<PgParser> | undefined;
+  const loadParser = deps.parser;
   let tokens: Promise<Tokens> | undefined;
   const broker = new SignInBroker({
     config,
@@ -110,6 +113,9 @@ export function createApp(deps: Deps) {
           connectionSetting: deps.connectionSetting ?? "HYPERDRIVE",
           classify: classifyPostgresError,
           now,
+          ...(loadParser ? { parser: () => (parser ??= loadParser()) } : {}),
+          rowLimit: config.rowLimit,
+          redaction: config.redaction,
         }
       : undefined;
     return handleMcp(c.req.raw, signedIn.staff, tools);
