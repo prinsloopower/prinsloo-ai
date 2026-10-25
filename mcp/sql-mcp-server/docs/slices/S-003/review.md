@@ -158,3 +158,93 @@ Axis: spec and scope
 It is carried over from review 1. T-013's live run uses the real fixture.
 
 Verdict: fail (1 blocker, 6 gaps, 17 nits)
+
+## Review 3 (2026-10-25)
+
+Reviewed: the whole slice, `git diff 19c6faa..3b2fca4`, with the second rework (6218454, 0f009d2). Both axes ran in separate fresh contexts and are merged here with attribution. Every Review 2 blocker and gap is confirmed resolved. Six Review 2 nits remain as they were, and are not repeated.
+Tests: `npm test` → 33 files, 196 passed, 0 failed, against Docker PostgreSQL 17 on 55432. A first run on each axis timed out once in `test/mcp.test.ts` (workerd start-up under load, a file this slice does not touch), and passed on rerun. `npm run typecheck` → clean.
+
+What each axis verified:
+- **Spec and scope**, with a temporary probe since deleted:
+  - about 40 Redaction inputs;
+  - five deep-nesting shapes;
+  - three end-to-end MCP cases;
+  - two plan-time errors on PostgreSQL 17.
+
+  Every input it tried left exactly one Audit record, and it found no route to a Hidden object.
+- **Standards and naming:** no line-ending churn is left in the slice diff, and there are no stale names.
+
+## blocker — Redaction keeps a string literal written as a type modifier
+Where: src/engine/postgres-redact.ts:73
+Axis: spec and scope
+Redaction allows every constant under `typmods`, `normalize` leaves typmods alone, and `typeName` (src/engine/postgres-structure.ts:392) accepts any constant there. The case was verified through the MCP harness with Redaction on:
+- `… WHERE o.total = 'a'::text('ann@example.com')` passes the walk and fails at plan;
+- its `submitted_sql` is `… = ?::text('ann@example.com')`;
+- `CAST('a' AS pg_catalog.varchar('ann@example.com'))` and `::text(5551234)` do the same.
+
+This breaks R-011. D-086's carve-out assumed typmods are type parameters such as `numeric(12,2)`.
+
+## gap — A fault in the Server's own work is recorded as a Database error
+Where: src/mcp.ts:211
+Axis: standards and naming
+A Database error is "a Tool call whose Statement the Server sent but the Database rejected" (domain model). When the tool's own work throws, for example when the parser fails to load, the catch writes `answerDatabaseError("other", id)`:
+- the Audit record says `database_error`;
+- the Agent is told "The database could not complete this.";
+- an Operator tracing it (J-008) will look at the Database.
+
+No Q-### was raised against the domain model. The catch wraps every Tool, so S-010 inherits the label.
+
+## gap — The `<unparsed: N chars>` marker is built in three places
+Where: src/mcp.ts:111
+Axis: standards and naming
+It is built at src/mcp.ts:111 and :115, and at src/engine/postgres-redact.ts:13. The marker is part of the Audit record's contract (queries.md, Proven by), and S-007's T-SQL Redaction would add a fourth copy.
+
+## gap — A Redaction failure leaves no operational line
+Where: src/mcp.ts:114
+Axis: standards and naming
+The fallback that keeps SQL by its length writes nothing, while the catch at :206–209 writes `server_fault`, which operations.md alerts on. A Redaction bug would quietly turn every query's logged SQL into its length, and S-010 is told to copy the pattern.
+
+## gap — `submittedSql` is documented as "refused only", but is written for faults too
+Where: src/audit.ts:44
+Axis: standards and naming
+It is also written:
+- for a Database error before sending (src/tools/query.ts:80);
+- for a Server fault (test/query/tool.test.ts:98).
+
+Four descriptions now disagree:
+- src/tools/list-tables.ts:53–54;
+- docs/security-material/queries.md:91;
+- data-model.md:148 ("for a refused Agent-written query only");
+- the Audit logger's doc comment.
+
+## nit — Any int32 in ORDER BY or GROUP BY is kept as an ordinal
+Where: src/engine/postgres-redact.ts:53
+Axis: spec and scope
+`ORDER BY 5551234` is logged verbatim, though it names no column and is refused at plan.
+
+## nit — A deeply nested expression ends as a Server fault, not a Refusal
+Where: src/engine/postgres-structure.ts:395
+Axis: spec and scope
+`+o.id` repeated 10,000 times (50 KB) overflows the walk's stack. The call still leaves one Audit record, but the Agent is told "The database could not complete this" for a query never sent.
+
+## nit — "engine" in lower case for the QueryEngine
+Where: src/mcp.ts:110
+Axis: standards and naming
+It appears in src/mcp.ts:110, test/query/tool.test.ts:101 and test/query/types.int.test.ts:47, and collides with the domain term Engine.
+
+## nit — The Security material still writes "the person" and "their question"
+Where: docs/security-material/queries.md:94
+Axis: standards and naming
+At :82, "database administrator" is in lower case.
+
+## nit — Tool-wide pieces live in tool-specific modules
+Where: src/tools/list-tables.ts:48
+Axis: standards and naming
+The shared `ToolAnswer` and the answer builders live in the `list_tables` module, and the Request text check in the Audit logger.
+
+## nit — `git blame` names the line-ending commit, and `.md` files are unpinned
+Where: .gitattributes:2
+Axis: standards and naming
+There is no `.git-blame-ignore-revs`.
+
+Verdict: fail (1 blocker, 4 gaps, 6 nits)
