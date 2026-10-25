@@ -63,6 +63,10 @@ describe("S-003 Audit records for Agent-written queries", () => {
       ),
     ).toBe("SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, interval ?, date ?, ?::numeric(12,2), ARRAY[?, ?] FROM sales.orders o LIMIT ? OFFSET ?");
     expect(redactSql("SELECT o.id FROM sales.orders o WHERE o.note = 'it''s $1 \"x\"'", parser, true)).toBe("SELECT o.id FROM sales.orders o WHERE o.note = ?");
+    // Ordinals in GROUP BY and ORDER BY name output columns; they are not values.
+    expect(redactSql("SELECT o.id, count(*) FROM sales.orders o WHERE o.total > 5 GROUP BY 1 ORDER BY 2 DESC, 1", parser, true)).toBe(
+      "SELECT o.id, count(*) FROM sales.orders o WHERE o.total > ? GROUP BY 1 ORDER BY 2 DESC, 1",
+    );
   });
 
   it("redaction_strips_comments", async () => {
@@ -90,6 +94,16 @@ describe("S-003 Audit records for Agent-written queries", () => {
     expect(redactSql(long, parser, true)).toBe(`<unparsed: ${long.length} chars>`);
     const { audit } = await auditOf({}, { request_text: ASK, sql: "SELEC 'secret-literal'" });
     expect(audit[0]!.submitted_sql).toBe("<unparsed: 22 chars>");
+    // SQL the lexer cannot finish is unparsed too, and its Tool call still leaves one Audit record.
+    for (const sql of ["SELECT o.id FROM sales.orders o WHERE o.total = 'secret-unterminated", "SELECT 1 /* unterminated", "SELECT $$x"]) {
+      expect(redactSql(sql, parser, true), sql).toBe(`<unparsed: ${sql.length} chars>`);
+      const { h, token } = await signedIn(queryDatabase());
+      const lines = await captureConsole(async () => {
+        const r = await resultOf(await callQuery(h, token, { request_text: ASK, sql }));
+        expect(r.content[0]!.text).toMatch(/^The query was not accepted: it is not valid PostgreSQL\. \(reference [0-9a-f-]{36}\)$/);
+      });
+      expect(auditLines(lines).map((a) => a.submitted_sql)).toEqual([`<unparsed: ${sql.length} chars>`]);
+    }
   });
 
   it("non_select_sql_logged_by_length_only", async () => {

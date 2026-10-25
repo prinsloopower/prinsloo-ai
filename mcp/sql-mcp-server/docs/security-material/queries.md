@@ -75,7 +75,7 @@ One thing `list_tables` already discloses: `all_columns: false` tells the Agent 
 
 ## Rows, and the cut-short notice
 
-A query returns at most the Row limit of rows. When more match, the result says `cut_short: true`, and its text ends "The result was cut short at the Row limit of N rows; more rows match." The Server cannot make the AI tool pass that notice on to the person asking (J-004).
+A query returns at most the Row limit of rows. When more match, the result says `cut_short: true`, and its text ends "The result was cut short at the Row limit of N rows; more rows match." The Server cannot make the AI tool pass that notice on to the Staff member (J-004).
 
 Values come back as JSON for booleans, small integers and floats, and as PostgreSQL prints them for everything else, so totals, large counts and timestamps are exact. **Every row returned is sent to the AI provider** that runs the Agent, Anthropic or OpenAI, under the organisation's agreement with them (D-036).
 
@@ -91,7 +91,7 @@ In addition to what every Audit record holds (visibility.md):
 | for a refused query, the SQL as submitted | the database driver's error text |
 | the outcome: answered (with its row count and whether it was cut short), refused (with its class), or database error (with its class) | |
 
-With Redaction on, the default, comments are removed from logged SQL, because an Agent may write values into them, and every literal becomes `?`. `WHERE o.id = 42 AND o.note = 'x'` is logged as `WHERE o.id = ? AND o.note = ?`. Only a single SELECT is logged that way: anything else, such as a refused `COPY`, `PREPARE` or `CREATE TABLE … AS`, and anything that does not parse, is logged as `<unparsed: N chars>`, because PostgreSQL's normaliser keeps literals in some statement types. The Request text is never redacted: if the person typed a customer's name into their question, it is in the record.
+With Redaction on, the default, comments are removed from logged SQL, because an Agent may write values into them, and every literal becomes `?`. The ordinals of `GROUP BY 1` and `ORDER BY 2` stay, because they name output columns, not values. `WHERE o.id = 42 AND o.note = 'x'` is logged as `WHERE o.id = ? AND o.note = ?`. Only a single SELECT is logged that way: anything else, such as a refused `COPY`, `PREPARE` or `CREATE TABLE … AS`, and anything that does not parse, is logged as `<unparsed: N chars>`, because PostgreSQL's normaliser keeps literals in some statement types. The Request text is never redacted: if the person typed a customer's name into their question, it is in the record.
 
 A record is at most 64 KiB. Longer SQL is cut, marked `…[cut]`, and the record says `shortened: true`.
 

@@ -44,18 +44,33 @@ function withoutComments(sql: string, parser: PgParser): string {
 }
 
 /**
- * Each placeholder's byte offset, or undefined when a literal value is left. A type's modifiers
- * (`numeric(12,2)`) are part of the type, not values.
+ * Each placeholder's byte offset, or undefined when a literal value is left. Two kinds of constant
+ * are not values, and may stay (D-088): a type's modifiers (`numeric(12,2)`), and the ordinals of
+ * `GROUP BY 1` and `ORDER BY 2`, which name output columns.
  */
 function placeholdersIfLiteralFree(tree: unknown): number[] | undefined {
   const offsets: number[] = [];
-  const visit = (node: unknown, inTypmods: boolean): boolean => {
+  const isOrdinal = (n: unknown) => Boolean(n && typeof n === "object" && "A_Const" in n && "ival" in ((n as { A_Const: object }).A_Const ?? {}));
+  const visit = (node: unknown, constAllowed: boolean): boolean => {
     if (!node || typeof node !== "object") return true;
-    if (Array.isArray(node)) return node.every((n) => visit(n, inTypmods));
+    if (Array.isArray(node)) return node.every((n) => visit(n, constAllowed));
     for (const [k, v] of Object.entries(node as Record<string, unknown>)) {
-      if (k === "A_Const" && !inTypmods) return false;
+      if (k === "A_Const" && !constAllowed) return false;
       if (k === "ParamRef") offsets.push((v as { location: number }).location);
-      if (!visit(v, inTypmods || k === "typmods")) return false;
+      if (k === "groupClause" && Array.isArray(v)) {
+        if (!v.every((item) => visit(item, isOrdinal(item)))) return false;
+        continue;
+      }
+      // Only the SELECT's own ORDER BY takes ordinals; in a window's or an aggregate's, a number is a constant.
+      if (k === "sortClause" && Array.isArray(v)) {
+        for (const item of v) {
+          const sort = (item as { SortBy?: { node?: unknown } }).SortBy;
+          if (!sort) return false;
+          if (!visit(sort.node, isOrdinal(sort.node))) return false;
+        }
+        continue;
+      }
+      if (!visit(v, constAllowed || k === "typmods")) return false;
     }
     return true;
   };

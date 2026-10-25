@@ -68,7 +68,15 @@ export async function loadPgParser(wasm: WebAssembly.Module): Promise<PgParser> 
         }
       }),
     normalize: (sql) => text(sql, m._wasm_normalize_query),
-    scan: (sql) => (JSON.parse(text(sql, m._wasm_scan)) as { tokens?: ReturnType<PgParser["scan"]> }).tokens ?? [],
+    scan: (sql) => {
+      // The lexer answers with error text, not JSON, for input it cannot finish (an unterminated literal).
+      const out = text(sql, m._wasm_scan);
+      try {
+        return (JSON.parse(out) as { tokens?: ReturnType<PgParser["scan"]> }).tokens ?? [];
+      } catch {
+        throw new ParseError(out);
+      }
+    },
   };
 
   /** Calls a WebAssembly entry point that returns a string, which starts with an error's text on failure. */

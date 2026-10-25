@@ -1,7 +1,7 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import { PostgresDatabase } from "../../src/engine/postgres.js";
 import { visibleObjects } from "../../src/visibility.js";
-import { nodeQueries } from "./node-parser.js";
+import { nodeQueryEngine } from "./node-parser.js";
 import { admin, as, ask, resetSql, rowsOf } from "./pg-fixture.js";
 
 const READER = "qy_reader";
@@ -44,7 +44,7 @@ describe("S-003 Query check: user-defined and catalog types against PostgreSQL",
     for (const c of UNREADABLE) expect(flags[c], c).toBe(false);
     for (const c of READABLE) expect(flags[c], c).toBe(true);
 
-    const engine = await nodeQueries();
+    const engine = await nodeQueryEngine();
     const visible = visibleObjects(catalog);
     for (const c of UNREADABLE) {
       for (const literal of ["qy_types.secret", "qy_types.nosuch"]) {

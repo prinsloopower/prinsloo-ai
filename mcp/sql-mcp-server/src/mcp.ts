@@ -35,26 +35,30 @@ export interface ToolContext {
   classify: (error: unknown) => ReasonClass;
   now: () => number;
   /** The Engine's half of the Query check and of Redaction; without it the query tool is not offered (D-086). */
-  queries?: () => Promise<QueryEngine>;
+  queryEngine?: () => Promise<QueryEngine>;
   rowLimit: number;
   redaction: boolean;
 }
 
 type CatalogRead = { catalog: Catalog } | { error: unknown };
 
-/** What a Tool call answers, and any SQL its Audit record keeps (unredacted here). */
-type ToolCallAnswer = ToolAnswer & { statement?: StatementRecord; submittedSql?: string };
-
 /** One Tool, as the MCP endpoint offers, checks, runs and audits it. */
 interface ToolSpec {
   description: string;
   inputSchema: Record<string, z.ZodType>;
-  /** Checks the inputs, which needs no Database: a Refusal's sentence, or the work to do once the catalog is read. */
-  prepare(args: Record<string, unknown>): { ok: false; sentence: string } | { ok: true; run(catalog: Catalog, id: string): Promise<ToolCallAnswer> };
+  /**
+   * Checks the inputs, which needs no Database: a Refusal's sentence, or the work to do once the
+   * catalog is read. It runs before dispatch, so a valid call reads the catalog once, and again in
+   * the handler on the SDK's arguments.
+   */
+  prepare(args: Record<string, unknown>): { ok: false; sentence: string } | { ok: true; run(catalog: Catalog, id: string): Promise<ToolAnswer> };
   /** The inputs the Audit record keeps, other than `request_text` (data-model.md). */
   inputs(args: Record<string, unknown>): Record<string, unknown>;
-  /** The SQL the Audit record keeps for this call, redacted when Redaction is on (R-011). */
-  auditSql?(args: Record<string, unknown>, answer: ToolCallAnswer): Promise<{ statements?: StatementRecord[]; submittedSql?: string }>;
+  /**
+   * The SQL the Audit record keeps for this call, redacted when Redaction is on (R-011). Redaction
+   * happens here, not in the Audit logger, because it needs the Engine's parser (D-088).
+   */
+  auditSql?(args: Record<string, unknown>, answer: ToolAnswer, faulted: boolean): Promise<{ statements?: StatementRecord[]; submittedSql?: string }>;
 }
 
 /** The Tools a Deployment offers. */
@@ -74,8 +78,8 @@ function toolSpecs(tools: ToolContext): Map<string, ToolSpec> {
       },
     ],
   ]);
-  const queries = tools.queries;
-  if (queries) {
+  const queryEngine = tools.queryEngine;
+  if (queryEngine) {
     specs.set(QUERY, {
       description: queryDescription(tools.rowLimit),
       inputSchema: { request_text: z.unknown().optional(), sql: z.unknown().optional() },
@@ -86,7 +90,7 @@ function toolSpecs(tools: ToolContext): Map<string, ToolSpec> {
           ok: true,
           run: async (catalog, id) =>
             answerQuery(valid.sql, {
-              engine: await queries(),
+              queryEngine: await queryEngine(),
               database: tools.database,
               visible: visibleObjects(catalog, tools.boundary),
               rowLimit: tools.rowLimit,
@@ -98,11 +102,23 @@ function toolSpecs(tools: ToolContext): Map<string, ToolSpec> {
       // A query's SQL is recorded as its Statement or submitted SQL instead (D-082).
       inputs: () => ({}),
       // The Statement it was sent as, or else the SQL as submitted, however the call was refused (D-086).
-      async auditSql(args, answer) {
-        const engine = await queries();
-        if (answer.statement) return { statements: [{ ...answer.statement, sql: engine.redact(answer.statement.sql, tools.redaction) }] };
+      async auditSql(args, answer, faulted) {
         const submitted = answer.submittedSql ?? (typeof args.sql === "string" && args.sql ? args.sql : undefined);
-        return submitted === undefined ? {} : { submittedSql: engine.redact(submitted, tools.redaction) };
+        // Whatever goes wrong while redacting, the Tool call still leaves its Audit record (R-010):
+        // the SQL is then kept by its length only.
+        const redact = async (sql: string) => {
+          // After a fault in the Server's own work, the engine is not loaded again within the same Tool call.
+          if (faulted) return tools.redaction ? `<unparsed: ${sql.length} chars>` : sql;
+          try {
+            return (await queryEngine()).redact(sql, tools.redaction);
+          } catch {
+            return tools.redaction ? `<unparsed: ${sql.length} chars>` : sql;
+          }
+        };
+        if (answer.statements?.length) {
+          return { statements: await Promise.all(answer.statements.map(async (s) => ({ ...s, sql: await redact(s.sql) }))) };
+        }
+        return submitted === undefined ? {} : { submittedSql: await redact(submitted) };
       },
     });
   }
@@ -143,10 +159,10 @@ export async function handleMcp(request: Request, staff?: Staff, tools?: ToolCon
     server.server.setRequestHandler(ListToolsRequestSchema, () => ({ tools: [] }));
   } else {
     const specs = toolSpecs(tools);
-    const audit = async (name: string, spec: ToolSpec, args: Record<string, unknown>, id: string, started: number, answer: ToolCallAnswer) =>
+    const audit = async (name: string, spec: ToolSpec, args: Record<string, unknown>, id: string, started: number, answer: ToolAnswer, faulted = false) =>
       writeAudit({
         id, started, ended: tools.now(), deployment: tools.deployment, staff, requestText: args.request_text, tool: name,
-        inputs: spec.inputs(args), outcome: answer.outcome, ...(spec.auditSql ? await spec.auditSql(args, answer) : {}),
+        inputs: spec.inputs(args), outcome: answer.outcome, ...(spec.auditSql ? await spec.auditSql(args, answer, faulted) : {}),
       });
 
     // The account check needs the catalog, and an unsafe account must answer with an HTTP 503,
@@ -172,7 +188,8 @@ export async function handleMcp(request: Request, staff?: Staff, tools?: ToolCon
         // A catalog read made before dispatch is part of this Tool call's time.
         const started = readStarted ?? tools.now();
         const id = crypto.randomUUID();
-        let answer: ToolCallAnswer;
+        let answer: ToolAnswer;
+        let faulted = false;
         const prepared = spec.prepare(args);
         if (!prepared.ok) {
           answer = answerRefusal("invalid_input", prepared.sentence, id);
@@ -184,10 +201,18 @@ export async function handleMcp(request: Request, staff?: Staff, tools?: ToolCon
             op("config_invalid", { variable: tools.connectionSetting, id });
             answer = answerRefusal("unsafe_account", UNSAFE_ACCOUNT, id);
           } else {
-            answer = await prepared.run(r.catalog, id);
+            try {
+              answer = await prepared.run(r.catalog, id);
+            } catch {
+              // A fault in the Server's own work, such as the parser failing to load, still ends the
+              // Tool call with an Audit record. The line names no detail, which can carry paths (D-088).
+              op("server_fault", { path: "/mcp", tool: name, id });
+              faulted = true;
+              answer = answerDatabaseError("other", id);
+            }
           }
         }
-        await audit(name, spec, args, id, started, answer);
+        await audit(name, spec, args, id, started, answer, faulted);
         return answer.result;
       });
     }

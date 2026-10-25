@@ -58,7 +58,7 @@ export function bypassesGrants(flags: AccountFlags): boolean {
 export function visibleTables(catalog: Catalog, boundary?: Boundary): VisibleTable[] {
   const byTable = new Map<string, { schema: string; table: string; columns: { name: string; type: string }[]; total: number }>();
   for (const row of catalog.rows) {
-    const key = `${row.schema}\u0000${row.table}`;
+    const key = visibleKey(row.schema, row.table);
     let entry = byTable.get(key);
     if (!entry) {
       entry = { schema: row.schema, table: row.table, columns: [], total: 0 };
@@ -68,7 +68,7 @@ export function visibleTables(catalog: Catalog, boundary?: Boundary): VisibleTab
     if (row.granted) entry.columns.push({ name: row.column, type: row.type });
   }
   // Exclusions ignore letter case and inclusions do not, so a slip always hides more, never less (D-081).
-  const excluded = new Set((boundary?.exclude ?? []).map(([s, t]) => `${s}\u0000${t}`.toLowerCase()));
+  const excluded = new Set((boundary?.exclude ?? []).map(([s, t]) => visibleKey(s, t).toLowerCase()));
   const tables: VisibleTable[] = [];
   for (const [key, e] of byTable) {
     if (e.columns.length === 0 || SYSTEM_SCHEMA.test(e.schema)) continue;

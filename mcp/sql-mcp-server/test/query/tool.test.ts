@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { queryDescription } from "../../src/tools/query.js";
-import { callMcp, captureConsole } from "../signin/helpers.js";
+import { callMcp, captureConsole, harness, signIn } from "../signin/helpers.js";
 import { queryDatabase } from "./catalog.js";
+import { nodeQueryEngine } from "./node-parser.js";
 import { ASK, auditLines, callQuery, opLinesOf, resultOf, signedIn } from "./mcp-helpers.js";
 
 const OBJECT_NAMES = ["sales", "orders", "customers", "kinds", "items", "shapes", "payroll", "salary", "email", "region"];
@@ -74,6 +75,33 @@ describe("S-003 the query tool", () => {
     expect(audit).toHaveLength(1);
     expect(audit[0]).toMatchObject({ tool: "query", outcome: { kind: "refusal", reason_class: "unsafe_account" } });
     expect(db.queries).toHaveLength(0);
+  });
+
+  it("query_engine_load_retried_after_failure", async () => {
+    let attempts = 0;
+    const flaky = async () => {
+      attempts++;
+      if (attempts === 1) throw new Error("WebAssembly failed to instantiate at /internal/path");
+      return nodeQueryEngine();
+    };
+    const db = queryDatabase();
+    const h = await harness({}, { realMcp: true, database: db, queryEngine: flaky });
+    const token = (await signIn(h)).access_token;
+    const sql = "SELECT o.id FROM sales.orders o WHERE o.id = 7";
+    const lines = await captureConsole(async () => {
+      const r = await resultOf(await callQuery(h, token, { request_text: ASK, sql }));
+      expect(r.content[0]!.text).toMatch(/^The database could not complete this\. \(reference [0-9a-f-]{36}\)$/);
+    });
+    // The failed Tool call still leaves its Audit record, and a Server fault line that names no detail.
+    const audit = auditLines(lines);
+    expect(audit).toHaveLength(1);
+    expect(audit[0]).toMatchObject({ tool: "query", submitted_sql: `<unparsed: ${sql.length} chars>`, outcome: { kind: "database_error", reason_class: "other" } });
+    expect(opLinesOf(lines)).toContainEqual(expect.objectContaining({ event: "server_fault" }));
+    expect(lines.join("\n")).not.toContain("/internal/path");
+    // The failed load is not kept: the next call loads the engine again, and runs.
+    const again = await resultOf(await callQuery(h, token, { request_text: ASK, sql }));
+    expect(again.isError).toBeFalsy();
+    expect(attempts).toBe(2);
   });
 
   it("query_refusals_never_echo_names", async () => {

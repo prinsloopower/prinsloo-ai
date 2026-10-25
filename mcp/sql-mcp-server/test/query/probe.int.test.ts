@@ -3,7 +3,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { classifyPostgresError, PostgresDatabase } from "../../src/engine/postgres.js";
 import { visibleObjects } from "../../src/visibility.js";
 import { answerQuery } from "../../src/tools/query.js";
-import { nodeQueries } from "./node-parser.js";
+import { nodeQueryEngine } from "./node-parser.js";
 import { ADMIN, admin } from "./pg-fixture.js";
 
 /**
@@ -125,7 +125,7 @@ const PROBES = [
 async function answer(database: string, sql: string) {
   const db = new PostgresDatabase(url(database, READER));
   const a = await answerQuery(sql, {
-    engine: await nodeQueries(),
+    queryEngine: await nodeQueryEngine(),
     database: db,
     visible: visibleObjects(await db.catalog()),
     rowLimit: 500,

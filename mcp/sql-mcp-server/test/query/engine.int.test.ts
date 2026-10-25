@@ -188,7 +188,7 @@ describe("S-003 Agent-written queries: Database errors", () => {
     const answer = await ask(READER, "SELECT 1 / (c.id - c.id) FROM qe_sales.customers c");
     expect(rowsOf(answer)).toEqual({ error: `The database could not complete this.${REF}` });
     expect(answer.outcome).toMatchObject({ kind: "database_error", reason_class: "other" });
-    expect(answer.statement).toMatchObject({ sql: "SELECT 1 / (c.id - c.id) FROM qe_sales.customers c", rows: 0 });
+    expect(answer.statements).toMatchObject([{ sql: "SELECT 1 / (c.id - c.id) FROM qe_sales.customers c", rows: 0 }]);
   });
 
   it("failure_after_fetch_keeps_statement", async () => {

@@ -34,7 +34,7 @@ export type ConfigResult = { ok: true; config: Config } | { ok: false; variable:
 
 export const GOOGLE_ISSUER = "https://accounts.google.com";
 
-/** The Row limit's ceiling (operations.md). */
+/** The largest Row limit an Operator may set (operations.md). */
 const ROW_LIMIT_MAX = 10_000;
 
 function value(env: RuntimeVariables, name: string): string | undefined {

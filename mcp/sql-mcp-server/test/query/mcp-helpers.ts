@@ -1,7 +1,7 @@
 import { expect } from "vitest";
 import type { Database } from "../../src/engine/database.js";
 import { callMcp, harness, signIn, type Harness } from "../signin/helpers.js";
-import { nodeQueries } from "./node-parser.js";
+import { nodeQueryEngine } from "./node-parser.js";
 
 export const ASK = "How many orders are there per region?";
 
@@ -13,7 +13,7 @@ export interface ToolResult {
 
 /** A signed-in Staff member on a Deployment with a Database and PostgreSQL's half of the Query check. */
 export async function signedIn(database: Database, env: Record<string, string | undefined> = {}) {
-  const h = await harness(env, { realMcp: true, database, queries: nodeQueries });
+  const h = await harness(env, { realMcp: true, database, queryEngine: nodeQueryEngine });
   const s = await signIn(h);
   return { h, token: s.access_token };
 }

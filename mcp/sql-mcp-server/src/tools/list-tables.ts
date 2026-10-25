@@ -1,4 +1,4 @@
-import { REQUEST_TEXT_MAX, withReference, type Outcome, type RefusalClass } from "../audit.js";
+import { isRequestText, REQUEST_TEXT_REFUSAL, withReference, type Outcome, type RefusalClass, type StatementRecord } from "../audit.js";
 import type { Boundary } from "../config.js";
 import type { Catalog, ReasonClass } from "../engine/database.js";
 import { visibleTables, type VisibleTable } from "../visibility.js";
@@ -17,9 +17,7 @@ export type Validated = { ok: true; requestText: string; schema?: string } | { o
 /** Checked by the tool itself, not the SDK, so a bad value is still a Tool call with an Audit record (D-078). */
 export function validateListTables(args: Record<string, unknown>): Validated {
   const { request_text: requestText, schema } = args;
-  if (typeof requestText !== "string" || requestText.length < 1 || requestText.length > REQUEST_TEXT_MAX) {
-    return { ok: false, sentence: "The request was not accepted: request_text must be 1–4,000 characters." };
-  }
+  if (!isRequestText(requestText)) return { ok: false, sentence: REQUEST_TEXT_REFUSAL };
   if (schema !== undefined && (typeof schema !== "string" || schema.length < 1 || schema.length > SCHEMA_MAX)) {
     return { ok: false, sentence: "The request was not accepted: schema must be 1–128 characters." };
   }
@@ -46,9 +44,14 @@ export function listing(catalog: Catalog, boundary: Boundary | undefined, schema
   return { tables: all.slice(0, TABLES_MAX), complete: all.length <= TABLES_MAX };
 }
 
+/** What a Tool call answers, and the SQL its Audit record keeps, unredacted here. */
 export interface ToolAnswer {
   result: { content: { type: "text"; text: string }[]; structuredContent?: Record<string, unknown>; isError?: boolean };
   outcome: Outcome;
+  /** Every Statement the Tool call sent (data-model.md). */
+  statements?: StatementRecord[];
+  /** The SQL of an Agent-written query that was refused, or failed before it was sent. */
+  submittedSql?: string;
 }
 
 export function answerListing(l: Listing): ToolAnswer {

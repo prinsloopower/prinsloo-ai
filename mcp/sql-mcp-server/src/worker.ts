@@ -3,7 +3,7 @@ import parserWasm from "@libpg-query/parser/wasm/libpg-query.wasm";
 import { createApp } from "./app.js";
 import type { RuntimeVariables } from "./config.js";
 import { loadPgParser } from "./engine/pg-parser.js";
-import { postgresQueries } from "./engine/postgres-queries.js";
+import { postgresQueryEngine } from "./engine/postgres-query-engine.js";
 import { PostgresDatabase } from "./engine/postgres.js";
 
 /** Cloudflare runtime adapter (ADR-001, ADR-002). */
@@ -22,7 +22,7 @@ export default {
       app = createApp({
         ping: () => database.ping(),
         database,
-        queries: async () => postgresQueries(await loadPgParser(parserWasm as WebAssembly.Module)),
+        queryEngine: async () => postgresQueryEngine(await loadPgParser(parserWasm as WebAssembly.Module)),
         connectionSetting: "HYPERDRIVE",
         env: env as unknown as RuntimeVariables,
       });

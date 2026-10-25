@@ -589,3 +589,15 @@ Rationale: the product owner's answers to the review hold (docs/slices/S-003/rev
   - the Audit logger takes a list of Statements, declared once.
 - **Kept, with the reason:** the Engine adapter's outcome kinds (`plan_refused`, `error`) are its own vocabulary, and the Tool maps them to the Audit record's `refusal` and `database_error`. The structural step's cases (`hidden`, `unqualified` and the rest) select D-082's sentences, and each maps to one class.
 Alternatives rejected: logging any SQL containing a comment by its length only (it loses the SQL whenever an Agent comments its query); deferring the structural gaps to S-007 and S-010 as questions (the product owner chose to fix them now).
+
+## D-088 — Choices made in S-003's second rework
+Decided by: model | Date: 2026-10-25 | Phase: build (S-003, after review 2)
+Rationale: review 2 failed on one blocker. These are the choices made fixing it and the gaps:
+- **The lexer's failures are parse failures.** The scanner answers with error text for SQL it cannot finish, so `scan` raises a `ParseError` and Redaction logs `<unparsed: N chars>`. As a second guard, a failure while redacting never stops the Audit record: that call's SQL is kept by its length.
+- **A fault in the Server's own work**, such as the parser failing to load, ends the Tool call as a Database error of class `other`, with D-080's sentence and reference. The `server_fault` line names the Tool and the id, never the error's text. That call does not load the engine again, and the next one does. A cached failure would otherwise break every `query` call for the isolate's lifetime.
+- **Ordinals under Redaction.** The ordinals of `GROUP BY` and of the SELECT's own `ORDER BY` name output columns, so they may stay in logged SQL, like a type's modifiers. A number in a window's or an aggregate's `ORDER BY` is a constant, and is still replaced.
+- **Redaction sits in the MCP endpoint, not the Audit logger.** components.md places it in the logger, but it needs the Engine's parser, which only the query tool's `QueryEngine` holds. The logger receives SQL already redacted. S-010 must redact Typed tool inputs (D-028) the same way, through the Tool's `auditSql`.
+- **Inputs are checked twice per call:** once before dispatch, so that a valid call reads the catalog once, and once in the handler, on the SDK's arguments. D-087's "checked once" meant once per check.
+- **Accepted as they are:**
+  - an `N'…'` literal is logged as `n$1`, because `normalize` writes it that way and the re-parse reads it as an identifier. No value is kept;
+  - `typeNames` stays a protected method, so a test subclass can make it fail after the fetch.

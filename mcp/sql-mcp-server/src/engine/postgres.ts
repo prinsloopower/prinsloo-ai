@@ -1,4 +1,5 @@
 import pg from "pg";
+import { visibleKey } from "../visibility.js";
 import type { AccountFlags, Catalog, Database, NamedTable, QueryOutcome, ReasonClass } from "./database.js";
 
 /** Connecting gives up after this long (security.md). */
@@ -180,7 +181,7 @@ export class PostgresDatabase implements Database {
         return planFailure(error);
       }
       const accounted = new Set(
-        (await send<[string, string]>(ACCOUNTED_SQL, [named.map((t) => t.schema), named.map((t) => t.table)])).rows.map(([s, t]) => `${s}\u0000${t}`),
+        (await send<[string, string]>(ACCOUNTED_SQL, [named.map((t) => t.schema), named.map((t) => t.table)])).rows.map(([s, t]) => visibleKey(s, t)),
       );
       if (planRelations(plan).some((r) => !accounted.has(r))) return { kind: "plan_refused", unaccounted: true };
 
@@ -282,7 +283,7 @@ function planRelations(plan: unknown): string[] {
     if (!node || typeof node !== "object") return;
     if (Array.isArray(node)) return node.forEach(visit);
     const n = node as Record<string, unknown>;
-    if (typeof n["Relation Name"] === "string" && typeof n.Schema === "string") found.push(`${n.Schema}\u0000${n["Relation Name"]}`);
+    if (typeof n["Relation Name"] === "string" && typeof n.Schema === "string") found.push(visibleKey(n.Schema, n["Relation Name"]));
     visit(n.Plan);
     visit(n.Plans);
   };
@@ -290,13 +291,12 @@ function planRelations(plan: unknown): string[] {
   return found;
 }
 
-
 const NETWORK_CODES = new Set(["ECONNREFUSED", "ECONNRESET", "ETIMEDOUT", "ENOTFOUND", "EHOSTUNREACH", "EPIPE", "EAI_AGAIN"]);
 
-/** A PostgreSQL failure's Database error class (D-080). The message is never used for anything else. */
 /** A driver or Node error's code: a SQLSTATE, or a socket code such as `EPIPE`. */
 const errorCode = (error: unknown) => (typeof error === "object" && error !== null && "code" in error ? String((error as { code: unknown }).code) : "");
 
+/** A PostgreSQL failure's Database error class (D-080). The message is never used for anything else. */
 export function classifyPostgresError(error: unknown): ReasonClass {
   const code = errorCode(error);
   if (code.startsWith("08") || NETWORK_CODES.has(code)) return "connection";

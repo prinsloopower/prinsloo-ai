@@ -57,7 +57,6 @@ const EXPR_KINDS = new Set([
 
 const SUBLINK_KINDS = new Set(["EXISTS_SUBLINK", "ANY_SUBLINK", "ALL_SUBLINK", "EXPR_SUBLINK", "ARRAY_SUBLINK"]);
 
-
 /** The one node a wrapper `{ Type: {...} }` holds. */
 function unwrap(node: unknown): [string, Node] {
   if (!node || typeof node !== "object" || Array.isArray(node)) throw new Refused("unsupported");

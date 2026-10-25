@@ -1,4 +1,4 @@
-import { REQUEST_TEXT_MAX, type RefusalClass, type StatementRecord } from "../audit.js";
+import { isRequestText, REQUEST_TEXT_REFUSAL, type RefusalClass } from "../audit.js";
 import type { Database, QueryEngine, ReasonClass, RefusalCase } from "../engine/database.js";
 import type { VisibleObjects } from "../visibility.js";
 import { answerDatabaseError, answerRefusal, type ToolAnswer } from "./list-tables.js";
@@ -45,27 +45,19 @@ export type ValidatedQuery = { ok: true; requestText: string; sql: string } | { 
 /** Checked by the tool itself, not the SDK, so a bad value is still a Tool call with an Audit record (D-078). */
 export function validateQuery(args: Record<string, unknown>): ValidatedQuery {
   const { request_text: requestText, sql } = args;
-  if (typeof requestText !== "string" || requestText.length < 1 || requestText.length > REQUEST_TEXT_MAX) {
-    return { ok: false, sentence: "The request was not accepted: request_text must be 1–4,000 characters." };
-  }
+  if (!isRequestText(requestText)) return { ok: false, sentence: REQUEST_TEXT_REFUSAL };
   if (typeof sql !== "string" || sql.length === 0) return { ok: false, sentence: "The request was not accepted: sql must be a non-empty string." };
   return { ok: true, requestText, sql };
 }
 
 export interface QueryContext {
-  engine: QueryEngine;
+  queryEngine: QueryEngine;
   database: Database;
   visible: VisibleObjects;
   rowLimit: number;
   classify: (error: unknown) => ReasonClass;
   /** The Tool call's Audit record id, the reference every Refusal and error carries (D-080). */
   id: string;
-}
-
-/** What one `query` Tool call answers, and the SQL its Audit record keeps (unredacted here). */
-export interface QueryAnswer extends ToolAnswer {
-  statement?: StatementRecord;
-  submittedSql?: string;
 }
 
 /** D-082's notice for a Cut-short result, which AI tools that show only text still carry (J-004). */
@@ -76,16 +68,16 @@ export const cutShortNotice = (rowLimit: number) => `The result was cut short at
  * execution layers. A query refused at any layer is never sent, and is kept as the submitted SQL;
  * one that was sent is kept as the Tool call's Statement, even when the Database failed it.
  */
-export async function answerQuery(sql: string, ctx: QueryContext): Promise<QueryAnswer> {
-  const refusals = queryRefusals(ctx.engine.name);
-  const refuse = (r: { reasonClass: RefusalClass; sentence: string }): QueryAnswer => ({ ...answerRefusal(r.reasonClass, r.sentence, ctx.id), submittedSql: sql });
-  const checked = ctx.engine.checkStructure(sql, ctx.visible);
+export async function answerQuery(sql: string, ctx: QueryContext): Promise<ToolAnswer> {
+  const refusals = queryRefusals(ctx.queryEngine.name);
+  const refuse = (r: { reasonClass: RefusalClass; sentence: string }): ToolAnswer => ({ ...answerRefusal(r.reasonClass, r.sentence, ctx.id), submittedSql: sql });
+  const checked = ctx.queryEngine.checkStructure(sql, ctx.visible);
   if (!checked.ok) return refuse(refusals[checked.refusal]);
   const outcome = await ctx.database.query(sql, checked.tables, ctx.rowLimit);
   if (outcome.kind === "plan_refused") return refuse(refusals[outcome.unaccounted ? "plan_unaccounted" : "plan"]);
   if (outcome.kind === "error") {
     const answer = answerDatabaseError(ctx.classify(outcome.error), ctx.id);
-    return outcome.sent ? { ...answer, statement: { sql, rows: 0, ms: outcome.ms } } : { ...answer, submittedSql: sql };
+    return outcome.sent ? { ...answer, statements: [{ sql, rows: 0, ms: outcome.ms }] } : { ...answer, submittedSql: sql };
   }
   const { columns, rows, cutShort, ms } = outcome.run;
   const body = { columns, rows, row_count: rows.length, cut_short: cutShort };
@@ -93,6 +85,6 @@ export async function answerQuery(sql: string, ctx: QueryContext): Promise<Query
   return {
     result: { content: [{ type: "text", text }], structuredContent: body },
     outcome: { kind: "ok", row_count: rows.length, cut_short: cutShort },
-    statement: { sql, rows: rows.length, ms },
+    statements: [{ sql, rows: rows.length, ms }],
   };
 }

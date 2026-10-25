@@ -3,6 +3,10 @@ import type { Staff } from "./signin/broker.js";
 
 /** Request text is accepted, and kept, up to this length (data-model.md). */
 export const REQUEST_TEXT_MAX = 4000;
+/** Every Tool takes a Request text (ADR-011); one outside these bounds is refused with this sentence. */
+export const REQUEST_TEXT_REFUSAL = "The request was not accepted: request_text must be 1–4,000 characters.";
+export const isRequestText = (v: unknown): v is string => typeof v === "string" && v.length >= 1 && v.length <= REQUEST_TEXT_MAX;
+
 /** A string input is kept up to this length; schema names are never longer (S-002). */
 const INPUT_MAX = 128;
 

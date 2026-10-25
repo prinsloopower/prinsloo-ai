@@ -184,6 +184,7 @@ This slice writes `docs/security-material/queries.md` (D-067). It covers:
 - A table whose row-level security policy calls a function, as Supabase's `auth.uid()` policies do, can be queried. The rows returned are those the policy allows.
 - A granted table `p`, whose policy reads a granted `m`, whose own policy reads a granted `o`, can be queried.
 - Every probe in this spec, including each one named in its Critique findings, gives the Agent the same answer, apart from the reference, in two Databases. In one the hidden table or column exists, and in the other it does not. No user-defined function or operator runs in either, as their counters show. The only exceptions are policy functions (D-083), and casts and domain constraints on user-defined column types (D-085). No probe in the suite may use them to tell the two Databases apart.
+- If the PostgreSQL parser fails to load, the `query` call ends in a Database error of class `other`, with a `server_fault` line that names no detail and one Audit record. The next call loads it again.
 - With the account made a superuser, a valid `query` call answers 503 with the misconfigured text and the reference. It writes one `config_invalid` line and one Audit record with outcome `refusal`/`unsafe_account`.
 - On a test table with a column `kind` of an enum type:
   - `SELECT m.kind`, `WHERE m.kind = 'shipped'`, `GROUP BY m.kind` and `SELECT m.*` run;
@@ -209,7 +210,7 @@ This slice writes `docs/security-material/queries.md` (D-067). It covers:
 - Every `query` call writes exactly one Audit record, carrying `staff` and the `request_text` as received:
   - a run query has one `statements` entry, with its `rows` and `ms`;
   - a refused one has `submitted_sql` and no `statements`.
-- With Redaction on, `SELECT o.id FROM sqlmcp_test.orders o WHERE o.id = 42 AND o.note = 'x'` is logged as `SELECT o.id FROM sqlmcp_test.orders o WHERE o.id = ? AND o.note = ?`. With it off, it is logged exactly as sent. A refused `SELEC 1`, with Redaction on, has `submitted_sql` `<unparsed: 7 chars>`. With Redaction on, `SELECT o.id -- note ann@example.com` keeps no part of its comment, while a quoted identifier containing `--` is kept. A refused `COPY (SELECT 1) TO '/tmp/x'`, `PREPARE p AS SELECT 'x'` and `NOTIFY c, 'x'` each have `submitted_sql` `<unparsed: N chars>`, and none of their literals appears in the record.
+- With Redaction on, `SELECT o.id FROM sqlmcp_test.orders o WHERE o.id = 42 AND o.note = 'x'` is logged as `SELECT o.id FROM sqlmcp_test.orders o WHERE o.id = ? AND o.note = ?`. With it off, it is logged exactly as sent. A refused `SELEC 1`, with Redaction on, has `submitted_sql` `<unparsed: 7 chars>`. With Redaction on, `SELECT o.id -- note ann@example.com` keeps no part of its comment, while a quoted identifier containing `--` is kept. `GROUP BY 1 ORDER BY 2 DESC` keeps its ordinals. SQL the lexer cannot finish, such as an unterminated literal or comment, is `<unparsed: N chars>`, and its Tool call still leaves one Audit record. A refused `COPY (SELECT 1) TO '/tmp/x'`, `PREPARE p AS SELECT 'x'` and `NOTIFY c, 'x'` each have `submitted_sql` `<unparsed: N chars>`, and none of their literals appears in the record.
 - An Audit record whose SQL and Request text would exceed 64 KiB is cut to fit, with `shortened: true`.
 - No Audit record holds a value from a result row.
 - Live, on the project test Deployment, through Hyperdrive, which the Docker tests do not use:
@@ -259,7 +260,7 @@ Verified by: query_runs_read_only_with_pinned_search_path, query_returns_columns
 Verified by: query_execution_error_classed_without_driver_text, query_statement_timeout_is_timeout, plan_step_network_failure_is_connection_error, failure_after_fetch_keeps_statement
 
 ### T-009 — The query tool sits beside list_tables, checks its inputs and refuses an unsafe account
-Verified by: tools_list_has_query_and_list_tables, query_description_static_with_row_limit, query_requires_request_text_and_sql, query_unsafe_account_answers_503_with_audit
+Verified by: tools_list_has_query_and_list_tables, query_description_static_with_row_limit, query_requires_request_text_and_sql, query_unsafe_account_answers_503_with_audit, query_engine_load_retried_after_failure
 
 ### T-010 — Every query Tool call leaves one Audit record with its SQL, redacted when Redaction is on
 Verified by: query_audit_records_statement_rows_and_timing, query_audit_records_submitted_sql_for_refusals, redaction_replaces_every_literal, redaction_off_keeps_sql_as_submitted, unparsed_sql_logged_by_length, non_select_sql_logged_by_length_only, audit_record_capped_at_64_kib, query_audit_never_holds_result_values, redaction_strips_comments
@@ -396,3 +397,10 @@ Amended after the code review (2026-10-25, docs/slices/S-003/review.md, D-087), 
 
   `reg_and_composite_types_refused_at_any_depth` was re-recorded after its call changed.
 
+Amended after the second code review (2026-10-25, docs/slices/S-003/review.md review 2, D-088):
+- **SQL the lexer cannot finish** is `<unparsed: N chars>`. `unparsed_sql_logged_by_length` now covers it end to end.
+- **Ordinals** in `GROUP BY` and the SELECT's own `ORDER BY` are kept under Redaction (`redaction_replaces_every_literal`).
+- **A failure in the Server's own work** still writes the Audit record. A failed parser load is not cached (`query_engine_load_retried_after_failure`).
+- **Line endings** are LF again, with `.gitattributes`.
+- **Names and shapes:** one answer shape with a list of Statements, one Request text check, and `queryEngine` as the single name.
+- `query_execution_error_classed_without_driver_text` and `reg_and_composite_types_refused_at_any_depth` were re-recorded after their bodies changed.

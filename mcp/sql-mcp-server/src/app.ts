@@ -1,7 +1,6 @@
 import { Hono, type Context } from "hono";
 import { readConfig, type RuntimeVariables } from "./config.js";
-import type { Database } from "./engine/database.js";
-import type { QueryEngine } from "./engine/database.js";
+import type { Database, QueryEngine } from "./engine/database.js";
 import { classifyPostgresError } from "./engine/postgres.js";
 import { handleMcp } from "./mcp.js";
 import { op } from "./oplog.js";
@@ -22,7 +21,7 @@ export interface Deps {
   /** The Database the Tools read; without one, no Tools are offered. */
   database?: Database;
   /** Loads the Engine's half of the Query check and of Redaction, once per isolate or process (ADR-005). */
-  queries?: () => Promise<QueryEngine>;
+  queryEngine?: () => Promise<QueryEngine>;
   /** The setting naming the Database account in config_invalid lines (D-077). */
   connectionSetting?: string;
   /** Answers a signed-in MCP request; the SDK handler unless a test swaps it. */
@@ -74,8 +73,8 @@ export function createApp(deps: Deps) {
   const fetchFn: Fetch = deps.fetch ?? ((input, init) => fetch(input, init));
   const now = deps.now ?? Date.now;
   // Loaded on the first query, then kept for the isolate or process (ADR-005).
-  let queries: Promise<QueryEngine> | undefined;
-  const loadQueries = deps.queries;
+  let queryEngine: Promise<QueryEngine> | undefined;
+  const loadQueryEngine = deps.queryEngine;
   let tokens: Promise<Tokens> | undefined;
   const broker = new SignInBroker({
     config,
@@ -113,7 +112,10 @@ export function createApp(deps: Deps) {
           connectionSetting: deps.connectionSetting ?? "HYPERDRIVE",
           classify: classifyPostgresError,
           now,
-          ...(loadQueries ? { queries: () => (queries ??= loadQueries()) } : {}),
+          // A failed load is not kept, so the next Tool call tries again.
+          ...(loadQueryEngine
+            ? { queryEngine: () => (queryEngine ??= loadQueryEngine().catch((e: unknown) => { queryEngine = undefined; throw e; })) }
+            : {}),
           rowLimit: config.rowLimit,
           redaction: config.redaction,
         }

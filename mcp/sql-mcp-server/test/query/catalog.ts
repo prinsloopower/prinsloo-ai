@@ -1,7 +1,7 @@
 import type { Boundary } from "../../src/config.js";
 import { visibleObjects } from "../../src/visibility.js";
 import { FakeDatabase } from "../listing/fake-database.js";
-import { nodeQueries } from "./node-parser.js";
+import { nodeQueryEngine } from "./node-parser.js";
 
 /**
  * The fake catalog the Query check's unit tests run over:
@@ -25,7 +25,7 @@ export function queryDatabase(opts: { email?: boolean } = {}): FakeDatabase {
 /** Runs the structural layer over the fake catalog. */
 export async function check(sql: string, opts: { boundary?: Boundary; email?: boolean } = {}) {
   const db = queryDatabase(opts);
-  return (await nodeQueries()).checkStructure(sql, visibleObjects(await db.catalog(), opts.boundary));
+  return (await nodeQueryEngine()).checkStructure(sql, visibleObjects(await db.catalog(), opts.boundary));
 }
 
 /** The reason a query was refused, or "ok". */
