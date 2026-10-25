@@ -151,3 +151,28 @@ These are left out of the gated documents for now because editing them re-gates 
 Raised by: code-review (S-002) | Blocks: slice-spec for S-003 (Agent-written SQL runs as this account)
 D-077 checks `rolsuper` and `rolbypassrls` of the account itself. Those attributes are not inherited, so an account that is a member of a superuser or BYPASSRLS role (for example `GRANT postgres TO sqlmcp_reader`) passes, and it can `SET ROLE` to that role. An account with `CREATEROLE` can grant itself `pg_read_all_data` before PostgreSQL 16. The check also reads `current_user`, so a superuser that connects with a `role` startup option passes while `session_user` can `RESET ROLE`. Options: refuse membership (`pg_has_role(…, 'MEMBER')`) of any role with `rolsuper` or `rolbypassrls`, refuse `rolcreaterole`, check `session_user` as well, or rely on S-003's query check refusing `SET`/`RESET ROLE` and say so in the Security material.
 Answered by the product owner: see D-081. Refuse every route.
+
+## Q-032 — Should the supported constructs include AT TIME ZONE and array constructors?
+Raised by: slice-spec (S-003) | Blocks: nothing; affects R-012 and the benchmark (S-004)
+security.md lists no `timezone` function, which `AT TIME ZONE` compiles to, and no `ARRAY[…]` or `ARRAY(subquery)`. Typical questions over `timestamptz` data ("orders per day in Johannesburg time") need the first. The S-003 Query check refuses both, as security.md says to do for anything not listed. Adding them is a security.md edit plus Query check tests, and editing security.md mid-slice re-gates the slice list (Q-030). S-004's benchmark will show whether their absence costs correct answers.
+Answered by the product owner, 2026-10-25: add both now. See D-084.
+
+## Q-033 — System-spec and data-model wording owed by S-003
+Raised by: slice-spec (S-003) | Blocks: nothing; apply at the next revision of the system spec
+- security.md, Query check: the Agent's query runs with `search_path` pinned to `pg_catalog`, and tables must be schema-qualified. `reg*` casts and schema-qualified functions, operators and types outside `pg_catalog` are refused. Plan-stage failures are Refusals with one shared sentence (D-082).
+- data-model.md, Audit record: `inputs` is `{}` for `query`, because the SQL is in `statements` or `submitted_sql`. A Statement's `rows` is the count returned to the Agent (D-082).
+- security.md, Redaction rule: the normaliser's `$n` placeholders are written as `?` (D-082).
+- security.md, Query check: columns must be qualified, `NATURAL`/`USING` joins are refused, casts name only an allow-list of built-in types, and a column whose type reaches a `reg*` type or a composite, at any depth, cannot be read (D-085). Partitions, inheritance children and row-level security policy tables are read under the named table's grant (D-082).
+- security.md, "every user-defined function is refused (D-038)": add that row-level security policy functions (D-083) and casts on user-defined column types (D-085) run as their owners wrote them.
+- ADR-005 and security.md: the PostgreSQL parser package is `@libpg-query/parser` 17.x, because the plain `libpg-query` package has no `normalize`. Its WebAssembly is about 2.0 MB, not 1 MB.
+These are left out of the gated documents for the reason Q-030 gives.
+Product owner, 2026-10-25: batch with Q-030 at the next system-spec revision. D-084's security.md edit is made now; the rest of this list waits.
+
+## Q-034 — Should Agent-written queries read enum, domain and other user-defined-type columns?
+Raised by: slice-spec (S-003) | Blocks: nothing; affects R-006 and R-012
+D-082 refuses any column whose type is not built in, because a cast or implicit cast defined on such a type can run a user function (`SECURITY DEFINER` included) that the Query check cannot see. Supabase schemas often use enums for status columns, and extension types such as `citext` sit outside `pg_catalog`, so those columns can be listed but not queried. The alternative is a Server statement that admits a type only when `pg_cast` holds no cast to or from it, its base type or its element type through a function outside `pg_catalog`. Opclass support functions of composite fields would also need care. S-004's benchmark will show how often the refusal costs an answer.
+Answered by the product owner, 2026-10-25: trust conversions like policies. See D-085.
+
+## Q-035 — How does S-007 parse T-SQL's AT TIME ZONE?
+Raised by: amendment critique (D-084) | Blocks: slice-spec for S-007
+security.md now lists `AT TIME ZONE` for MS SQL Server (D-084). ADR-005 and the Redaction rule use `node-sql-parser`'s T-SQL AST, and version 5.4.0 cannot parse it: it reads `AT` as an alias and stops at `TIME`. Unless that changes, S-007's structural layer refuses a construct security.md supports, and its Redaction logs such SQL as `<unparsed>`. Options: a newer or patched parser; a narrow pre-parse rewrite whose correctness the plan check (SHOWPLAN) backs; or dropping `AT TIME ZONE` from the MS SQL Server column. T-SQL also takes Windows time-zone names (`'South Africa Standard Time'`), not IANA names, which S-004's and S-008's benchmark questions must allow for.

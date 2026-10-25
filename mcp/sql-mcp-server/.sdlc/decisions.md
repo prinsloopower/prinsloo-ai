@@ -474,3 +474,76 @@ Rationale: product owner's answers after the S-002 code review.
 - **Boundary letter case.** Exclusions match ignoring letter case, so `"Payroll"` excludes `payroll`. Included schemas match exactly, so a case typo shows less, never more. A mistake in the Boundary always hides rather than reveals.
 - **Column types.** A column's type is shown by name only when it is a built-in type (`pg_catalog`). Any other type is shown as `user-defined`, because a type's name can carry a hidden schema's or table's name (every table has a row type of the same name).
 Alternatives rejected: relying on S-003's Query check to refuse `SET ROLE` (one more place that must never fail); exact Boundary matching everywhere (a case slip in an exclusion would show what it meant to hide).
+
+## D-082 — Choices made specifying S-003
+Decided by: model | Date: 2026-10-23 | Phase: slice-spec (S-003)
+Rationale: the Query check needs answers that ADR-005 and security.md do not give. Revised after the S-003 gate-1 critique (docs/slices/S-003/spec.md).
+
+**Shared by both Engines.** S-007 repeats these for MS SQL Server, where R-002 asks for the same tools.
+- **The `query` tool.**
+  - It takes `request_text` and `sql`.
+  - It returns `{ columns: [ { name, type } ], rows: [ [ value, … ] ], row_count, cut_short }`. `type` follows `list_tables`' rule (D-081): a built-in type's name with its modifier, or `user-defined`.
+  - Values are JSON `null`, booleans, numbers for 16- and 32-bit integers and floats (with `NaN` and infinities as strings), and the Database's own text output for every other type. Bigints, numerics and timestamps are therefore never altered by JavaScript.
+- **Cut-short notice.** A cut-short result's text content ends with "The result was cut short at the Row limit of <N> rows; more rows match."
+- **Refusals.** Each sentence ends with D-080's reference. No sentence echoes a name from the query, and each depends only on the query's text and what the listing shows.
+
+  | case | `reason_class` | sentence |
+  |---|---|---|
+  | bad `request_text` | `invalid_input` | "The request was not accepted: request_text must be 1–4,000 characters." |
+  | bad `sql` | `invalid_input` | "The request was not accepted: sql must be a non-empty string." |
+  | over 64 KiB | `query_check` | "The query was not accepted: it is longer than 64 KiB." |
+  | does not parse | `query_check` | "The query was not accepted: it is not valid <Engine name>." |
+  | not exactly one read-only SELECT | `query_check` | "The query was not accepted: it must be exactly one SELECT, which only reads." |
+  | unsupported node, function, operator or type | `query_check` | "The query was not accepted: it uses a clause, function, operator or type that is not supported here." |
+  | unqualified table, or an unqualified, `NATURAL` or `USING` column reference | `query_check` | "The query was not accepted: qualify every table with its schema and every column with its table or alias." |
+  | `*` over a table not fully readable | `query_check` | "The query was not accepted: name the columns instead of using *, because not every column of that table can be read." |
+  | a column whose type reaches a `reg*` type or a composite, through domains, arrays, ranges or composite fields at any depth | `query_check` | "The query was not accepted: it reads a column of a type that queries cannot read." |
+  | a subquery or CTE column with no name the check can read | `query_check` | "The query was not accepted: name every subquery and CTE column you use with AS, and refer to it by that name." |
+  | a table or column that is not Visible, or does not exist | `hidden_object` | "The query was not accepted: it reads a table or column that is not available to you. Use list_tables to see what you may query." |
+  | anything the Engine's plan step refuses | `query_check`; `hidden_object` when the plan reads a relation it cannot account for | "The query was not accepted: the database could not plan it. Check its names and types against list_tables, and its constant values." |
+
+  A plan-step failure is a Refusal, never a Database error, because the query was not sent. That includes the planner folding a constant, as in `1/0`.
+
+**PostgreSQL.**
+- **Pinned `search_path`.** The query runs with `search_path` pinned to `pg_catalog`. Every table must be schema-qualified, and every column qualified with its table or alias. An unqualified operator or function could otherwise resolve to a user-schema object, which can be `SECURITY DEFINER` (D-038). An unqualified or `NATURAL`/`USING` column name could otherwise tell an ungranted column from a missing one, because PostgreSQL resolves names before it checks privileges. The one exception is an `ORDER BY` item equal to an explicit output name, which PostgreSQL resolves to the output column first.
+- **No catalog lookups, and only built-in cast targets.** Casts and typed literals may name only an allow-list of built-in types, with no array types. A column cannot be read when its type reaches a `reg*` type or a composite, looking through domains, arrays, ranges, multiranges and composite fields at any depth. `reg*` values coerce literals to catalog entries and print catalog names, and a composite reveals its shape, which for a Hidden table's row type is that table's shape. Columns of other user-defined types are readable under D-085, which amended this entry on 2026-10-25. A bare name is accepted only as a whole item of the SELECT's own `ORDER BY`. Aggregate and window `ORDER BY` resolve against input columns. A subquery or CTE column must be one of its readable output names, because PostgreSQL reads `s.f` as `f(s)` otherwise. A table reference may not carry a column-alias list, because PostgreSQL counts hidden columns against it. A join may not carry an alias. A function in `FROM` exposes columns only through its column-alias list. Operator names are checked in `SubLink`s as well as expressions, and `ORDER BY … USING` is refused. `alias.*` is limited to whole select-list items over tables whose columns are all Visible and readable. Casts defined on the user-defined type of a Visible column run as their owner wrote them (D-085). User-defined operators are kept out by the pinned `search_path`, since `CREATE OPERATOR` needs no type ownership. Objects a superuser installs into `pg_catalog` are trusted like built-ins. Row-level security policies and the functions they call are trusted under D-083.
+- **Columns checked before the Database.** Every column reference is checked against the Visible columns before anything is sent. The plan check accounts for each relation in the plan as follows:
+  - a table the query names;
+  - a partition or inheritance descendant of one;
+  - a table that one of their row-level security policies reads, followed through nested policies, those tables' descendants and policy-read views to the end of the chain.
+
+  PostgreSQL reads all of those under the named table's grant, so they are accepted even when outside the Boundary. A Visible table whose policy reads an ungranted table is unqueryable, and it gets the plan sentence. This tells the Agent the table cannot be used, never what it depends on.
+- **Execution.** Rows are fetched through a cursor, `Row limit + 1` at a time, over the extended query protocol, inside a read-only transaction that is always rolled back.
+- **Audit record.** A `query` Audit record has `inputs: {}`. The SQL is recorded once, in `statements` or `submitted_sql`, and `rows` is the count returned to the Agent. Redaction writes `normalize`'s `$n` placeholders as `?`, and uses that output only for a single SELECT whose normalised text holds no literal. Anything else is `<unparsed: N chars>`, because `normalize` keeps literals in `COPY`, `PREPARE`, `CREATE … AS` and other statement types. N counts UTF-16 code units.
+
+Alternatives rejected:
+- resolving names through the Database account's default `search_path`: it lets user-schema operators and functions resolve too;
+- leaving column resolution to PostgreSQL: ambiguity and `NATURAL` joins reveal ungranted columns;
+- a deny-list of `reg*` types: it misses their array types;
+- reading user-defined-type columns behind a `pg_cast` check: it is more surface to prove. Q-034 then settled the question the other way (D-085);
+- refusing queries whose plan reads a descendant or policy table: each such refusal would confirm a Hidden object exists;
+- wrapping the query in `SELECT * FROM (…) LIMIT n`: ADR-005 rejects rewriting;
+- returning every value as a JavaScript-parsed type: bigints and numerics lose precision, and timestamps shift zone.
+
+## D-083 — Row-level security policies, and the functions they call, are trusted like grants
+Decided by: human | Date: 2026-10-24 | Phase: slice-spec (S-003)
+Rationale: product owner, after the S-003 gate-2 critique ("Trust them"). A policy on a Visible table runs whatever functions it calls, `SECURITY DEFINER` ones included, inside the Agent's read-only transaction, and the Query check cannot see them. Policies are the Database administrator's own configuration, as grants are (D-074). They decide which rows come back, not what the Agent wrote. Supabase policies routinely call functions such as `auth.uid()`. This narrows D-038, which keeps every user-defined function away from the Agent's own SQL but not from the Database administrator's policies. The Security material says so, and tells a Security reviewer to review policy functions as part of the grants.
+Alternatives rejected: refusing any table whose policies call a function outside `pg_catalog` (on Supabase it would make most tables with row-level security unqueryable).
+
+## D-084 — AT TIME ZONE and array constructors join the supported constructs; answers Q-032
+Decided by: human | Date: 2026-10-25 | Phase: slice-spec (S-003)
+Rationale: product owner ("Q-032: Add both now"). Without `AT TIME ZONE`, a question about daily figures in local time is answered in UTC days, which gives quietly wrong totals (R-012). Array constructors cost less to leave out, but the owner chose both. security.md's supported constructs gain:
+- `AT TIME ZONE` and `AT LOCAL` (`timezone`) on PostgreSQL, and `AT TIME ZONE` on MS SQL Server, where T-SQL has it natively;
+- `ARRAY[…]` and `ARRAY(subquery)` on PostgreSQL. T-SQL has no equivalent.
+
+Array subscripts and casts to array types stay refused, so `_regclass` and `regclass[]` stay closed. Editing security.md re-gates the system spec and the slice list.
+Alternatives rejected: waiting for S-004's benchmark (time-zone answers would be wrong in the meantime); adding `AT TIME ZONE` only.
+
+## D-085 — Casts on user-defined column types are trusted like grants; answers Q-034
+Decided by: human | Date: 2026-10-25 | Phase: slice-spec (S-003)
+Rationale: product owner ("Q-034: Trust conversions like policies"). Columns of enums, domains and extension types are common in Supabase schemas, and refusing them would leave many questions unanswerable. They are therefore readable. Whatever casts their types carry run as the type's owner defined them, whether implicit or explicit, and whether functions or `SECURITY DEFINER` ones. The Server treats them, like row-level security policies (D-083), as the Database's own configuration. This narrows D-038 again: the Agent still cannot name a user-defined function, operator or cast target, but casts that already exist on a Visible column's type can run. `reg*` columns, their arrays and domains over them stay unreadable, because they reveal catalog names, not because of what they run. The Security material says so, and tells reviewers to review casts on user-defined column types as part of the grants. Types are created far more casually than policies, so this is a weaker guarantee than D-083, and the owner accepted that.
+Amended 2026-10-25 by the product owner, after the amendment critique:
+- **Composites are refused.** Columns whose type is, or reaches, a composite type are unreadable, table row types included, because a composite reveals the shape of the table it mirrors ("Refuse composites").
+- **Domain constraints are trusted.** Domain `CHECK` constraints, which run when the Agent's literal is converted to a domain, are trusted with casts ("Yes, trust them").
+- **`reg*` is checked at any depth.** The type is looked through at any depth, for `reg*` as for composites.
+Alternatives rejected: refusing such columns (most enum questions unanswerable); admitting a type only when it has no user-written casts (more surface to prove, and the critiques found holes at each layer).

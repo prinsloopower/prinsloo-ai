@@ -50,11 +50,11 @@ ADR-005 places this list here. A construct not listed is refused.
 | | PostgreSQL | MS SQL Server |
 |---|---|---|
 | statement | one `SELECT`, optionally under `WITH` (recursive allowed, data-modifying CTEs refused) | one `SELECT`, optionally under `WITH` |
-| clauses | `FROM`, all `JOIN` kinds, `WHERE`, `GROUP BY` (with `ROLLUP`/`CUBE`/`GROUPING SETS`), `HAVING`, `WINDOW`, `ORDER BY`, `LIMIT`, `OFFSET`, `DISTINCT [ON]`, `UNION`/`INTERSECT`/`EXCEPT`, subqueries, `CASE`, casts, `VALUES` | `FROM`, all `JOIN` kinds and `APPLY`, `WHERE`, `GROUP BY` (with `ROLLUP`/`CUBE`/`GROUPING SETS`), `HAVING`, `ORDER BY`, `TOP`, `OFFSET … FETCH`, `DISTINCT`, `UNION`/`INTERSECT`/`EXCEPT`, subqueries, `CASE`, `CAST`/`CONVERT`/`TRY_CAST` |
+| clauses | `FROM`, all `JOIN` kinds, `WHERE`, `GROUP BY` (with `ROLLUP`/`CUBE`/`GROUPING SETS`), `HAVING`, `WINDOW`, `ORDER BY`, `LIMIT`, `OFFSET`, `DISTINCT [ON]`, `UNION`/`INTERSECT`/`EXCEPT`, subqueries, `CASE`, casts, `VALUES`, `ARRAY[…]` and `ARRAY(subquery)` (no subscripts) | `FROM`, all `JOIN` kinds and `APPLY`, `WHERE`, `GROUP BY` (with `ROLLUP`/`CUBE`/`GROUPING SETS`), `HAVING`, `ORDER BY`, `TOP`, `OFFSET … FETCH`, `DISTINCT`, `UNION`/`INTERSECT`/`EXCEPT`, subqueries, `CASE`, `CAST`/`CONVERT`/`TRY_CAST` |
 | refused | `FOR UPDATE`/`SHARE`, `INTO`, `TABLESAMPLE`, `pg_catalog` and `information_schema`, set-returning functions other than `unnest` and `generate_series` | `INTO`, table and query hints, `OPENROWSET`/`OPENQUERY`/`OPENDATASOURCE`/`OPENJSON`/`OPENXML`, `FOR XML`/`FOR JSON`, `sys` and `INFORMATION_SCHEMA`, `WAITFOR`, variables, `EXEC` |
 | aggregate | `count sum avg min max string_agg array_agg bool_and bool_or stddev stddev_pop stddev_samp variance var_pop var_samp percentile_cont percentile_disc mode` | `COUNT COUNT_BIG SUM AVG MIN MAX STRING_AGG STDEV STDEVP VAR VARP` |
 | window | `row_number rank dense_rank percent_rank cume_dist ntile lag lead first_value last_value nth_value` | `ROW_NUMBER RANK DENSE_RANK PERCENT_RANK CUME_DIST NTILE LAG LEAD FIRST_VALUE LAST_VALUE` |
-| date/time | `now current_date current_timestamp date_trunc date_part extract age make_date make_timestamp to_char to_date to_timestamp justify_days justify_hours justify_interval` | `GETDATE GETUTCDATE SYSDATETIME DATEADD DATEDIFF DATEDIFF_BIG DATEPART DATENAME DATEFROMPARTS DATETRUNC EOMONTH YEAR MONTH DAY` |
+| date/time | `now current_date current_timestamp date_trunc date_part extract age make_date make_timestamp to_char to_date to_timestamp justify_days justify_hours justify_interval` and `AT TIME ZONE`/`AT LOCAL` (`timezone`) | `GETDATE GETUTCDATE SYSDATETIME DATEADD DATEDIFF DATEDIFF_BIG DATEPART DATENAME DATEFROMPARTS DATETRUNC EOMONTH YEAR MONTH DAY` and `AT TIME ZONE` |
 | text | `lower upper length char_length substring trim ltrim rtrim replace concat concat_ws left right position strpos split_part initcap lpad rpad` and the `LIKE`/`ILIKE` operators | `LOWER UPPER LEN SUBSTRING TRIM LTRIM RTRIM REPLACE CONCAT CONCAT_WS LEFT RIGHT CHARINDEX REPLICATE` and `LIKE` |
 | numeric | `abs round ceil floor trunc mod power sqrt sign greatest least` | `ABS ROUND CEILING FLOOR POWER SQRT SIGN` |
 | conditional | `coalesce nullif` | `COALESCE NULLIF ISNULL IIF` |
@@ -89,3 +89,13 @@ Every other function is refused, including `nextval`, `pg_sleep`, `set_config`, 
 - D-056: the platform's own request logs hold connector URLs.
 - D-057: the Server applies no rate limit. A flood of unauthenticated calls, or of `/register` and metadata fetches, costs the Operator compute but stores nothing and reaches no Database.
 - Already on record: results reach the AI provider (D-036), and Request text cannot be verified (ADR-011).
+
+Amended 2026-10-25 by D-084: `AT TIME ZONE` on both Engines, plus `AT LOCAL` and the array constructors on PostgreSQL, join the supported constructs. Other wording owed to S-002 and S-003 waits for the next revision (Q-030, Q-033).
+
+## Critique findings
+
+System-spec part of the 2026-10-25 amendment review for D-084 and D-085, by a fresh critic. Verdict: hold (0 blockers, 1 gap, 0 nits) for the system-spec amendment. For the slice backlog's re-approval: pass (0 blockers, 0 gaps, 0 nits), because no slice line becomes wrong or incomplete. The `reg*`-inside-composite blocker found in the same gate is recorded in the S-003 spec. The line saying every user-defined function is refused (D-038) is out of date under D-083 and D-085, but that wording is deferred on the record (Q-033, fifth bullet), so it is not a finding here.
+
+- **gap — the MS SQL Server parser named here cannot parse `AT TIME ZONE`.** The Redaction rule and ADR-005 name `node-sql-parser`'s AST for MS SQL Server. Verified with `node-sql-parser` 5.4.0 (`database: 'transactsql'`): `SELECT o.created_at AT TIME ZONE 'South Africa Standard Time' FROM s.o AS o` fails to parse, because `AT` is read as an alias and the parser then stops at `TIME`. The same happens with a `CAST(… AS datetimeoffset)` operand. S-007's Query check would refuse a construct this table says is supported, and redaction would log it as `<unparsed>`. S-007's slice-spec will find this out mid-build. It should be raised as a Q-### now: a different parser, a pre-parse rewrite, or removing the MS SQL Server entry. T-SQL also takes Windows time-zone names, not IANA names, which S-004's and S-008's benchmark questions should allow for.
+
+Resolution, 2026-10-25: raised as Q-035, which blocks S-007's slice-spec. The MS SQL Server entry stays until S-007 settles it.

@@ -74,10 +74,10 @@
       "gate": {
         "result": "pass",
         "by": "human",
-        "at": "2026-10-21T11:49:55+00:00",
-        "quote": "Approve the amended discovery, journeys, domain model, PRD, architecture, system spec and slices, confirm D-077, and commit."
+        "at": "2026-10-25T16:15:14+00:00",
+        "quote": "Approve all three (Recommended)"
       },
-      "hash": "sha256:44171e3319be271b"
+      "hash": "sha256:cdb1cd7543cf1537"
     },
     "slices": {
       "status": "approved",
@@ -85,10 +85,10 @@
       "gate": {
         "result": "pass",
         "by": "human",
-        "at": "2026-10-21T11:49:56+00:00",
-        "quote": "Approve the amended discovery, journeys, domain model, PRD, architecture, system spec and slices, confirm D-077, and commit."
+        "at": "2026-10-25T16:15:14+00:00",
+        "quote": "Approve all three (Recommended)"
       },
-      "hash": "sha256:c88f1d4475911c83"
+      "hash": "sha256:811f4c9cf2563322"
     },
     "retro": {
       "status": "approved",
@@ -111,6 +111,49 @@
     }
   },
   "slices": [
+    {
+      "id": "S-001",
+      "title": "Signing in from Claude and ChatGPT",
+      "status": "verified",
+      "traces": [
+        "J-002",
+        "R-009",
+        "R-017"
+      ],
+      "rework": {
+        "verify": 1
+      },
+      "gates": {
+        "slice-spec": {
+          "result": "pass",
+          "by": "human",
+          "at": "2026-10-20T00:37:14+00:00",
+          "quote": "Approve the amended system spec, slices and S-001 spec, close the review, and commit."
+        },
+        "build": {
+          "result": "pass",
+          "by": "script",
+          "at": "2026-10-20T00:37:30+00:00"
+        },
+        "review": {
+          "result": "pass",
+          "by": "human",
+          "at": "2026-10-20T00:37:30+00:00",
+          "quote": "Approve the amended system spec, slices and S-001 spec, close the review, and commit."
+        },
+        "deploy": {
+          "result": "pass",
+          "by": "script",
+          "at": "2026-10-20T02:34:08+00:00"
+        },
+        "verify": {
+          "result": "pass",
+          "by": "human",
+          "at": "2026-10-21T01:10:59+00:00",
+          "quote": "1. pass S-001 for Entra now, drop Google client from requirements 2. Confirm D-070"
+        }
+      }
+    },
     {
       "id": "S-002",
       "title": "Seeing which tables are available",
@@ -159,6 +202,67 @@
     {
       "id": "S-003",
       "title": "Answering a question from the data",
+      "status": "specified",
+      "traces": [
+        "J-004",
+        "J-008",
+        "R-002",
+        "R-004",
+        "R-006",
+        "R-011",
+        "R-015"
+      ],
+      "size_at_creation": "product",
+      "rework": {
+        "slice-spec": 4
+      },
+      "gates": {
+        "slice-spec": {
+          "result": "pass",
+          "by": "human",
+          "at": "2026-10-25T16:15:14+00:00",
+          "quote": "Approve all three (Recommended)"
+        }
+      }
+    },
+    {
+      "id": "S-004",
+      "title": "Measuring answer correctness on PostgreSQL",
+      "status": "planned",
+      "traces": [
+        "R-012"
+      ],
+      "size_at_creation": "product"
+    },
+    {
+      "id": "S-005",
+      "title": "Deploying on Cloudflare from the docs alone",
+      "status": "planned",
+      "traces": [
+        "J-001",
+        "R-001",
+        "R-013"
+      ],
+      "size_at_creation": "product"
+    },
+    {
+      "id": "S-006",
+      "title": "Signing in to an MS SQL Server Deployment on Azure",
+      "status": "planned",
+      "traces": [
+        "J-001",
+        "J-002",
+        "J-003",
+        "R-001",
+        "R-002",
+        "R-003",
+        "R-009"
+      ],
+      "size_at_creation": "product"
+    },
+    {
+      "id": "S-007",
+      "title": "Answering questions from MS SQL Server",
       "status": "planned",
       "traces": [
         "J-004",
@@ -170,11 +274,72 @@
         "R-015"
       ],
       "size_at_creation": "product"
+    },
+    {
+      "id": "S-008",
+      "title": "Measuring MS SQL Server",
+      "status": "planned",
+      "traces": [
+        "J-001",
+        "R-003",
+        "R-012",
+        "R-013"
+      ],
+      "size_at_creation": "product"
+    },
+    {
+      "id": "S-009",
+      "title": "A Security reviewer approves a read-only Deployment",
+      "status": "planned",
+      "traces": [
+        "J-007",
+        "R-014"
+      ],
+      "size_at_creation": "product"
+    },
+    {
+      "id": "S-010",
+      "title": "Changing a record",
+      "status": "planned",
+      "traces": [
+        "J-005",
+        "J-009",
+        "R-003",
+        "R-005",
+        "R-007",
+        "R-008"
+      ],
+      "size_at_creation": "product"
+    },
+    {
+      "id": "S-011",
+      "title": "Deleting a record",
+      "status": "planned",
+      "traces": [
+        "J-005",
+        "J-009",
+        "R-005",
+        "R-007",
+        "R-008"
+      ],
+      "size_at_creation": "product"
+    },
+    {
+      "id": "S-012",
+      "title": "Creating a table in a Conversation",
+      "status": "planned",
+      "traces": [
+        "J-006",
+        "R-005",
+        "R-007",
+        "R-016"
+      ],
+      "size_at_creation": "product"
     }
   ],
   "blocked_on": null,
   "open_questions": [],
-  "phase": "slice-spec",
-  "phase_paused_s": 0,
-  "phase_started_at": "2026-10-23T20:32:53+00:00"
+  "phase": "build",
+  "phase_started_at": "2026-10-25T16:17:10+00:00",
+  "phase_paused_s": 0
 }
