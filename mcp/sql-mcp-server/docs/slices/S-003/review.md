@@ -248,3 +248,79 @@ Axis: standards and naming
 There is no `.git-blame-ignore-revs`.
 
 Verdict: fail (1 blocker, 4 gaps, 6 nits)
+
+## Review 4 (2026-10-25)
+
+Reviewed: the whole slice, `git diff 19c6faa..c33f708`, with the third rework (c5ad3fe). Both axes ran in separate fresh contexts and are merged here with attribution. Every Review 3 blocker and gap is resolved, except the Server-fault label, which is now on the record as Q-036 (D-089).
+Tests: `npm test` → 33 files, 198 passed, 0 failed, against Docker PostgreSQL 17 on 55432. `npm run typecheck` → clean. Both axes ran both commands, and every file in the slice is LF.
+
+What each axis verified:
+- **Spec and scope**, with a temporary probe since deleted, and PostgreSQL 17 in a rolled-back transaction:
+  - 26 Redaction inputs;
+  - 18 structural inputs against fixtures with and without the ungranted column, which gave identical verdicts;
+  - deep nesting in five shapes, none of which threw;
+  - six MCP calls, each leaving exactly one Audit record with no literal leaked.
+- **Standards and naming:** no rejected domain-model alias in the slice's code, tests or Security material, and no stale imports after the move to `src/tools/answer.ts`.
+
+## nit — The Security material does not say that whole-number type modifiers stay in logged SQL
+Where: docs/security-material/queries.md:94
+Axis: spec and scope; also raised on standards and naming
+It names ordinals as the only exception to "every literal becomes `?`". D-086 and D-089 also keep type modifiers, so `'x'::varchar(5551234)` is logged as `?::varchar(5551234)`.
+
+## nit — The parser-side RangeError branch has no test of its own
+Where: src/engine/postgres-structure.ts:522
+Axis: spec and scope
+`deeply_nested_query_refused_as_query_check` overflows the walk. Nothing pins the catch after `parser.parse` on its own.
+
+## nit — A failed engine load during auditing is labelled `step: "redaction"`
+Where: src/mcp.ts:108
+Axis: spec and scope
+This happens when the call was refused before it ran, and the engine then fails to load in `auditSql`. The Audit record is still written.
+
+## nit — An auditSql comment still says the submitted SQL is kept only for refused calls
+Where: src/mcp.ts:96
+Axis: standards and naming
+src/tools/query.ts:66–69 has the same narrowing.
+
+## nit — A floating module doc comment
+Where: src/tools/answer.ts:4
+Axis: standards and naming
+
+## nit — `withReference` is left in the Audit logger
+Where: src/audit.ts:110
+Axis: standards and naming
+Only src/tools/answer.ts uses it.
+
+## nit — `.git-blame-ignore-revs` has no effect where it is
+Where: .git-blame-ignore-revs:2
+Axis: standards and naming
+The git top level is the parent repository, GitHub reads this file only at the repository root, and `blame.ignoreRevsFile` is unset.
+
+## nit — The Redaction-failure test does not check the `step` field
+Where: test/query/audit.test.ts:104
+Axis: standards and naming
+
+## nit — `deeply_nested_query_refused_as_query_check` breaks its neighbours' naming
+Where: test/query/structure.test.ts:191
+Axis: standards and naming
+
+## nit — `outputs` returns a count
+Where: src/engine/postgres-redact.ts:59
+Axis: standards and naming
+
+## nit — The RangeError catches are broader than their stated reason
+Where: src/engine/postgres-structure.ts:533
+Axis: standards and naming
+A RangeError caused by a defect would be quietly turned into a Refusal. That outcome is safe, since the query is refused.
+
+## nit — The Server-fault catch does not cite Q-036
+Where: src/mcp.ts:201
+Axis: standards and naming
+S-010 copies this catch, and may take the label as settled.
+
+## nit — "engine" in lower case remains in two tests
+Where: test/query/tool.test.ts:101
+Axis: standards and naming
+It also appears at test/query/types.int.test.ts:47.
+
+Verdict: pass (0 blockers, 0 gaps, 13 nits)
