@@ -24,11 +24,18 @@ export interface Config {
   publicUrl?: string;
   /** Unset excludes nothing: the Database account's grants alone decide (D-075). */
   boundary?: Boundary;
+  /** The most rows an Agent-written query returns (R-015); 500 when unset. */
+  rowLimit: number;
+  /** Whether literals in logged SQL are replaced (R-011); on when unset (D-007). */
+  redaction: boolean;
 }
 
 export type ConfigResult = { ok: true; config: Config } | { ok: false; variable: string };
 
 export const GOOGLE_ISSUER = "https://accounts.google.com";
+
+/** The Row limit's ceiling (operations.md). */
+const ROW_LIMIT_MAX = 10_000;
 
 function value(env: RuntimeVariables, name: string): string | undefined {
   const v = env[name];
@@ -64,6 +71,12 @@ export function readConfig(env: RuntimeVariables): ConfigResult {
   const boundary = boundaryText === undefined ? undefined : parseBoundary(boundaryText);
   if (boundary === null) return { ok: false, variable: "BOUNDARY" };
 
+  const rowLimitText = value(env, "ROW_LIMIT") ?? "500";
+  const rowLimit = /^\d+$/.test(rowLimitText) ? Number(rowLimitText) : NaN;
+  if (!(rowLimit >= 1 && rowLimit <= ROW_LIMIT_MAX)) return { ok: false, variable: "ROW_LIMIT" };
+  const redactionText = value(env, "REDACTION") ?? "on";
+  if (redactionText !== "on" && redactionText !== "off") return { ok: false, variable: "REDACTION" };
+
   const issuer = value(env, "IDP_ISSUER");
   if (issuer && !isUrl(issuer, ["https:"])) return { ok: false, variable: "IDP_ISSUER" };
   const clientId = value(env, "IDP_CLIENT_ID");
@@ -79,7 +92,10 @@ export function readConfig(env: RuntimeVariables): ConfigResult {
         }
       : undefined;
 
-  return { ok: true, config: { secret, previousSecret, identityProvider, publicUrl: publicUrl?.replace(/\/+$/, ""), boundary } };
+  return {
+    ok: true,
+    config: { secret, previousSecret, identityProvider, publicUrl: publicUrl?.replace(/\/+$/, ""), boundary, rowLimit, redaction: redactionText === "on" },
+  };
 }
 
 const isName = (v: unknown): v is string => typeof v === "string" && v !== "";

@@ -5,6 +5,8 @@
   "main": "src/worker.ts",
   "compatibility_date": "2026-10-01",
   "compatibility_flags": ["nodejs_compat"],
+  // The PostgreSQL parser's Emscripten glue reads these, which Workers do not define (S-003).
+  "define": { "__filename": "\"/libpg-query.js\"", "__dirname": "\"/\"" },
   // Audit records go to Workers Logs, the Host log facility on Cloudflare (ADR-013, D-008).
   "observability": {
     "enabled": true,

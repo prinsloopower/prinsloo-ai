@@ -1,6 +1,7 @@
 import { Hono, type Context } from "hono";
 import { readConfig, type RuntimeVariables } from "./config.js";
 import type { Database } from "./engine/database.js";
+import type { PgParser } from "./engine/pg-parser.js";
 import { classifyPostgresError } from "./engine/postgres.js";
 import { handleMcp } from "./mcp.js";
 import { op } from "./oplog.js";
@@ -20,6 +21,8 @@ export interface Deps {
   now?: () => number;
   /** The Database the Tools read; without one, no Tools are offered. */
   database?: Database;
+  /** Loads the Engine's parser for the Query check, once per isolate or process (ADR-005). */
+  parser?: () => Promise<PgParser>;
   /** The setting naming the Database account in config_invalid lines (D-077). */
   connectionSetting?: string;
   /** Answers a signed-in MCP request; the SDK handler unless a test swaps it. */

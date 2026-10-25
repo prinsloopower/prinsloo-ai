@@ -1,0 +1,79 @@
+// @ts-expect-error The Emscripten glue ships without types; its default export builds the module.
+import PgQueryModule from "@libpg-query/parser/wasm/libpg-query.js";
+
+/** PostgreSQL's own parser, compiled to WebAssembly (ADR-005; `@libpg-query/parser` 17.x, D-082). */
+export interface PgParser {
+  /** The parse tree as libpg_query's JSON; throws a ParseError when the SQL does not parse. */
+  parse(sql: string): { stmts: { stmt: Record<string, unknown> }[] };
+  /** The SQL with every literal replaced by `$n` (security.md, Redaction rule). */
+  normalize(sql: string): string;
+}
+
+/** The SQL did not parse. Its message is the parser's, and is never shown to the Agent or logged. */
+export class ParseError extends Error {}
+
+interface Emscripten {
+  _malloc(n: number): number;
+  _free(p: number): void;
+  lengthBytesUTF8(s: string): number;
+  stringToUTF8(s: string, p: number, n: number): void;
+  UTF8ToString(p: number): string;
+  getValue(p: number, type: "i32"): number;
+  _wasm_parse_query_raw(p: number): number;
+  _wasm_free_parse_result(p: number): void;
+  _wasm_normalize_query(p: number): number;
+  _wasm_free_string(p: number): void;
+}
+
+/**
+ * Loads the parser from a compiled WebAssembly module. Workers cannot compile WebAssembly from
+ * bytes at run time, so the Worker imports the `.wasm` file as a module and passes it here; Node
+ * compiles the same file from disk. The package's own entry point is not used: it instantiates on
+ * import, through Node's file system.
+ */
+export async function loadPgParser(wasm: WebAssembly.Module): Promise<PgParser> {
+  // On Workers the glue needs `__filename` and `__dirname`, which wrangler.jsonc defines at build time.
+  const m = (await PgQueryModule({
+    instantiateWasm(imports: WebAssembly.Imports, receive: (instance: WebAssembly.Instance) => void) {
+      WebAssembly.instantiate(wasm, imports).then(receive);
+      return {};
+    },
+  })) as Emscripten;
+
+  const withString = <T>(sql: string, use: (ptr: number) => T): T => {
+    const len = m.lengthBytesUTF8(sql) + 1;
+    const ptr = m._malloc(len);
+    try {
+      m.stringToUTF8(sql, ptr, len);
+      return use(ptr);
+    } finally {
+      m._free(ptr);
+    }
+  };
+
+  return {
+    parse: (sql) =>
+      withString(sql, (ptr) => {
+        const result = m._wasm_parse_query_raw(ptr);
+        try {
+          const tree = m.getValue(result, "i32");
+          const error = m.getValue(result + 8, "i32");
+          if (error || !tree) throw new ParseError(error ? m.UTF8ToString(m.getValue(error, "i32")) : "no parse tree");
+          return JSON.parse(m.UTF8ToString(tree)) as ReturnType<PgParser["parse"]>;
+        } finally {
+          m._wasm_free_parse_result(result);
+        }
+      }),
+    normalize: (sql) =>
+      withString(sql, (ptr) => {
+        const result = m._wasm_normalize_query(ptr);
+        try {
+          const text = m.UTF8ToString(result);
+          if (/^(syntax error|deparse error|ERROR)/.test(text)) throw new ParseError(text);
+          return text;
+        } finally {
+          m._wasm_free_string(result);
+        }
+      }),
+  };
+}
