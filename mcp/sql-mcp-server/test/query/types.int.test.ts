@@ -1,7 +1,7 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import { PostgresDatabase } from "../../src/engine/postgres.js";
-import { checkQuery, visibleObjects } from "../../src/query/check.js";
-import { nodeParser } from "./node-parser.js";
+import { visibleObjects } from "../../src/visibility.js";
+import { nodeQueries } from "./node-parser.js";
 import { admin, as, ask, resetSql, rowsOf } from "./pg-fixture.js";
 
 const READER = "qy_reader";
@@ -44,7 +44,7 @@ describe("S-003 Query check: user-defined and catalog types against PostgreSQL",
     for (const c of UNREADABLE) expect(flags[c], c).toBe(false);
     for (const c of READABLE) expect(flags[c], c).toBe(true);
 
-    const parser = await nodeParser();
+    const engine = await nodeQueries();
     const visible = visibleObjects(catalog);
     for (const c of UNREADABLE) {
       for (const literal of ["qy_types.secret", "qy_types.nosuch"]) {
@@ -54,7 +54,7 @@ describe("S-003 Query check: user-defined and catalog types against PostgreSQL",
           `SELECT coalesce(t.${c}, '${literal}') FROM qy_types.t t`,
           `SELECT t.${c} FROM qy_types.t t UNION SELECT '${literal}'`,
         ]) {
-          expect(checkQuery(sql, parser, visible), sql).toEqual({ ok: false, reason: "unreadable_type" });
+          expect(engine.checkStructure(sql, visible), sql).toEqual({ ok: false, refusal: "unreadable_type" });
         }
       }
     }
@@ -82,7 +82,7 @@ describe("S-003 Query check: user-defined and catalog types against PostgreSQL",
     expect(rowsOf(await ask(READER, "SELECT lower(t.kc) FROM qy_types.t t WHERE t.id = 1"))).toEqual([["cast:shipped"]]);
   });
 
-  it("domain_constraints_run_as_written", async () => {
+  it("domain_constraints_not_applied_to_literals", async () => {
     // PostgreSQL resolves coalesce over a domain and a literal to the domain's base type, so the
     // domain's CHECK, which raises on 'boom', is not applied to the Agent's literal (D-086).
     expect(rowsOf(await ask(READER, "SELECT coalesce(t.dc, 'x') FROM qy_types.t t WHERE t.id = 1"))).toEqual([["fine"]]);

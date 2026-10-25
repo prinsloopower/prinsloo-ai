@@ -91,7 +91,7 @@ In addition to what every Audit record holds (visibility.md):
 | for a refused query, the SQL as submitted | the database driver's error text |
 | the outcome: answered (with its row count and whether it was cut short), refused (with its class), or database error (with its class) | |
 
-With Redaction on, the default, every literal in logged SQL becomes `?`. `WHERE o.id = 42 AND o.note = 'x'` is logged as `WHERE o.id = ? AND o.note = ?`. Only a single SELECT is logged that way: anything else, such as a refused `COPY`, `PREPARE` or `CREATE TABLE … AS`, and anything that does not parse, is logged as `<unparsed: N chars>`, because PostgreSQL's normaliser keeps literals in some statement types. The Request text is never redacted: if the person typed a customer's name into their question, it is in the record.
+With Redaction on, the default, comments are removed from logged SQL, because an Agent may write values into them, and every literal becomes `?`. `WHERE o.id = 42 AND o.note = 'x'` is logged as `WHERE o.id = ? AND o.note = ?`. Only a single SELECT is logged that way: anything else, such as a refused `COPY`, `PREPARE` or `CREATE TABLE … AS`, and anything that does not parse, is logged as `<unparsed: N chars>`, because PostgreSQL's normaliser keeps literals in some statement types. The Request text is never redacted: if the person typed a customer's name into their question, it is in the record.
 
 A record is at most 64 KiB. Longer SQL is cut, marked `…[cut]`, and the record says `shortened: true`.
 

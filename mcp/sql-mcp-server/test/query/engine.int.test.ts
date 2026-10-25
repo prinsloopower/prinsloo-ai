@@ -1,12 +1,12 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import { PostgresDatabase } from "../../src/engine/postgres.js";
-import { QUERY_REFUSALS } from "../../src/tools/query.js";
+import { queryRefusals } from "../../src/tools/query.js";
 import { admin, as, ask, resetSql, rowsOf } from "./pg-fixture.js";
 
 const READER = "qe_reader";
 const SLOW = "qe_slow";
 const REF = " (reference 00000000-0000-4000-8000-000000000000)";
-const PLAN = QUERY_REFUSALS.plan.sentence + REF;
+const PLAN = queryRefusals("PostgreSQL").plan.sentence + REF;
 
 beforeAll(async () => {
   await admin(`
@@ -167,6 +167,15 @@ describe("S-003 Agent-written queries: execution", () => {
     ]);
   });
 
+  it("at_time_zone_and_array_constructors_run", async () => {
+    // Order 1 is at 23:30 UTC on Monday 2026-01-05, which is 01:30 on Tuesday in Johannesburg.
+    expect(rowsOf(await ask(READER, "SELECT date_trunc('day', o.created_at AT TIME ZONE 'Africa/Johannesburg') AS d FROM qe_sales.orders o WHERE o.id = 1"))).toEqual([
+      ["2026-01-06 00:00:00"],
+    ]);
+    expect(rowsOf(await ask(READER, "SELECT ARRAY[1, 2, 3], ARRAY(SELECT o.id FROM qe_sales.orders o ORDER BY o.id LIMIT 3)"))).toEqual([["{1,2,3}", "{1,2,3}"]]);
+    expect(rowsOf(await ask(READER, "SELECT o.id FROM qe_sales.orders o WHERE o.id = ANY (ARRAY[1, 2]) ORDER BY o.id"))).toEqual([[1], [2]]);
+  });
+
   it("query_sent_over_extended_protocol", async () => {
     // Below the Query check, which would refuse two statements: the Database itself refuses them.
     const outcome = await new PostgresDatabase(as(READER)).query("SELECT 1; SELECT 2", [], 500);
@@ -180,6 +189,17 @@ describe("S-003 Agent-written queries: Database errors", () => {
     expect(rowsOf(answer)).toEqual({ error: `The database could not complete this.${REF}` });
     expect(answer.outcome).toMatchObject({ kind: "database_error", reason_class: "other" });
     expect(answer.statement).toMatchObject({ sql: "SELECT 1 / (c.id - c.id) FROM qe_sales.customers c", rows: 0 });
+  });
+
+  it("failure_after_fetch_keeps_statement", async () => {
+    // The column-type lookup runs after the rows were fetched, so the query was sent.
+    class FailingAfterFetch extends PostgresDatabase {
+      protected override async typeNames(): Promise<string[]> {
+        throw Object.assign(new Error("terminating connection"), { code: "57P01" });
+      }
+    }
+    const outcome = await new FailingAfterFetch(as(READER)).query("SELECT o.id FROM qe_sales.orders o WHERE o.id = 1", [{ schema: "qe_sales", table: "orders" }], 500);
+    expect(outcome).toMatchObject({ kind: "error", sent: true });
   });
 
   it("query_statement_timeout_is_timeout", async () => {

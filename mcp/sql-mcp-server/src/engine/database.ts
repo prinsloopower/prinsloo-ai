@@ -1,3 +1,5 @@
+import type { VisibleObjects } from "../visibility.js";
+
 /**
  * Whether the Database account can reach every table at once (D-077, D-081): itself, through any
  * role it is a member of (with or without inherited rights), or through the session it connected as.
@@ -24,6 +26,34 @@ export interface CatalogRow {
 export interface Catalog {
   flags: AccountFlags;
   rows: CatalogRow[];
+}
+
+/**
+ * Why the size and structural steps refused an Agent-written query. Each case maps to one of
+ * D-082's sentences, and to the Refusal class the Audit record logs (`hidden` → `hidden_object`,
+ * every other case → `query_check`), in `tools/query.ts`.
+ */
+export type RefusalCase =
+  | "too_long"
+  | "not_parsed"
+  | "not_select"
+  | "unsupported"
+  | "unqualified"
+  | "star"
+  | "unreadable_type"
+  | "unnamed_output"
+  | "hidden";
+
+/** What the size and structural steps decided; the plan layer still runs after a pass. */
+export type StructureCheckResult = { ok: true; tables: NamedTable[] } | { ok: false; refusal: RefusalCase };
+
+/** An Engine's own half of the Query check and of Redaction (ADR-005): the parts that read its SQL dialect. */
+export interface QueryEngine {
+  /** The Engine's name, as the Agent's sentences give it (D-082). */
+  readonly name: string;
+  checkStructure(sql: string, visible: VisibleObjects): StructureCheckResult;
+  /** The SQL an Audit record keeps: redacted when `on`, as submitted otherwise (R-011). */
+  redact(sql: string, on: boolean): string;
 }
 
 /** A table an Agent-written query names, as the Query check found it. */

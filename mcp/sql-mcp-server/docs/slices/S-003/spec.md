@@ -97,7 +97,7 @@ One record per `query` Tool call, in data-model.md's format, with the field choi
 - `tool` is `query`, and `inputs` is `{}`.
 - A query that ran has `statements: [{ sql, rows, ms }]`, where `ms` runs from the cursor's declaration to its last fetch. A Database error during execution still records the Statement, with `rows` 0.
 - A refused query has `submitted_sql` and `statements: []`.
-- With Redaction on, `sql` and `submitted_sql` are `normalize`'s output, with every `$n` written as `?`, under two conditions:
+- With Redaction on, comments are first removed: each comment PostgreSQL's lexer finds becomes one space, because a comment can carry values as a literal does (D-087). `sql` and `submitted_sql` are then `normalize`'s output, with every `$n` written as `?`, under two conditions:
   - the parse tree is exactly one `SelectStmt`;
   - re-parsing the normalised text finds no `A_Const` left.
 
@@ -189,7 +189,7 @@ This slice writes `docs/security-material/queries.md` (D-067). It covers:
   - `SELECT m.kind`, `WHERE m.kind = 'shipped'`, `GROUP BY m.kind` and `SELECT m.*` run;
   - its `columns[].type` is `user-defined`.
 - With an `AS IMPLICIT` cast from that enum to `text` defined by a function, `SELECT m.kind::text` and `lower(m.kind)` call the cast function, as a counter it increments shows (D-085).
-- On a column of a domain whose `CHECK` calls a counting function, `coalesce(t.d, 'x')` runs, and the constraint runs as defined (D-085).
+- On a column of a domain whose `CHECK` raises on `'boom'`, `coalesce(t.d, 'boom')` and `ARRAY[t.d, 'boom']` run: PostgreSQL resolves them to the domain's base type, so the constraint is not applied to the Agent's literal (D-086, D-087).
 - A cast to the enum type itself (`'x'::public.kind_t`) is still refused, as a cast target outside the allow-list.
 - A query over a partitioned table, and over a parent with an inheritance child, returns the descendants' rows and passes. So does a query over a table whose row-level security policy reads a granted table. A query over a table whose policy reads an ungranted table is refused with the plan sentence.
 - `SELECT 1/0` and `'2024-13-01'::date` are refused with the plan sentence. `SELECT 1 / (c.id - c.id) FROM sqlmcp_test.customers c` ends in a Database error of class `other`. A query cancelled by `statement_timeout` ends in class `timeout`. Each carries its sentence and the reference.
@@ -202,13 +202,14 @@ This slice writes `docs/security-material/queries.md` (D-067). It covers:
 - `ROW_LIMIT` `0`, `10001` or `abc`, and `REDACTION` `maybe`, each answer 503 "Deployment misconfigured: <variable>", with no Audit record.
 - A `bigint` count, a `numeric(12,2)` total and a `timestamptz` come back as PostgreSQL's text output, unchanged. Their `columns[].type` are `bigint`, `numeric(12,2)` and `timestamp with time zone`, as `list_tables` would name them.
 - `SELECT 1::int2, 2::int4, 1.5::float4, 2.5::float8, 'NaN'::float8, 'Infinity'::float8, true, NULL::int4` returns `[1, 2, 1.5, 2.5, "NaN", "Infinity", true, null]`: JSON numbers, strings, a boolean and `null`, as D-082 fixes.
+- A connection lost while planning, whether a SQLSTATE `08` error or a socket error such as `EPIPE`, ends in a Database error of class `connection`, not a plan Refusal. A failure after the rows were fetched still records the Statement.
 - Called directly, below the Query check, the execution path rejects SQL holding two statements. The Database itself refuses it (SQLSTATE `42601`), as only the extended protocol does, and neither statement runs.
 - A 65,536-byte query passes the size layer, and one of 65,537 bytes is refused.
 - A `query` call with `request_text` missing, empty or 4,001 characters, or with `sql` missing, empty or not a string, ends in a Refusal of class `invalid_input` with an Audit record. A 4,000-character `request_text` is accepted.
 - Every `query` call writes exactly one Audit record, carrying `staff` and the `request_text` as received:
   - a run query has one `statements` entry, with its `rows` and `ms`;
   - a refused one has `submitted_sql` and no `statements`.
-- With Redaction on, `SELECT o.id FROM sqlmcp_test.orders o WHERE o.id = 42 AND o.note = 'x'` is logged as `SELECT o.id FROM sqlmcp_test.orders o WHERE o.id = ? AND o.note = ?`. With it off, it is logged exactly as sent. A refused `SELEC 1`, with Redaction on, has `submitted_sql` `<unparsed: 7 chars>`. A refused `COPY (SELECT 1) TO '/tmp/x'`, `PREPARE p AS SELECT 'x'` and `NOTIFY c, 'x'` each have `submitted_sql` `<unparsed: N chars>`, and none of their literals appears in the record.
+- With Redaction on, `SELECT o.id FROM sqlmcp_test.orders o WHERE o.id = 42 AND o.note = 'x'` is logged as `SELECT o.id FROM sqlmcp_test.orders o WHERE o.id = ? AND o.note = ?`. With it off, it is logged exactly as sent. A refused `SELEC 1`, with Redaction on, has `submitted_sql` `<unparsed: 7 chars>`. With Redaction on, `SELECT o.id -- note ann@example.com` keeps no part of its comment, while a quoted identifier containing `--` is kept. A refused `COPY (SELECT 1) TO '/tmp/x'`, `PREPARE p AS SELECT 'x'` and `NOTIFY c, 'x'` each have `submitted_sql` `<unparsed: N chars>`, and none of their literals appears in the record.
 - An Audit record whose SQL and Request text would exceed 64 KiB is cut to fit, with `shortened: true`.
 - No Audit record holds a value from a result row.
 - Live, on the project test Deployment, through Hyperdrive, which the Docker tests do not use:
@@ -246,22 +247,22 @@ Verified by: query_check_accepts_every_supported_construct, query_check_refuses_
 Verified by: hidden_and_missing_tables_refused_alike, hidden_and_missing_columns_refused_alike, boundary_excluded_table_refused, unqualified_columns_natural_and_using_refused, order_by_output_alias_accepted, bare_names_in_aggregate_and_window_order_refused, column_existence_probes_refused_alike, table_column_alias_lists_and_join_aliases_refused, subquery_columns_must_be_output_names, function_columns_only_through_alias_list, star_only_over_fully_visible_tables, query_refusals_never_echo_names
 
 ### T-005 — The Agent's SQL names only built-ins, runs user-defined casts only as their owners wrote them, and never looks up a catalog name
-Verified by: user_defined_type_columns_readable, user_defined_casts_run_as_written, casts_to_user_defined_types_refused, reg_type_columns_and_domains_refused, reg_and_composite_types_refused_at_any_depth, domain_constraints_run_as_written, operators_checked_in_sublinks_and_order_using_refused
+Verified by: user_defined_type_columns_readable, user_defined_casts_run_as_written, casts_to_user_defined_types_refused, reg_type_columns_and_domains_refused, reg_and_composite_types_refused_at_any_depth, domain_constraints_not_applied_to_literals, operators_checked_in_sublinks_and_order_using_refused
 
 ### T-006 — The plan check accounts for every relation the plan reads
 Verified by: plan_accepts_partitions_and_inheritance_children, plan_accepts_policy_tables_of_named_table, plan_follows_nested_policy_tables, policy_functions_run_as_written, policy_reading_ungranted_table_refused, plan_failures_share_one_sentence, constant_folding_error_is_plan_refusal
 
 ### T-007 — An accepted query runs read-only and returns at most the Row limit, saying when it was cut short
-Verified by: query_runs_read_only_with_pinned_search_path, query_returns_columns_and_rows, query_cut_short_at_row_limit, query_at_exactly_row_limit_not_cut_short, query_values_keep_database_text_form, query_values_follow_shared_json_forms, query_column_types_named_as_list_tables, query_sent_over_extended_protocol
+Verified by: query_runs_read_only_with_pinned_search_path, query_returns_columns_and_rows, query_cut_short_at_row_limit, query_at_exactly_row_limit_not_cut_short, query_values_keep_database_text_form, query_values_follow_shared_json_forms, query_column_types_named_as_list_tables, query_sent_over_extended_protocol, at_time_zone_and_array_constructors_run
 
 ### T-008 — A query that fails after it is sent ends in a Database error that names nothing
-Verified by: query_execution_error_classed_without_driver_text, query_statement_timeout_is_timeout
+Verified by: query_execution_error_classed_without_driver_text, query_statement_timeout_is_timeout, plan_step_network_failure_is_connection_error, failure_after_fetch_keeps_statement
 
 ### T-009 — The query tool sits beside list_tables, checks its inputs and refuses an unsafe account
 Verified by: tools_list_has_query_and_list_tables, query_description_static_with_row_limit, query_requires_request_text_and_sql, query_unsafe_account_answers_503_with_audit
 
 ### T-010 — Every query Tool call leaves one Audit record with its SQL, redacted when Redaction is on
-Verified by: query_audit_records_statement_rows_and_timing, query_audit_records_submitted_sql_for_refusals, redaction_replaces_every_literal, redaction_off_keeps_sql_as_submitted, unparsed_sql_logged_by_length, non_select_sql_logged_by_length_only, audit_record_capped_at_64_kib, query_audit_never_holds_result_values
+Verified by: query_audit_records_statement_rows_and_timing, query_audit_records_submitted_sql_for_refusals, redaction_replaces_every_literal, redaction_off_keeps_sql_as_submitted, unparsed_sql_logged_by_length, non_select_sql_logged_by_length_only, audit_record_capped_at_64_kib, query_audit_never_holds_result_values, redaction_strips_comments
 
 ### T-011 — A Security reviewer can read what an Agent-written query may do and what it leaves behind
 Verified by: manual. `docs/security-material/queries.md` is read against the Security material section above, and every point is present, each pointing to its rule or decision.
@@ -380,3 +381,18 @@ Revision 5, 2026-10-25, with the product owner's answers ("Refuse composites"; d
 - Q-033 → its fourth bullet now matches D-085.
 - Nits → the implicit cast is named, and the `AT TIME ZONE` fixture is `timestamptz`.
 - The system-spec finding (the T-SQL parser cannot parse `AT TIME ZONE`) is raised as Q-035 for S-007.
+
+Amended after the code review (2026-10-25, docs/slices/S-003/review.md, D-087), by the product owner's answer: fix all eleven gaps, and strip comments under Redaction.
+- **Plan-step network errors.** A plan-step failure is classed by `classifyPostgresError`, so `EPIPE` and other socket errors are Database errors of class `connection` (`plan_step_network_failure_is_connection_error`).
+- **Failures after the fetch.** These keep the Statement (`failure_after_fetch_keeps_statement`).
+- **Comments under Redaction.** They are removed by the lexer before normalising (`redaction_strips_comments`).
+- **D-084 against PostgreSQL.** `AT TIME ZONE` and the array constructors now run against PostgreSQL (`at_time_zone_and_array_constructors_run`).
+- **The domain-constraint test.** It is renamed `domain_constraints_not_applied_to_literals`, and its Proven by line now says what PostgreSQL does.
+- **Restructuring, with no behaviour change:**
+  - the PostgreSQL structural layer and Redaction live under `src/engine/`, behind a `QueryEngine` that names its Engine in the parse sentence;
+  - `checkQuery` becomes `checkStructure`, `RefusalClass` is a typed union, and a single `SYSTEM_SCHEMA` serves the listing and the Query check;
+  - each Tool is one record in the MCP endpoint;
+  - the Audit logger takes a list of Statements.
+
+  `reg_and_composite_types_refused_at_any_depth` was re-recorded after its call changed.
+

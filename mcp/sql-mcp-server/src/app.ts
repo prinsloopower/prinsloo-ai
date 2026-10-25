@@ -1,7 +1,7 @@
 import { Hono, type Context } from "hono";
 import { readConfig, type RuntimeVariables } from "./config.js";
 import type { Database } from "./engine/database.js";
-import type { PgParser } from "./engine/pg-parser.js";
+import type { QueryEngine } from "./engine/database.js";
 import { classifyPostgresError } from "./engine/postgres.js";
 import { handleMcp } from "./mcp.js";
 import { op } from "./oplog.js";
@@ -21,8 +21,8 @@ export interface Deps {
   now?: () => number;
   /** The Database the Tools read; without one, no Tools are offered. */
   database?: Database;
-  /** Loads the Engine's parser for the Query check, once per isolate or process (ADR-005). */
-  parser?: () => Promise<PgParser>;
+  /** Loads the Engine's half of the Query check and of Redaction, once per isolate or process (ADR-005). */
+  queries?: () => Promise<QueryEngine>;
   /** The setting naming the Database account in config_invalid lines (D-077). */
   connectionSetting?: string;
   /** Answers a signed-in MCP request; the SDK handler unless a test swaps it. */
@@ -74,8 +74,8 @@ export function createApp(deps: Deps) {
   const fetchFn: Fetch = deps.fetch ?? ((input, init) => fetch(input, init));
   const now = deps.now ?? Date.now;
   // Loaded on the first query, then kept for the isolate or process (ADR-005).
-  let parser: Promise<PgParser> | undefined;
-  const loadParser = deps.parser;
+  let queries: Promise<QueryEngine> | undefined;
+  const loadQueries = deps.queries;
   let tokens: Promise<Tokens> | undefined;
   const broker = new SignInBroker({
     config,
@@ -113,7 +113,7 @@ export function createApp(deps: Deps) {
           connectionSetting: deps.connectionSetting ?? "HYPERDRIVE",
           classify: classifyPostgresError,
           now,
-          ...(loadParser ? { parser: () => (parser ??= loadParser()) } : {}),
+          ...(loadQueries ? { queries: () => (queries ??= loadQueries()) } : {}),
           rowLimit: config.rowLimit,
           redaction: config.redaction,
         }

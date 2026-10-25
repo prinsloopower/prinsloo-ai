@@ -1,9 +1,9 @@
 import pg from "pg";
 import type { Boundary } from "../../src/config.js";
 import { classifyPostgresError, PostgresDatabase } from "../../src/engine/postgres.js";
-import { visibleObjects } from "../../src/query/check.js";
+import { visibleObjects } from "../../src/visibility.js";
 import { answerQuery } from "../../src/tools/query.js";
-import { nodeParser } from "./node-parser.js";
+import { nodeQueries } from "./node-parser.js";
 
 // Started by `npm run db:up` (test/docker-compose.yml, ADR-010). The superuser sets up roles and
 // grants; queries then run as the Database account, the way a Deployment would.
@@ -41,7 +41,7 @@ export async function ask(role: string, sql: string, opts: { rowLimit?: number; 
   const database = new PostgresDatabase(as(role));
   const catalog = await database.catalog();
   return answerQuery(sql, {
-    parser: await nodeParser(),
+    engine: await nodeQueries(),
     database,
     visible: visibleObjects(catalog, opts.boundary),
     rowLimit: opts.rowLimit ?? 500,

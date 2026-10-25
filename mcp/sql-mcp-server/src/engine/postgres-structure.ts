@@ -1,66 +1,21 @@
-import type { Boundary } from "../config.js";
-import type { Catalog, NamedTable } from "../engine/database.js";
-import { ParseError, type PgParser } from "../engine/pg-parser.js";
-import { visibleTables } from "../visibility.js";
+import type { NamedTable, RefusalCase, StructureCheckResult } from "./database.js";
+import { ParseError, type PgParser } from "./pg-parser.js";
+import { SYSTEM_SCHEMA, visibleKey as key, type VisibleObjects, type VisibleTableInfo } from "../visibility.js";
 
 /**
  * The Query check's structural layer on PostgreSQL (ADR-005, D-082; S-003 spec, Query check
- * step 2). It walks the parse tree and accepts only the node types, functions, operators and
- * casts listed, so that every Refusal depends on the query's text and on what `list_tables`
- * shows, never on what is hidden.
+ * steps 1 and 2): size, then a walk of the parse tree that accepts only the node types, functions,
+ * operators and casts listed, so that every Refusal depends on the query's text and on what
+ * `list_tables` shows, never on what is hidden. Passing it is not passing the Query check: the
+ * plan layer runs after it, in `PostgresDatabase.query`.
  */
-
-/** Why the structural layer refused an Agent-written query; each maps to one of D-082's sentences. */
-export type RefusalReason =
-  | "too_long"
-  | "not_parsed"
-  | "not_select"
-  | "unsupported"
-  | "unqualified"
-  | "star"
-  | "unreadable_type"
-  | "unnamed_output"
-  | "hidden";
-
-export type QueryCheckResult = { ok: true; tables: NamedTable[] } | { ok: false; reason: RefusalReason };
-
-interface VisibleTableInfo {
-  columns: Map<string, { readable: boolean }>;
-  /** Whether `*` may expand over it: every column Visible and readable. */
-  star: boolean;
-}
-
-/** The Visible objects for one Tool call, keyed by `schema\0table`. */
-export interface VisibleObjects {
-  tables: Map<string, VisibleTableInfo>;
-}
 
 /** Agent-written query text is accepted up to this many bytes (operations.md). */
 export const QUERY_MAX_BYTES = 64 * 1024;
 
-const key = (schema: string, table: string) => `${schema}\u0000${table}`;
-
-/** The Visible objects the Allow-list and the Boundary give (ADR-006), with each column's readability. */
-export function visibleObjects(catalog: Catalog, boundary?: Boundary): VisibleObjects {
-  const readable = new Map<string, boolean>();
-  const allReadable = new Map<string, boolean>();
-  for (const row of catalog.rows) {
-    const k = key(row.schema, row.table);
-    if (row.granted) readable.set(`${k}\u0000${row.column}`, row.readable);
-    allReadable.set(k, (allReadable.get(k) ?? true) && row.readable);
-  }
-  const tables = new Map<string, VisibleTableInfo>();
-  for (const t of visibleTables(catalog, boundary)) {
-    const k = key(t.schema, t.table);
-    const columns = new Map(t.columns.map((c) => [c.name, { readable: readable.get(`${k}\u0000${c.name}`) === true }]));
-    tables.set(k, { columns, star: t.all_columns && allReadable.get(k) === true });
-  }
-  return { tables };
-}
-
 class Refused extends Error {
-  constructor(readonly reason: RefusalReason) {
-    super(reason);
+  constructor(readonly refusal: RefusalCase) {
+    super(refusal);
   }
 }
 
@@ -102,7 +57,6 @@ const EXPR_KINDS = new Set([
 
 const SUBLINK_KINDS = new Set(["EXISTS_SUBLINK", "ANY_SUBLINK", "ALL_SUBLINK", "EXPR_SUBLINK", "ARRAY_SUBLINK"]);
 
-const SYSTEM_SCHEMA = /^(pg_catalog|information_schema|pg_toast.*|pg_temp.*)$/;
 
 /** The one node a wrapper `{ Type: {...} }` holds. */
 function unwrap(node: unknown): [string, Node] {
@@ -372,7 +326,7 @@ class Walker {
     const outputs: (string | null)[] = [];
     for (const rel of rels) {
       if (rel.kind === "table") {
-        if (!rel.info.star) throw new Refused("star");
+        if (!rel.info.allReadable) throw new Refused("star");
         outputs.push(...rel.info.columns.keys());
       } else {
         outputs.push(...rel.outputs);
@@ -543,25 +497,33 @@ function leftmostNames(node: Node): (string | null)[] {
   return list(n.targetList).map((t) => (unwrap(t)[1].name as string | undefined) ?? null);
 }
 
-/** Runs the structural layer over one Agent-written query. */
-export function checkQuery(sql: string, parser: PgParser, visible: VisibleObjects): QueryCheckResult {
-  if (new TextEncoder().encode(sql).length > QUERY_MAX_BYTES) return { ok: false, reason: "too_long" };
+export const utf8Length = (s: string) => new TextEncoder().encode(s).length;
+
+/** The one SelectStmt a parse tree holds, if that is all it holds. */
+export function onlySelect(tree: ReturnType<PgParser["parse"]>): Node | undefined {
+  const stmts = tree.stmts ?? [];
+  if (stmts.length !== 1) return undefined;
+  const [type, select] = Object.entries(stmts[0]!.stmt)[0] ?? [];
+  return type === "SelectStmt" ? (select as Node) : undefined;
+}
+
+/** Runs the size and structural steps of the Query check over one Agent-written query. */
+export function checkStructure(sql: string, parser: PgParser, visible: VisibleObjects): StructureCheckResult {
+  if (utf8Length(sql) > QUERY_MAX_BYTES) return { ok: false, refusal: "too_long" };
   let tree: ReturnType<PgParser["parse"]>;
   try {
     tree = parser.parse(sql);
   } catch (e) {
-    if (e instanceof ParseError) return { ok: false, reason: "not_parsed" };
+    if (e instanceof ParseError) return { ok: false, refusal: "not_parsed" };
     throw e;
   }
-  const stmts = tree.stmts ?? [];
-  if (stmts.length !== 1) return { ok: false, reason: "not_select" };
-  const [type, select] = Object.entries(stmts[0]!.stmt)[0] ?? [];
-  if (type !== "SelectStmt") return { ok: false, reason: "not_select" };
+  const select = onlySelect(tree);
+  if (!select) return { ok: false, refusal: "not_select" };
   const walker = new Walker(visible);
   try {
-    walker.select(select as Node, undefined);
+    walker.select(select, undefined);
   } catch (e) {
-    if (e instanceof Refused) return { ok: false, reason: e.reason };
+    if (e instanceof Refused) return { ok: false, refusal: e.refusal };
     throw e;
   }
   return { ok: true, tables: walker.tables };

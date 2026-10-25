@@ -2,13 +2,10 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import { ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import * as z from "zod";
-import { writeAudit } from "./audit.js";
+import { writeAudit, type StatementRecord } from "./audit.js";
 import type { Boundary } from "./config.js";
-import type { Catalog, Database, ReasonClass } from "./engine/database.js";
-import type { PgParser } from "./engine/pg-parser.js";
+import type { Catalog, Database, QueryEngine, ReasonClass } from "./engine/database.js";
 import { op } from "./oplog.js";
-import { visibleObjects } from "./query/check.js";
-import { redactSql } from "./query/redact.js";
 import { page, type Staff } from "./signin/broker.js";
 import {
   answerDatabaseError,
@@ -20,8 +17,8 @@ import {
   validateListTables,
   type ToolAnswer,
 } from "./tools/list-tables.js";
-import { answerQuery, QUERY, queryDescription, validateQuery, type QueryAnswer } from "./tools/query.js";
-import { bypassesGrants } from "./visibility.js";
+import { answerQuery, QUERY, queryDescription, validateQuery } from "./tools/query.js";
+import { bypassesGrants, visibleObjects } from "./visibility.js";
 
 export const SERVER_INFO = { name: "sql-mcp-server", version: "0.0.1" };
 
@@ -37,29 +34,88 @@ export interface ToolContext {
   connectionSetting: string;
   classify: (error: unknown) => ReasonClass;
   now: () => number;
-  /** The Engine's parser for the Query check; without one the query tool is not offered (D-086). */
-  parser?: () => Promise<PgParser>;
+  /** The Engine's half of the Query check and of Redaction; without it the query tool is not offered (D-086). */
+  queries?: () => Promise<QueryEngine>;
   rowLimit: number;
   redaction: boolean;
 }
 
 type CatalogRead = { catalog: Catalog } | { error: unknown };
 
-/** The Tool a `tools/call` names, when it is one of ours. */
-function toolCallOf(body: unknown): { name: string; args: Record<string, unknown> } | undefined {
+/** What a Tool call answers, and any SQL its Audit record keeps (unredacted here). */
+type ToolCallAnswer = ToolAnswer & { statement?: StatementRecord; submittedSql?: string };
+
+/** One Tool, as the MCP endpoint offers, checks, runs and audits it. */
+interface ToolSpec {
+  description: string;
+  inputSchema: Record<string, z.ZodType>;
+  /** Checks the inputs, which needs no Database: a Refusal's sentence, or the work to do once the catalog is read. */
+  prepare(args: Record<string, unknown>): { ok: false; sentence: string } | { ok: true; run(catalog: Catalog, id: string): Promise<ToolCallAnswer> };
+  /** The inputs the Audit record keeps, other than `request_text` (data-model.md). */
+  inputs(args: Record<string, unknown>): Record<string, unknown>;
+  /** The SQL the Audit record keeps for this call, redacted when Redaction is on (R-011). */
+  auditSql?(args: Record<string, unknown>, answer: ToolCallAnswer): Promise<{ statements?: StatementRecord[]; submittedSql?: string }>;
+}
+
+/** The Tools a Deployment offers. */
+function toolSpecs(tools: ToolContext): Map<string, ToolSpec> {
+  const specs = new Map<string, ToolSpec>([
+    [
+      LIST_TABLES,
+      {
+        description: LIST_TABLES_DESCRIPTION,
+        inputSchema: { request_text: z.unknown().optional(), schema: z.unknown().optional() },
+        prepare(args) {
+          const valid = validateListTables(args);
+          return valid.ok ? { ok: true, run: async (catalog) => answerListing(listing(catalog, tools.boundary, valid.schema)) } : valid;
+        },
+        // A schema name is an identifier, so Redaction keeps it (security.md); the Audit logger bounds it.
+        inputs: (args) => ("schema" in args ? { schema: args.schema } : {}),
+      },
+    ],
+  ]);
+  const queries = tools.queries;
+  if (queries) {
+    specs.set(QUERY, {
+      description: queryDescription(tools.rowLimit),
+      inputSchema: { request_text: z.unknown().optional(), sql: z.unknown().optional() },
+      prepare(args) {
+        const valid = validateQuery(args);
+        if (!valid.ok) return valid;
+        return {
+          ok: true,
+          run: async (catalog, id) =>
+            answerQuery(valid.sql, {
+              engine: await queries(),
+              database: tools.database,
+              visible: visibleObjects(catalog, tools.boundary),
+              rowLimit: tools.rowLimit,
+              classify: tools.classify,
+              id,
+            }),
+        };
+      },
+      // A query's SQL is recorded as its Statement or submitted SQL instead (D-082).
+      inputs: () => ({}),
+      // The Statement it was sent as, or else the SQL as submitted, however the call was refused (D-086).
+      async auditSql(args, answer) {
+        const engine = await queries();
+        if (answer.statement) return { statements: [{ ...answer.statement, sql: engine.redact(answer.statement.sql, tools.redaction) }] };
+        const submitted = answer.submittedSql ?? (typeof args.sql === "string" && args.sql ? args.sql : undefined);
+        return submitted === undefined ? {} : { submittedSql: engine.redact(submitted, tools.redaction) };
+      },
+    });
+  }
+  return specs;
+}
+
+/** The Tool a `tools/call` names, when it is one this Deployment offers. */
+function toolCallOf(body: unknown, specs: Map<string, ToolSpec>): { name: string; spec: ToolSpec; args: Record<string, unknown> } | undefined {
   if (!body || typeof body !== "object" || Array.isArray(body)) return undefined;
   const b = body as { method?: unknown; params?: { name?: unknown; arguments?: Record<string, unknown> } };
-  if (b.method !== "tools/call" || (b.params?.name !== LIST_TABLES && b.params?.name !== QUERY)) return undefined;
-  return { name: b.params.name, args: b.params.arguments ?? {} };
+  const spec = typeof b.params?.name === "string" ? specs.get(b.params.name) : undefined;
+  return b.method === "tools/call" && spec ? { name: b.params!.name as string, spec, args: b.params!.arguments ?? {} } : undefined;
 }
-
-function inputsOf(tool: string, args: Record<string, unknown>): Record<string, unknown> {
-  // A schema name is an identifier, so Redaction keeps it (security.md); the Audit logger bounds it.
-  // A query's SQL is recorded as its Statement or submitted SQL instead (D-082).
-  return tool === LIST_TABLES && "schema" in args ? { schema: args.schema } : {};
-}
-
-const validInputs = (tool: string, args: Record<string, unknown>) => (tool === QUERY ? validateQuery(args).ok : validateListTables(args).ok);
 
 async function readCatalog(database: Database): Promise<CatalogRead> {
   try {
@@ -86,49 +142,40 @@ export async function handleMcp(request: Request, staff?: Staff, tools?: ToolCon
     server.server.registerCapabilities({ tools: {} });
     server.server.setRequestHandler(ListToolsRequestSchema, () => ({ tools: [] }));
   } else {
+    const specs = toolSpecs(tools);
+    const audit = async (name: string, spec: ToolSpec, args: Record<string, unknown>, id: string, started: number, answer: ToolCallAnswer) =>
+      writeAudit({
+        id, started, ended: tools.now(), deployment: tools.deployment, staff, requestText: args.request_text, tool: name,
+        inputs: spec.inputs(args), outcome: answer.outcome, ...(spec.auditSql ? await spec.auditSql(args, answer) : {}),
+      });
+
     // The account check needs the catalog, and an unsafe account must answer with an HTTP 503,
     // which a tool handler cannot set. So a Tool call with valid inputs reads the catalog here,
     // once, and the handler uses that read (D-077, D-078).
-    /**
-     * The SQL a `query` Tool call's Audit record keeps, redacted when Redaction is on (R-011):
-     * the Statement it was sent as, or else the SQL as submitted, however the call was refused.
-     */
-    const auditedSql = async (name: string, args: Record<string, unknown>, answer: QueryAnswer) => {
-      if (name !== QUERY || !tools.parser) return {};
-      const redact = async (sql: string) => redactSql(sql, await tools.parser!(), tools.redaction);
-      if (answer.statement) return { statement: { ...answer.statement, sql: await redact(answer.statement.sql) } };
-      const submitted = answer.submittedSql ?? (typeof args.sql === "string" && args.sql ? args.sql : undefined);
-      return submitted === undefined ? {} : { submittedSql: await redact(submitted) };
-    };
-
     let read: CatalogRead | undefined;
     let readStarted: number | undefined;
-    const call = toolCallOf(body);
-    if (call && validInputs(call.name, call.args)) {
+    const call = toolCallOf(body, specs);
+    if (call && call.spec.prepare(call.args).ok) {
       const started = (readStarted = tools.now());
       read = await readCatalog(tools.database);
       if ("catalog" in read && bypassesGrants(read.catalog.flags)) {
         const id = crypto.randomUUID();
         const answer = answerRefusal("unsafe_account", UNSAFE_ACCOUNT, id);
         op("config_invalid", { variable: tools.connectionSetting, id });
-        writeAudit({
-          id, started, ended: tools.now(), deployment: tools.deployment, staff, requestText: call.args.request_text, tool: call.name,
-          inputs: inputsOf(call.name, call.args), outcome: answer.outcome, ...(await auditedSql(call.name, call.args, answer)),
-        });
+        await audit(call.name, call.spec, call.args, id, started, answer);
         return page(answer.result.content[0]!.text, 503);
       }
     }
 
-    /** One Tool call: input checks, the catalog read and account check, then the tool's own work, and its Audit record. */
-    const toolCall = (name: string, run: (args: Record<string, unknown>, catalog: Catalog, id: string) => Promise<QueryAnswer>) =>
-      async (args: Record<string, unknown>) => {
+    for (const [name, spec] of specs) {
+      server.registerTool(name, { description: spec.description, inputSchema: spec.inputSchema }, async (args: Record<string, unknown>) => {
         // A catalog read made before dispatch is part of this Tool call's time.
         const started = readStarted ?? tools.now();
         const id = crypto.randomUUID();
-        let answer: QueryAnswer;
-        const invalid = name === QUERY ? validateQuery(args) : validateListTables(args);
-        if (!invalid.ok) {
-          answer = answerRefusal("invalid_input", invalid.sentence, id);
+        let answer: ToolCallAnswer;
+        const prepared = spec.prepare(args);
+        if (!prepared.ok) {
+          answer = answerRefusal("invalid_input", prepared.sentence, id);
         } else {
           const r = read ?? (await readCatalog(tools.database));
           if ("error" in r) {
@@ -137,41 +184,12 @@ export async function handleMcp(request: Request, staff?: Staff, tools?: ToolCon
             op("config_invalid", { variable: tools.connectionSetting, id });
             answer = answerRefusal("unsafe_account", UNSAFE_ACCOUNT, id);
           } else {
-            answer = await run(args, r.catalog, id);
+            answer = await prepared.run(r.catalog, id);
           }
         }
-        writeAudit({
-          id, started, ended: tools.now(), deployment: tools.deployment, staff, requestText: args.request_text, tool: name,
-          inputs: inputsOf(name, args), outcome: answer.outcome, ...(await auditedSql(name, args, answer)),
-        });
+        await audit(name, spec, args, id, started, answer);
         return answer.result;
-      };
-
-    server.registerTool(
-      LIST_TABLES,
-      { description: LIST_TABLES_DESCRIPTION, inputSchema: { request_text: z.unknown().optional(), schema: z.unknown().optional() } },
-      toolCall(LIST_TABLES, async (args, catalog): Promise<ToolAnswer> => {
-        const valid = validateListTables(args);
-        return answerListing(listing(catalog, tools.boundary, valid.ok ? valid.schema : undefined));
-      }),
-    );
-
-    const parser = tools.parser;
-    if (parser) {
-      server.registerTool(
-        QUERY,
-        { description: queryDescription(tools.rowLimit), inputSchema: { request_text: z.unknown().optional(), sql: z.unknown().optional() } },
-        toolCall(QUERY, async (args, catalog, id) =>
-          answerQuery(args.sql as string, {
-            parser: await parser(),
-            database: tools.database,
-            visible: visibleObjects(catalog, tools.boundary),
-            rowLimit: tools.rowLimit,
-            classify: tools.classify,
-            id,
-          }),
-        ),
-      );
+      });
     }
   }
 

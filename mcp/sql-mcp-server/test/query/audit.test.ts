@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { redactSql } from "../../src/query/redact.js";
+import { redactSql } from "../../src/engine/postgres-redact.js";
 import { captureConsole } from "../signin/helpers.js";
 import { queryDatabase } from "./catalog.js";
 import { ASK, auditLines, callQuery, resultOf, signedIn } from "./mcp-helpers.js";
@@ -63,6 +63,16 @@ describe("S-003 Audit records for Agent-written queries", () => {
       ),
     ).toBe("SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, interval ?, date ?, ?::numeric(12,2), ARRAY[?, ?] FROM sales.orders o LIMIT ? OFFSET ?");
     expect(redactSql("SELECT o.id FROM sales.orders o WHERE o.note = 'it''s $1 \"x\"'", parser, true)).toBe("SELECT o.id FROM sales.orders o WHERE o.note = ?");
+  });
+
+  it("redaction_strips_comments", async () => {
+    const parser = await nodeParser();
+    const logged = redactSql("SELECT o.id -- note ann@example.com\nFROM sales.orders o /* card 4111 */ WHERE o.id = 1 AND o.\"a--b\" = '-- kept?'", parser, true);
+    // Each comment becomes one space, so tokens either side of it never run together.
+    expect(logged).toBe("SELECT o.id  \nFROM sales.orders o   WHERE o.id = ? AND o.\"a--b\" = ?");
+    for (const value of ["ann@example.com", "4111", "kept"]) expect(logged).not.toContain(value);
+    // Redaction off keeps comments, as it keeps every literal.
+    expect(redactSql("SELECT 1 -- note", parser, false)).toBe("SELECT 1 -- note");
   });
 
   it("redaction_off_keeps_sql_as_submitted", async () => {

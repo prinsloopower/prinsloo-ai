@@ -571,3 +571,21 @@ Rationale: the spec left these open, or building showed one of its statements to
   - `query_audit_never_holds_result_values`: the answer logged;
   - `probe_suite_never_runs_user_functions`: operators in `SubLink`s left unchecked.
 Alternatives rejected: patching the package to load on Workers (a fork to maintain); registering `query` with a parser loaded from Node's file system in tests (S-002's recorded tests would change).
+
+## D-087 — Resolving the S-003 code review; comments are stripped under Redaction
+Decided by: human | Date: 2026-10-25 | Phase: review (S-003)
+Rationale: the product owner's answers to the review hold (docs/slices/S-003/review.md): "Fix all 11 now", and, for SQL comments under Redaction, "Strip comments". With Redaction on, every comment PostgreSQL's lexer finds becomes one space before normalising, so values an Agent writes into a comment are never logged. A quoted identifier containing `--` is kept. The other gaps were fixed in this slice instead of deferred:
+- **Behaviour fixed:**
+  - a plan-step failure is classed by `classifyPostgresError`, so a socket error is a `connection` Database error;
+  - a failure after the fetch keeps the Statement;
+  - D-084's constructs run against PostgreSQL in a test;
+  - the domain-constraint test is renamed to what it proves, and its Proven by line is corrected.
+- **Restructured, with no behaviour change:**
+  - an Engine's half of the Query check and of Redaction sits behind a `QueryEngine` in `src/engine/`, and its name fills D-082's parse sentence, so S-007 adds an MS SQL Server `QueryEngine` and changes nothing in `tools/query.ts`;
+  - the structural step is `checkStructure`, not the whole Query check;
+  - Refusal classes are the typed union `RefusalClass`;
+  - one `SYSTEM_SCHEMA` serves the listing and the Query check;
+  - each Tool is one record in the MCP endpoint, with its inputs checked once;
+  - the Audit logger takes a list of Statements, declared once.
+- **Kept, with the reason:** the Engine adapter's outcome kinds (`plan_refused`, `error`) are its own vocabulary, and the Tool maps them to the Audit record's `refusal` and `database_error`. The structural step's cases (`hidden`, `unqualified` and the rest) select D-082's sentences, and each maps to one class.
+Alternatives rejected: logging any SQL containing a comment by its length only (it loses the SQL whenever an Agent comments its query); deferring the structural gaps to S-007 and S-010 as questions (the product owner chose to fix them now).

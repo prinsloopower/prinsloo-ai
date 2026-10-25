@@ -10,8 +10,40 @@ export interface VisibleTable {
   all_columns: boolean;
 }
 
-/** Schemas every account can read, which would list every Hidden object (D-077). */
-const SYSTEM_SCHEMA = /^(pg_catalog|information_schema|pg_toast.*|pg_temp.*|sys|INFORMATION_SCHEMA)$/;
+/** Schemas every account can read, which would list every Hidden object (D-077). The Query check refuses them too. */
+export const SYSTEM_SCHEMA = /^(pg_catalog|information_schema|pg_toast.*|pg_temp.*|sys|INFORMATION_SCHEMA)$/;
+
+/** One Visible table as the Query check sees it (S-003). */
+export interface VisibleTableInfo {
+  columns: Map<string, { readable: boolean }>;
+  /** Every column Visible and readable, so `*` may expand over it (`all_columns`, D-082). */
+  allReadable: boolean;
+}
+
+/** The Visible objects for one Tool call, keyed by `visibleKey`, with each column's readability. */
+export interface VisibleObjects {
+  tables: Map<string, VisibleTableInfo>;
+}
+
+export const visibleKey = (schema: string, table: string) => `${schema}\u0000${table}`;
+
+/** The Visible objects the Allow-list and the Boundary give (ADR-006), with each column's readability (D-085). */
+export function visibleObjects(catalog: Catalog, boundary?: Boundary): VisibleObjects {
+  const readable = new Map<string, boolean>();
+  const allReadable = new Map<string, boolean>();
+  for (const row of catalog.rows) {
+    const k = visibleKey(row.schema, row.table);
+    if (row.granted) readable.set(`${k}\u0000${row.column}`, row.readable);
+    allReadable.set(k, (allReadable.get(k) ?? true) && row.readable);
+  }
+  const tables = new Map<string, VisibleTableInfo>();
+  for (const t of visibleTables(catalog, boundary)) {
+    const k = visibleKey(t.schema, t.table);
+    const columns = new Map(t.columns.map((c) => [c.name, { readable: readable.get(`${k}\u0000${c.name}`) === true }]));
+    tables.set(k, { columns, allReadable: t.all_columns && allReadable.get(k) === true });
+  }
+  return { tables };
+}
 
 /** Whether the account holds a grant that reaches every table at once (D-077). */
 export function bypassesGrants(flags: AccountFlags): boolean {

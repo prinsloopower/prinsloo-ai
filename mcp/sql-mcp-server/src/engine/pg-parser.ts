@@ -7,6 +7,8 @@ export interface PgParser {
   parse(sql: string): { stmts: { stmt: Record<string, unknown> }[] };
   /** The SQL with every literal replaced by `$n` (security.md, Redaction rule). */
   normalize(sql: string): string;
+  /** PostgreSQL's own lexer: each token with its byte offsets, comments included. */
+  scan(sql: string): { start: number; end: number; tokenName: string }[];
 }
 
 /** The SQL did not parse. Its message is the parser's, and is never shown to the Agent or logged. */
@@ -22,6 +24,7 @@ interface Emscripten {
   _wasm_parse_query_raw(p: number): number;
   _wasm_free_parse_result(p: number): void;
   _wasm_normalize_query(p: number): number;
+  _wasm_scan(p: number): number;
   _wasm_free_string(p: number): void;
 }
 
@@ -64,16 +67,21 @@ export async function loadPgParser(wasm: WebAssembly.Module): Promise<PgParser> 
           m._wasm_free_parse_result(result);
         }
       }),
-    normalize: (sql) =>
-      withString(sql, (ptr) => {
-        const result = m._wasm_normalize_query(ptr);
-        try {
-          const text = m.UTF8ToString(result);
-          if (/^(syntax error|deparse error|ERROR)/.test(text)) throw new ParseError(text);
-          return text;
-        } finally {
-          m._wasm_free_string(result);
-        }
-      }),
+    normalize: (sql) => text(sql, m._wasm_normalize_query),
+    scan: (sql) => (JSON.parse(text(sql, m._wasm_scan)) as { tokens?: ReturnType<PgParser["scan"]> }).tokens ?? [],
   };
+
+  /** Calls a WebAssembly entry point that returns a string, which starts with an error's text on failure. */
+  function text(sql: string, entry: (ptr: number) => number): string {
+    return withString(sql, (ptr) => {
+      const result = entry(ptr);
+      try {
+        const out = m.UTF8ToString(result);
+        if (/^(syntax error|deparse error|ERROR)/.test(out)) throw new ParseError(out);
+        return out;
+      } finally {
+        m._wasm_free_string(result);
+      }
+    });
+  }
 }

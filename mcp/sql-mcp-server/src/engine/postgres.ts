@@ -119,7 +119,10 @@ const flagsOf = (r: FlagsRow): AccountFlags => ({
 
 /** PostgreSQL behind the Engine adapter: one connection per call, closed when it ends (ADR-008). */
 export class PostgresDatabase implements Database {
-  constructor(private readonly connectionString: string) {}
+  constructor(
+    private readonly connectionString: string,
+    private readonly now: () => number = Date.now,
+  ) {}
 
   private async rows<T>(sql: string): Promise<T[]> {
     const client = new pg.Client({ connectionString: this.connectionString, connectionTimeoutMillis: CONNECT_MS });
@@ -164,40 +167,28 @@ export class PostgresDatabase implements Database {
     const client = new pg.Client({ connectionString: this.connectionString, connectionTimeoutMillis: CONNECT_MS });
     const send = <R extends unknown[] = unknown[]>(text: string, values?: unknown[], types?: pg.CustomTypesConfig) =>
       client.query<R>({ text, values, types, rowMode: "array", queryMode: "extended" } as pg.QueryArrayConfig);
+    // Whether the query itself has gone to the Database, and when: from then on, any failure is the Statement's.
+    let started: number | undefined;
     try {
       await client.connect();
       await send("BEGIN READ ONLY");
       await send("SET LOCAL search_path = pg_catalog");
-    } catch (error) {
-      await client.end().catch(() => {});
-      return { kind: "error", error, sent: false, ms: 0 };
-    }
-    try {
       let plan: unknown;
       try {
         plan = (await send(`EXPLAIN (VERBOSE, FORMAT JSON) ${sql}`)).rows[0]?.[0];
       } catch (error) {
-        const code = sqlstate(error);
-        if (!code || code.startsWith("08")) return { kind: "error", error, sent: false, ms: 0 };
-        return { kind: "plan_refused", unaccounted: false, code };
+        return planFailure(error);
       }
       const accounted = new Set(
         (await send<[string, string]>(ACCOUNTED_SQL, [named.map((t) => t.schema), named.map((t) => t.table)])).rows.map(([s, t]) => `${s}\u0000${t}`),
       );
       if (planRelations(plan).some((r) => !accounted.has(r))) return { kind: "plan_refused", unaccounted: true };
 
-      const started = Date.now();
-      let result: pg.QueryArrayResult;
-      try {
-        await send(`DECLARE sqlmcp_query NO SCROLL CURSOR FOR ${sql}`);
-        result = await send(`FETCH FORWARD ${rowLimit + 1} FROM sqlmcp_query`, undefined, VALUE_TYPES);
-      } catch (error) {
-        return { kind: "error", error, sent: true, ms: Date.now() - started };
-      }
-      const ms = Date.now() - started;
-      const names = result.fields.length
-        ? (await send<[string]>(TYPE_NAMES_SQL, [result.fields.map((f) => f.dataTypeID), result.fields.map((f) => f.dataTypeModifier)])).rows.map(([n]) => n)
-        : [];
+      started = this.now();
+      await send(`DECLARE sqlmcp_query NO SCROLL CURSOR FOR ${sql}`);
+      const result = await send(`FETCH FORWARD ${rowLimit + 1} FROM sqlmcp_query`, undefined, VALUE_TYPES);
+      const ms = this.now() - started;
+      const names = await this.typeNames(send, result.fields);
       return {
         kind: "ok",
         run: {
@@ -208,12 +199,31 @@ export class PostgresDatabase implements Database {
         },
       };
     } catch (error) {
-      return { kind: "error", error, sent: false, ms: 0 };
+      return started === undefined ? { kind: "error", error, sent: false, ms: 0 } : { kind: "error", error, sent: true, ms: this.now() - started };
     } finally {
+      // Best effort: the transaction is read-only and ends with the connection anyway, and a failure
+      // here must not replace the outcome already decided.
       await client.query("ROLLBACK").catch(() => {});
       await client.end().catch(() => {});
     }
   }
+
+  /** Result column types, named as `list_tables` names them, by one Server statement. */
+  protected async typeNames(send: (text: string, values?: unknown[]) => Promise<pg.QueryArrayResult>, fields: pg.FieldDef[]): Promise<string[]> {
+    if (!fields.length) return [];
+    const result = await send(TYPE_NAMES_SQL, [fields.map((f) => f.dataTypeID), fields.map((f) => f.dataTypeModifier)]);
+    return result.rows.map(([n]) => n as string);
+  }
+}
+
+/**
+ * How a failure to plan an Agent-written query ends: a lost connection is a Database error,
+ * classed as D-080 classes it; anything PostgreSQL itself raised is a plan Refusal (D-086).
+ */
+export function planFailure(error: unknown): QueryOutcome {
+  if (classifyPostgresError(error) === "connection") return { kind: "error", error, sent: false, ms: 0 };
+  const code = errorCode(error);
+  return { kind: "plan_refused", unaccounted: false, ...(code ? { code } : {}) };
 }
 
 /**
@@ -280,16 +290,15 @@ function planRelations(plan: unknown): string[] {
   return found;
 }
 
-function sqlstate(error: unknown): string | undefined {
-  const code = typeof error === "object" && error !== null && "code" in error ? String((error as { code: unknown }).code) : "";
-  return /^[0-9A-Z]{5}$/.test(code) ? code : undefined;
-}
 
 const NETWORK_CODES = new Set(["ECONNREFUSED", "ECONNRESET", "ETIMEDOUT", "ENOTFOUND", "EHOSTUNREACH", "EPIPE", "EAI_AGAIN"]);
 
 /** A PostgreSQL failure's Database error class (D-080). The message is never used for anything else. */
+/** A driver or Node error's code: a SQLSTATE, or a socket code such as `EPIPE`. */
+const errorCode = (error: unknown) => (typeof error === "object" && error !== null && "code" in error ? String((error as { code: unknown }).code) : "");
+
 export function classifyPostgresError(error: unknown): ReasonClass {
-  const code = typeof error === "object" && error !== null && "code" in error ? String((error as { code: unknown }).code) : "";
+  const code = errorCode(error);
   if (code.startsWith("08") || NETWORK_CODES.has(code)) return "connection";
   if (code === "57014" || /^57P0[1-5]$/.test(code)) return "timeout";
   if (code === "42501") return "permission";

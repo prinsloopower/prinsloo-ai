@@ -1,7 +1,6 @@
-import { REQUEST_TEXT_MAX } from "../audit.js";
-import type { Database, ReasonClass } from "../engine/database.js";
-import type { PgParser } from "../engine/pg-parser.js";
-import { checkQuery, type RefusalReason, type VisibleObjects } from "../query/check.js";
+import { REQUEST_TEXT_MAX, type RefusalClass, type StatementRecord } from "../audit.js";
+import type { Database, QueryEngine, ReasonClass, RefusalCase } from "../engine/database.js";
+import type { VisibleObjects } from "../visibility.js";
 import { answerDatabaseError, answerRefusal, type ToolAnswer } from "./list-tables.js";
 
 export const QUERY = "query";
@@ -15,32 +14,31 @@ export function queryDescription(rowLimit: number): string {
   );
 }
 
-/** D-082's Refusal classes and sentences for Agent-written queries; none names anything from the query. */
-export const QUERY_REFUSALS: Record<RefusalReason | "plan" | "plan_unaccounted", { reasonClass: string; sentence: string }> = {
-  too_long: { reasonClass: "query_check", sentence: "The query was not accepted: it is longer than 64 KiB." },
-  not_parsed: { reasonClass: "query_check", sentence: "The query was not accepted: it is not valid PostgreSQL." },
-  not_select: { reasonClass: "query_check", sentence: "The query was not accepted: it must be exactly one SELECT, which only reads." },
-  unsupported: { reasonClass: "query_check", sentence: "The query was not accepted: it uses a clause, function, operator or type that is not supported here." },
-  unqualified: { reasonClass: "query_check", sentence: "The query was not accepted: qualify every table with its schema and every column with its table or alias." },
-  star: { reasonClass: "query_check", sentence: "The query was not accepted: name the columns instead of using *, because not every column of that table can be read." },
-  unreadable_type: { reasonClass: "query_check", sentence: "The query was not accepted: it reads a column of a type that queries cannot read." },
-  unnamed_output: {
-    reasonClass: "query_check",
-    sentence: "The query was not accepted: name every subquery and CTE column you use with AS, and refer to it by that name.",
-  },
-  hidden: {
-    reasonClass: "hidden_object",
-    sentence: "The query was not accepted: it reads a table or column that is not available to you. Use list_tables to see what you may query.",
-  },
-  plan: {
-    reasonClass: "query_check",
-    sentence: "The query was not accepted: the database could not plan it. Check its names and types against list_tables, and its constant values.",
-  },
-  plan_unaccounted: {
-    reasonClass: "hidden_object",
-    sentence: "The query was not accepted: the database could not plan it. Check its names and types against list_tables, and its constant values.",
-  },
-};
+/** One sentence for every plan-layer failure, so none tells an ungranted column from a missing one (D-082). */
+const PLAN_SENTENCE = "The query was not accepted: the database could not plan it. Check its names and types against list_tables, and its constant values.";
+
+/** D-082's Refusal classes and sentences for Agent-written queries, for one Engine; none names anything from the query. */
+export function queryRefusals(engine: string): Record<RefusalCase | "plan" | "plan_unaccounted", { reasonClass: RefusalClass; sentence: string }> {
+  return {
+    too_long: { reasonClass: "query_check", sentence: "The query was not accepted: it is longer than 64 KiB." },
+    not_parsed: { reasonClass: "query_check", sentence: `The query was not accepted: it is not valid ${engine}.` },
+    not_select: { reasonClass: "query_check", sentence: "The query was not accepted: it must be exactly one SELECT, which only reads." },
+    unsupported: { reasonClass: "query_check", sentence: "The query was not accepted: it uses a clause, function, operator or type that is not supported here." },
+    unqualified: { reasonClass: "query_check", sentence: "The query was not accepted: qualify every table with its schema and every column with its table or alias." },
+    star: { reasonClass: "query_check", sentence: "The query was not accepted: name the columns instead of using *, because not every column of that table can be read." },
+    unreadable_type: { reasonClass: "query_check", sentence: "The query was not accepted: it reads a column of a type that queries cannot read." },
+    unnamed_output: {
+      reasonClass: "query_check",
+      sentence: "The query was not accepted: name every subquery and CTE column you use with AS, and refer to it by that name.",
+    },
+    hidden: {
+      reasonClass: "hidden_object",
+      sentence: "The query was not accepted: it reads a table or column that is not available to you. Use list_tables to see what you may query.",
+    },
+    plan: { reasonClass: "query_check", sentence: PLAN_SENTENCE },
+    plan_unaccounted: { reasonClass: "hidden_object", sentence: PLAN_SENTENCE },
+  };
+}
 
 export type ValidatedQuery = { ok: true; requestText: string; sql: string } | { ok: false; sentence: string };
 
@@ -55,7 +53,7 @@ export function validateQuery(args: Record<string, unknown>): ValidatedQuery {
 }
 
 export interface QueryContext {
-  parser: PgParser;
+  engine: QueryEngine;
   database: Database;
   visible: VisibleObjects;
   rowLimit: number;
@@ -66,7 +64,7 @@ export interface QueryContext {
 
 /** What one `query` Tool call answers, and the SQL its Audit record keeps (unredacted here). */
 export interface QueryAnswer extends ToolAnswer {
-  statement?: { sql: string; rows: number; ms: number };
+  statement?: StatementRecord;
   submittedSql?: string;
 }
 
@@ -74,16 +72,17 @@ export interface QueryAnswer extends ToolAnswer {
 export const cutShortNotice = (rowLimit: number) => `The result was cut short at the Row limit of ${rowLimit} rows; more rows match.`;
 
 /**
- * One Agent-written query: the structural layer, then the Engine's plan and execution layers.
- * A query refused at any layer is never sent, and is kept as the submitted SQL; one that was sent
- * is kept as the Tool call's Statement, even when the Database failed it.
+ * One Agent-written query: the Query check's size and structural steps, then the Engine's plan and
+ * execution layers. A query refused at any layer is never sent, and is kept as the submitted SQL;
+ * one that was sent is kept as the Tool call's Statement, even when the Database failed it.
  */
 export async function answerQuery(sql: string, ctx: QueryContext): Promise<QueryAnswer> {
-  const refuse = (r: { reasonClass: string; sentence: string }): QueryAnswer => ({ ...answerRefusal(r.reasonClass, r.sentence, ctx.id), submittedSql: sql });
-  const checked = checkQuery(sql, ctx.parser, ctx.visible);
-  if (!checked.ok) return refuse(QUERY_REFUSALS[checked.reason]);
+  const refusals = queryRefusals(ctx.engine.name);
+  const refuse = (r: { reasonClass: RefusalClass; sentence: string }): QueryAnswer => ({ ...answerRefusal(r.reasonClass, r.sentence, ctx.id), submittedSql: sql });
+  const checked = ctx.engine.checkStructure(sql, ctx.visible);
+  if (!checked.ok) return refuse(refusals[checked.refusal]);
   const outcome = await ctx.database.query(sql, checked.tables, ctx.rowLimit);
-  if (outcome.kind === "plan_refused") return refuse(QUERY_REFUSALS[outcome.unaccounted ? "plan_unaccounted" : "plan"]);
+  if (outcome.kind === "plan_refused") return refuse(refusals[outcome.unaccounted ? "plan_unaccounted" : "plan"]);
   if (outcome.kind === "error") {
     const answer = answerDatabaseError(ctx.classify(outcome.error), ctx.id);
     return outcome.sent ? { ...answer, statement: { sql, rows: 0, ms: outcome.ms } } : { ...answer, submittedSql: sql };

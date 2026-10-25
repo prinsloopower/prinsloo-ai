@@ -1,4 +1,4 @@
-import { REQUEST_TEXT_MAX, withReference, type Outcome } from "../audit.js";
+import { REQUEST_TEXT_MAX, withReference, type Outcome, type RefusalClass } from "../audit.js";
 import type { Boundary } from "../config.js";
 import type { Catalog, ReasonClass } from "../engine/database.js";
 import { visibleTables, type VisibleTable } from "../visibility.js";
@@ -59,7 +59,7 @@ export function answerListing(l: Listing): ToolAnswer {
   };
 }
 
-export function answerRefusal(reasonClass: string, sentence: string, id: string): ToolAnswer {
+export function answerRefusal(reasonClass: RefusalClass, sentence: string, id: string): ToolAnswer {
   const text = withReference(sentence, id);
   return { result: { content: [{ type: "text", text }], isError: true }, outcome: { kind: "refusal", reason_class: reasonClass, reason: text } };
 }
