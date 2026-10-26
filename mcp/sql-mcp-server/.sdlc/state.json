@@ -260,9 +260,9 @@
       },
       "gates": {
         "slice-spec": {
-          "result": "fail",
+          "result": "hold",
           "by": "model",
-          "at": "2026-10-26T00:46:28+00:00"
+          "at": "2026-10-26T00:56:33+00:00"
         }
       }
     },
@@ -369,9 +369,7 @@
       "size_at_creation": "product"
     }
   ],
-  "blocked_on": null,
+  "blocked_on": "slice-spec: Gate 2: 0 blockers, 4 gaps, 6 nits (docs/slices/S-004/spec.md)",
   "open_questions": [],
-  "phase": "slice-spec",
-  "phase_started_at": "2026-10-26T00:48:04+00:00",
-  "phase_paused_s": 0
+  "phase": "slice-spec"
 }
