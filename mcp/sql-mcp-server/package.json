@@ -15,7 +15,8 @@
     "db:down": "docker compose -f test/docker-compose.yml down",
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
-    "smoke": "node scripts/smoke.mjs"
+    "smoke": "node scripts/smoke.mjs",
+    "benchmark": "tsx bench/run.ts"
   },
   "dependencies": {
     "@libpg-query/parser": "^17.8.0",
