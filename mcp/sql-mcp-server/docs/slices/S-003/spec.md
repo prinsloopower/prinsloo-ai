@@ -275,6 +275,7 @@ Verified by: manual. On or after 2026-10-30, Workers Logs is queried for `type` 
 
 ### T-013 — Live: Claude and ChatGPT answer from rows, and the Operator can trace each answer
 Verified by: manual. The product owner asks Claude and ChatGPT the four live questions under Proven by. Each answer is from a `query` call that went through Hyperdrive's extended-protocol cursor path. The list-every-order answer says it was cut short. Both Refusals name nothing. Each call's Audit record is found in Workers Logs, with the Staff member, Request text and redacted SQL. Outcomes and dates are recorded in this spec.
+Outcome, 2026-10-25, on version `4dc70716`: all four checks passed from both Claude and ChatGPT ("Everything works"). See .sdlc/verification/S-003.md.
 
 ### T-014 — An adversarial probe suite cannot tell a hidden table or column from a missing one
 Verified by: hidden_object_probe_suite_answers_identically, probe_suite_never_runs_user_functions

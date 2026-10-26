@@ -76,3 +76,4 @@
 {"iteration": 1, "phase": "build", "slice": "S-003", "gate": "pass", "duration_s": 51, "rework_count": 0, "defects_found": 0, "output_bytes": 0}
 {"iteration": 1, "phase": "review", "slice": "S-003", "gate": "pass", "duration_s": 56, "rework_count": 2, "defects_found": 0, "output_bytes": 17355}
 {"iteration": 1, "phase": "deploy", "slice": "S-003", "gate": "pass", "duration_s": 68, "rework_count": 0, "defects_found": 0, "output_bytes": 3597}
+{"iteration": 1, "phase": "verify", "slice": "S-003", "gate": "pass", "duration_s": 200, "rework_count": 0, "defects_found": 0, "output_bytes": 2058}

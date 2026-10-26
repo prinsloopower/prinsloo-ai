@@ -476,7 +476,7 @@ Rationale: product owner's answers after the S-002 code review.
 Alternatives rejected: relying on S-003's Query check to refuse `SET ROLE` (one more place that must never fail); exact Boundary matching everywhere (a case slip in an exclusion would show what it meant to hide).
 
 ## D-082 — Choices made specifying S-003
-Decided by: model | Date: 2026-10-23 | Phase: slice-spec (S-003)
+Decided by: human (confirmed 2026-10-25 at the S-003 verification gate) | Date: 2026-10-23 | Phase: slice-spec (S-003)
 Rationale: the Query check needs answers that ADR-005 and security.md do not give. Revised after the S-003 gate-1 critique (docs/slices/S-003/spec.md).
 
 **Shared by both Engines.** S-007 repeats these for MS SQL Server, where R-002 asks for the same tools.
@@ -549,7 +549,7 @@ Amended 2026-10-25 by the product owner, after the amendment critique:
 Alternatives rejected: refusing such columns (most enum questions unanswerable); admitting a type only when it has no user-written casts (more surface to prove, and the critiques found holes at each layer).
 
 ## D-086 — Choices made building S-003
-Decided by: model | Date: 2026-10-25 | Phase: build (S-003)
+Decided by: human (confirmed 2026-10-25 at the S-003 verification gate) | Date: 2026-10-25 | Phase: build (S-003)
 Rationale: the spec left these open, or building showed one of its statements to be inexact:
 - **The parser on Workers.** `@libpg-query/parser` is loaded from a compiled WebAssembly module through Emscripten's `instantiateWasm` hook. The Worker imports the `.wasm` file, and Node compiles it from disk. The package's own entry point is not used, because it instantiates on import through Node's file system. Its glue reads `__filename` and `__dirname`, which Workers lack, so `wrangler.jsonc` defines both at build time. The bundle is 585 KiB gzipped.
 - **The query tool needs a parser.** `query` is registered only when the app is given a parser, as no Tool is registered without a Database (D-078). The Worker always gives one, and S-002's tests, which give none, keep their recorded failures.
@@ -591,7 +591,7 @@ Rationale: the product owner's answers to the review hold (docs/slices/S-003/rev
 Alternatives rejected: logging any SQL containing a comment by its length only (it loses the SQL whenever an Agent comments its query); deferring the structural gaps to S-007 and S-010 as questions (the product owner chose to fix them now).
 
 ## D-088 — Choices made in S-003's second rework
-Decided by: model | Date: 2026-10-25 | Phase: build (S-003, after review 2)
+Decided by: human (confirmed 2026-10-25 at the S-003 verification gate) | Date: 2026-10-25 | Phase: build (S-003, after review 2)
 Rationale: review 2 failed on one blocker. These are the choices made fixing it and the gaps:
 - **The lexer's failures are parse failures.** The scanner answers with error text for SQL it cannot finish, so `scan` raises a `ParseError` and Redaction logs `<unparsed: N chars>`. As a second guard, a failure while redacting never stops the Audit record: that call's SQL is kept by its length.
 - **A fault in the Server's own work**, such as the parser failing to load, ends the Tool call as a Database error of class `other`, with D-080's sentence and reference. The `server_fault` line names the Tool and the id, never the error's text. That call does not load the engine again, and the next one does. A cached failure would otherwise break every `query` call for the isolate's lifetime.
@@ -603,7 +603,7 @@ Rationale: review 2 failed on one blocker. These are the choices made fixing it 
   - `typeNames` stays a protected method, so a test subclass can make it fail after the fetch.
 
 ## D-089 — Choices made in S-003's third rework
-Decided by: model | Date: 2026-10-25 | Phase: build (S-003, after review 3)
+Decided by: human (confirmed 2026-10-25 at the S-003 verification gate) | Date: 2026-10-25 | Phase: build (S-003, after review 3)
 Rationale: review 3 failed on one blocker: a string written as a type modifier survived Redaction. The fix and the gaps:
 - **Type modifiers are whole numbers.** The structural step refuses any other constant in a type's modifiers, so `'a'::text('ann@example.com')` never reaches the Database or the log. Redaction allows only whole numbers there, as a second guard.
 - **Ordinals name output columns.** An ordinal is kept under Redaction only when it is between 1 and the SELECT's number of output columns, where a set operation's are its leftmost SELECT's. Any other number there is a value.

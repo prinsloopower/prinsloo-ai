@@ -202,7 +202,7 @@
     {
       "id": "S-003",
       "title": "Answering a question from the data",
-      "status": "deployed",
+      "status": "verified",
       "traces": [
         "J-004",
         "J-008",
@@ -238,6 +238,12 @@
           "result": "pass",
           "by": "script",
           "at": "2026-10-25T23:52:59+00:00"
+        },
+        "verify": {
+          "result": "pass",
+          "by": "human",
+          "at": "2026-10-26T00:23:24+00:00",
+          "quote": "I have completed the live checks. Everything works. / Pass now, T-012 later / Confirm all four"
         }
       }
     },
