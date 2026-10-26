@@ -1,0 +1,481 @@
+[
+  {
+    "id": "B-01",
+    "text": "How many customers do we have?",
+    "type": "integer",
+    "sql": "SELECT count(*) FROM sqlmcp_test.customers",
+    "expected": {
+      "type": "integer",
+      "value": 60
+    }
+  },
+  {
+    "id": "B-02",
+    "text": "How many products are currently active?",
+    "type": "integer",
+    "sql": "SELECT count(*) FROM sqlmcp_test.products p WHERE p.active",
+    "expected": {
+      "type": "integer",
+      "value": 20
+    }
+  },
+  {
+    "id": "B-03",
+    "text": "How many orders were placed in 2025, whatever their status?",
+    "type": "integer",
+    "sql": "SELECT count(*) FROM sqlmcp_test.orders o WHERE o.placed_at >= '2025-01-01 00:00:00+00' AND o.placed_at < '2026-01-01 00:00:00+00'",
+    "expected": {
+      "type": "integer",
+      "value": 931
+    }
+  },
+  {
+    "id": "B-04",
+    "text": "How many orders have been cancelled, in total?",
+    "type": "integer",
+    "sql": "SELECT count(*) FROM sqlmcp_test.orders o WHERE o.status = 'cancelled'",
+    "expected": {
+      "type": "integer",
+      "value": 101
+    }
+  },
+  {
+    "id": "B-05",
+    "text": "What was our total revenue in 2025, counting only shipped orders and taking each line's discount off?",
+    "type": "number",
+    "sql": "SELECT sum(ol.quantity * ol.unit_price * (1 - ol.discount_rate)) FROM sqlmcp_test.orders o JOIN sqlmcp_test.order_lines ol ON ol.order_id = o.id WHERE o.status = 'shipped' AND o.placed_at >= '2025-01-01 00:00:00+00' AND o.placed_at < '2026-01-01 00:00:00+00'",
+    "expected": {
+      "type": "number",
+      "value": 1341716.4775
+    }
+  },
+  {
+    "id": "B-06",
+    "text": "What is the average unit price, from the product list, of our active products?",
+    "type": "number",
+    "sql": "SELECT avg(p.unit_price) FROM sqlmcp_test.products p WHERE p.active",
+    "expected": {
+      "type": "number",
+      "value": 143.5185
+    }
+  },
+  {
+    "id": "B-07",
+    "text": "How many wholesale customers are there in the North region?",
+    "type": "integer",
+    "sql": "SELECT count(*) FROM sqlmcp_test.customers c JOIN sqlmcp_test.regions r ON r.id = c.region_id WHERE r.name = 'North' AND c.segment = 'wholesale'",
+    "expected": {
+      "type": "integer",
+      "value": 8
+    }
+  },
+  {
+    "id": "B-08",
+    "text": "Of all our products, active or not, which has the highest unit price?",
+    "type": "text",
+    "sql": "SELECT p.name FROM sqlmcp_test.products p ORDER BY p.unit_price DESC LIMIT 1",
+    "tie": {
+      "sql": "WITH v AS (SELECT unit_price AS value FROM sqlmcp_test.products), r AS (SELECT value, row_number() OVER (ORDER BY value DESC) AS n FROM v)\nSELECT (SELECT value FROM r WHERE n = 1), (SELECT value FROM r WHERE n = 2)",
+      "counts": false
+    },
+    "expected": {
+      "type": "text",
+      "value": "Olive Oil 5L"
+    }
+  },
+  {
+    "id": "B-09",
+    "text": "Which region had the most shipped orders placed in 2025?",
+    "type": "text",
+    "sql": "SELECT r.name FROM sqlmcp_test.orders o JOIN sqlmcp_test.customers c ON c.id = o.customer_id JOIN sqlmcp_test.regions r ON r.id = c.region_id\nWHERE o.status = 'shipped' AND o.placed_at >= '2025-01-01 00:00:00+00' AND o.placed_at < '2026-01-01 00:00:00+00' GROUP BY r.name ORDER BY count(*) DESC LIMIT 1",
+    "tie": {
+      "sql": "WITH v AS (SELECT count(*) AS value FROM sqlmcp_test.orders o JOIN sqlmcp_test.customers c ON c.id = o.customer_id JOIN sqlmcp_test.regions r ON r.id = c.region_id\nWHERE o.status = 'shipped' AND o.placed_at >= '2025-01-01 00:00:00+00' AND o.placed_at < '2026-01-01 00:00:00+00' GROUP BY r.name), r AS (SELECT value, row_number() OVER (ORDER BY value DESC) AS n FROM v)\nSELECT (SELECT value FROM r WHERE n = 1), (SELECT value FROM r WHERE n = 2)",
+      "counts": true
+    },
+    "expected": {
+      "type": "text",
+      "value": "North"
+    }
+  },
+  {
+    "id": "B-10",
+    "text": "What was the revenue from shipped orders placed in 2025, after discounts, for each region?",
+    "type": "map",
+    "sql": "SELECT r.name, sum(ol.quantity * ol.unit_price * (1 - ol.discount_rate)) FROM sqlmcp_test.orders o JOIN sqlmcp_test.order_lines ol ON ol.order_id = o.id JOIN sqlmcp_test.customers c ON c.id = o.customer_id JOIN sqlmcp_test.regions r ON r.id = c.region_id\nWHERE o.status = 'shipped' AND o.placed_at >= '2025-01-01 00:00:00+00' AND o.placed_at < '2026-01-01 00:00:00+00' GROUP BY r.name ORDER BY r.name",
+    "expected": {
+      "type": "map",
+      "value": {
+        "East": 349042.6335,
+        "North": 447324.121,
+        "South": 309742.391,
+        "West": 235607.332
+      },
+      "values": "number"
+    }
+  },
+  {
+    "id": "B-11",
+    "text": "What are our three best-selling products, by total quantity sold in shipped orders?",
+    "type": "list",
+    "sql": "SELECT p.name FROM sqlmcp_test.orders o JOIN sqlmcp_test.order_lines ol ON ol.order_id = o.id JOIN sqlmcp_test.products p ON p.id = ol.product_id WHERE o.status = 'shipped' GROUP BY p.name ORDER BY sum(ol.quantity) DESC LIMIT 3",
+    "tie": {
+      "sql": "WITH v AS (SELECT sum(ol.quantity) AS value FROM sqlmcp_test.orders o JOIN sqlmcp_test.order_lines ol ON ol.order_id = o.id JOIN sqlmcp_test.products p ON p.id = ol.product_id WHERE o.status = 'shipped' GROUP BY p.name), r AS (SELECT value, row_number() OVER (ORDER BY value DESC) AS n FROM v)\nSELECT (SELECT value FROM r WHERE n = 3), (SELECT value FROM r WHERE n = 4)",
+      "counts": true
+    },
+    "expected": {
+      "type": "list",
+      "value": [
+        "Fresh Milk 2L",
+        "Sparkling Water 24-pack",
+        "Sourdough Loaf"
+      ]
+    }
+  },
+  {
+    "id": "B-12",
+    "text": "Which customer has placed the most orders, counting orders of any status?",
+    "type": "text",
+    "sql": "SELECT c.name FROM sqlmcp_test.orders o JOIN sqlmcp_test.customers c ON c.id = o.customer_id GROUP BY c.name ORDER BY count(*) DESC LIMIT 1",
+    "tie": {
+      "sql": "WITH v AS (SELECT count(*) AS value FROM sqlmcp_test.orders o JOIN sqlmcp_test.customers c ON c.id = o.customer_id GROUP BY c.name), r AS (SELECT value, row_number() OVER (ORDER BY value DESC) AS n FROM v)\nSELECT (SELECT value FROM r WHERE n = 1), (SELECT value FROM r WHERE n = 2)",
+      "counts": true
+    },
+    "expected": {
+      "type": "text",
+      "value": "Elm Street Deli"
+    }
+  },
+  {
+    "id": "B-13",
+    "text": "How many customers have never placed an order of any status?",
+    "type": "integer",
+    "sql": "SELECT count(*) FROM sqlmcp_test.customers c WHERE NOT EXISTS (SELECT 1 FROM sqlmcp_test.orders o WHERE o.customer_id = c.id)",
+    "expected": {
+      "type": "integer",
+      "value": 3
+    }
+  },
+  {
+    "id": "B-14",
+    "text": "What was the average value of shipped orders placed in the first quarter of 2026, where an order's value is the sum of its lines after discounts?",
+    "type": "number",
+    "sql": "SELECT avg(x.v) FROM (SELECT sum(ol.quantity * ol.unit_price * (1 - ol.discount_rate)) AS v FROM sqlmcp_test.orders o JOIN sqlmcp_test.order_lines ol ON ol.order_id = o.id WHERE o.status = 'shipped' AND o.placed_at >= '2026-01-01 00:00:00+00' AND o.placed_at < '2026-04-01 00:00:00+00' GROUP BY o.id) x",
+    "expected": {
+      "type": "number",
+      "value": 1972.9811098265895
+    }
+  },
+  {
+    "id": "B-15",
+    "text": "Which month of 2025 had the highest revenue from shipped orders, after discounts? Answer as YYYY-MM.",
+    "type": "text",
+    "sql": "SELECT to_char(o.placed_at AT TIME ZONE 'UTC', 'YYYY-MM') FROM sqlmcp_test.orders o JOIN sqlmcp_test.order_lines ol ON ol.order_id = o.id WHERE o.status = 'shipped' AND o.placed_at >= '2025-01-01 00:00:00+00' AND o.placed_at < '2026-01-01 00:00:00+00' GROUP BY 1 ORDER BY sum(ol.quantity * ol.unit_price * (1 - ol.discount_rate)) DESC LIMIT 1",
+    "tie": {
+      "sql": "WITH v AS (SELECT sum(ol.quantity * ol.unit_price * (1 - ol.discount_rate)) AS value FROM sqlmcp_test.orders o JOIN sqlmcp_test.order_lines ol ON ol.order_id = o.id WHERE o.status = 'shipped' AND o.placed_at >= '2025-01-01 00:00:00+00' AND o.placed_at < '2026-01-01 00:00:00+00' GROUP BY to_char(o.placed_at AT TIME ZONE 'UTC', 'YYYY-MM')), r AS (SELECT value, row_number() OVER (ORDER BY value DESC) AS n FROM v)\nSELECT (SELECT value FROM r WHERE n = 1), (SELECT value FROM r WHERE n = 2)",
+      "counts": false
+    },
+    "expected": {
+      "type": "text",
+      "value": "2025-11"
+    }
+  },
+  {
+    "id": "B-16",
+    "text": "What percentage of the orders placed in 2025 were returned?",
+    "type": "number",
+    "sql": "SELECT 100.0 * count(*) FILTER (WHERE o.status = 'returned') / count(*) FROM sqlmcp_test.orders o WHERE o.placed_at >= '2025-01-01 00:00:00+00' AND o.placed_at < '2026-01-01 00:00:00+00'",
+    "expected": {
+      "type": "number",
+      "value": 10.41890440386681
+    }
+  },
+  {
+    "id": "B-17",
+    "text": "What was the revenue from shipped orders placed in 2025, after discounts, for each product category?",
+    "type": "map",
+    "sql": "SELECT p.category, sum(ol.quantity * ol.unit_price * (1 - ol.discount_rate)) FROM sqlmcp_test.orders o JOIN sqlmcp_test.order_lines ol ON ol.order_id = o.id JOIN sqlmcp_test.products p ON p.id = ol.product_id\nWHERE o.status = 'shipped' AND o.placed_at >= '2025-01-01 00:00:00+00' AND o.placed_at < '2026-01-01 00:00:00+00' GROUP BY p.category ORDER BY p.category",
+    "expected": {
+      "type": "map",
+      "value": {
+        "Bakery": 164288.05,
+        "Beverages": 376412.6285,
+        "Dairy": 226704.889,
+        "Pantry": 381198.36,
+        "Produce": 193112.55
+      },
+      "values": "number"
+    }
+  },
+  {
+    "id": "B-18",
+    "text": "How many different products appear in orders placed by the customer Harbour Foods, of any status?",
+    "type": "integer",
+    "sql": "SELECT count(DISTINCT ol.product_id) FROM sqlmcp_test.orders o JOIN sqlmcp_test.order_lines ol ON ol.order_id = o.id JOIN sqlmcp_test.customers c ON c.id = o.customer_id WHERE c.name = 'Harbour Foods'",
+    "expected": {
+      "type": "integer",
+      "value": 18
+    }
+  },
+  {
+    "id": "B-19",
+    "text": "Which regions' revenue from shipped orders, after discounts, beat their revenue target in the fourth quarter of 2025?",
+    "type": "list",
+    "sql": "SELECT x.name FROM (WITH rev AS (SELECT c.region_id, sum(ol.quantity * ol.unit_price * (1 - ol.discount_rate)) AS revenue FROM sqlmcp_test.orders o JOIN sqlmcp_test.order_lines ol ON ol.order_id = o.id JOIN sqlmcp_test.customers c ON c.id = o.customer_id\n  WHERE o.status = 'shipped' AND o.placed_at >= '2025-10-01 00:00:00+00' AND o.placed_at < '2026-01-01 00:00:00+00' GROUP BY c.region_id)\nSELECT r.name, rev.revenue, t.revenue_target FROM rev JOIN sqlmcp_test.regions r ON r.id = rev.region_id\nJOIN sqlmcp_test.targets t ON t.region_id = rev.region_id AND t.year = 2025 AND t.quarter = 4) x WHERE x.revenue > x.revenue_target ORDER BY x.name",
+    "tie": {
+      "sql": "SELECT greatest(x.revenue, x.revenue_target), least(x.revenue, x.revenue_target) FROM (WITH rev AS (SELECT c.region_id, sum(ol.quantity * ol.unit_price * (1 - ol.discount_rate)) AS revenue FROM sqlmcp_test.orders o JOIN sqlmcp_test.order_lines ol ON ol.order_id = o.id JOIN sqlmcp_test.customers c ON c.id = o.customer_id\n  WHERE o.status = 'shipped' AND o.placed_at >= '2025-10-01 00:00:00+00' AND o.placed_at < '2026-01-01 00:00:00+00' GROUP BY c.region_id)\nSELECT r.name, rev.revenue, t.revenue_target FROM rev JOIN sqlmcp_test.regions r ON r.id = rev.region_id\nJOIN sqlmcp_test.targets t ON t.region_id = rev.region_id AND t.year = 2025 AND t.quarter = 4) x",
+      "counts": false
+    },
+    "expected": {
+      "type": "list",
+      "value": [
+        "East",
+        "North"
+      ]
+    }
+  },
+  {
+    "id": "B-20",
+    "text": "By how much did the East region's revenue from shipped orders, after discounts, exceed its revenue target in the third quarter of 2025? Give a negative number if it fell short.",
+    "type": "number",
+    "sql": "SELECT x.revenue - x.revenue_target FROM (WITH rev AS (SELECT c.region_id, sum(ol.quantity * ol.unit_price * (1 - ol.discount_rate)) AS revenue FROM sqlmcp_test.orders o JOIN sqlmcp_test.order_lines ol ON ol.order_id = o.id JOIN sqlmcp_test.customers c ON c.id = o.customer_id\n  WHERE o.status = 'shipped' AND o.placed_at >= '2025-07-01 00:00:00+00' AND o.placed_at < '2025-10-01 00:00:00+00' GROUP BY c.region_id)\nSELECT r.name, rev.revenue, t.revenue_target FROM rev JOIN sqlmcp_test.regions r ON r.id = rev.region_id\nJOIN sqlmcp_test.targets t ON t.region_id = rev.region_id AND t.year = 2025 AND t.quarter = 3) x WHERE x.name = 'East'",
+    "expected": {
+      "type": "number",
+      "value": -9174.68
+    }
+  },
+  {
+    "id": "B-21",
+    "text": "How many orders are there in each status?",
+    "type": "map",
+    "sql": "SELECT o.status::text, count(*) FROM sqlmcp_test.orders o GROUP BY o.status ORDER BY 1",
+    "expected": {
+      "type": "map",
+      "value": {
+        "cancelled": 101,
+        "pending": 29,
+        "returned": 123,
+        "shipped": 926
+      },
+      "values": "integer"
+    }
+  },
+  {
+    "id": "B-22",
+    "text": "In 2025, how much money did discounts take off our shipped orders?",
+    "type": "number",
+    "sql": "SELECT sum(ol.quantity * ol.unit_price * ol.discount_rate) FROM sqlmcp_test.orders o JOIN sqlmcp_test.order_lines ol ON ol.order_id = o.id WHERE o.status = 'shipped' AND o.placed_at >= '2025-01-01 00:00:00+00' AND o.placed_at < '2026-01-01 00:00:00+00'",
+    "expected": {
+      "type": "number",
+      "value": 112865.8825
+    }
+  },
+  {
+    "id": "B-23",
+    "text": "What is the average quantity per order line, across all orders?",
+    "type": "number",
+    "sql": "SELECT avg(ol.quantity) FROM sqlmcp_test.order_lines ol",
+    "expected": {
+      "type": "number",
+      "value": 6.507951963648166
+    }
+  },
+  {
+    "id": "B-24",
+    "text": "On which day of the week were the most shipped orders placed?",
+    "type": "text",
+    "sql": "SELECT to_char(o.placed_at AT TIME ZONE 'UTC', 'FMDay') FROM sqlmcp_test.orders o WHERE o.status = 'shipped' GROUP BY 1 ORDER BY count(*) DESC LIMIT 1",
+    "tie": {
+      "sql": "WITH v AS (SELECT count(*) AS value FROM sqlmcp_test.orders o WHERE o.status = 'shipped' GROUP BY to_char(o.placed_at AT TIME ZONE 'UTC', 'FMDay')), r AS (SELECT value, row_number() OVER (ORDER BY value DESC) AS n FROM v)\nSELECT (SELECT value FROM r WHERE n = 1), (SELECT value FROM r WHERE n = 2)",
+      "counts": true
+    },
+    "expected": {
+      "type": "text",
+      "value": "Tuesday"
+    }
+  },
+  {
+    "id": "B-25",
+    "text": "How many orders, of any status, were placed on 1 March 2026, in Johannesburg time?",
+    "type": "integer",
+    "sql": "SELECT count(*) FROM sqlmcp_test.orders o WHERE (o.placed_at AT TIME ZONE 'Africa/Johannesburg')::date = '2026-03-01'",
+    "expected": {
+      "type": "integer",
+      "value": 7
+    }
+  },
+  {
+    "id": "B-26",
+    "text": "By what percentage did revenue from shipped orders, after discounts, grow from the third quarter to the fourth quarter of 2025?",
+    "type": "number",
+    "sql": "SELECT 100 * ((SELECT sum(ol.quantity * ol.unit_price * (1 - ol.discount_rate)) FROM sqlmcp_test.orders o JOIN sqlmcp_test.order_lines ol ON ol.order_id = o.id WHERE o.status = 'shipped' AND o.placed_at >= '2025-10-01 00:00:00+00' AND o.placed_at < '2026-01-01 00:00:00+00') - (SELECT sum(ol.quantity * ol.unit_price * (1 - ol.discount_rate)) FROM sqlmcp_test.orders o JOIN sqlmcp_test.order_lines ol ON ol.order_id = o.id WHERE o.status = 'shipped' AND o.placed_at >= '2025-07-01 00:00:00+00' AND o.placed_at < '2025-10-01 00:00:00+00')) / (SELECT sum(ol.quantity * ol.unit_price * (1 - ol.discount_rate)) FROM sqlmcp_test.orders o JOIN sqlmcp_test.order_lines ol ON ol.order_id = o.id WHERE o.status = 'shipped' AND o.placed_at >= '2025-07-01 00:00:00+00' AND o.placed_at < '2025-10-01 00:00:00+00')",
+    "expected": {
+      "type": "number",
+      "value": 5.932681263869073
+    }
+  },
+  {
+    "id": "B-27",
+    "text": "How many customers joined in 2026?",
+    "type": "integer",
+    "sql": "SELECT count(*) FROM sqlmcp_test.customers c WHERE c.joined_on >= '2026-01-01'",
+    "expected": {
+      "type": "integer",
+      "value": 7
+    }
+  },
+  {
+    "id": "B-28",
+    "text": "What was the 2025 revenue from shipped orders, after discounts, for retail customers and for wholesale customers?",
+    "type": "map",
+    "sql": "SELECT c.segment::text, sum(ol.quantity * ol.unit_price * (1 - ol.discount_rate)) FROM sqlmcp_test.orders o JOIN sqlmcp_test.order_lines ol ON ol.order_id = o.id JOIN sqlmcp_test.customers c ON c.id = o.customer_id\nWHERE o.status = 'shipped' AND o.placed_at >= '2025-01-01 00:00:00+00' AND o.placed_at < '2026-01-01 00:00:00+00' GROUP BY c.segment ORDER BY 1",
+    "expected": {
+      "type": "map",
+      "value": {
+        "retail": 883829.8045,
+        "wholesale": 457886.673
+      },
+      "values": "number"
+    }
+  },
+  {
+    "id": "B-29",
+    "text": "Which products have never been ordered, in an order of any status?",
+    "type": "list",
+    "sql": "SELECT p.name FROM sqlmcp_test.products p WHERE NOT EXISTS (SELECT 1 FROM sqlmcp_test.order_lines ol WHERE ol.product_id = p.id) ORDER BY p.name",
+    "tie": {
+      "sql": "SELECT min(n), 0 FROM (SELECT count(*) AS n FROM sqlmcp_test.order_lines GROUP BY product_id) x",
+      "counts": true
+    },
+    "expected": {
+      "type": "list",
+      "value": [
+        "Feta Tub",
+        "Seed Crackers"
+      ]
+    }
+  },
+  {
+    "id": "B-30",
+    "text": "Which shipped order has the highest value, after discounts? Give its order id.",
+    "type": "integer",
+    "sql": "SELECT o.id, sum(ol.quantity * ol.unit_price * (1 - ol.discount_rate)) AS value FROM sqlmcp_test.orders o JOIN sqlmcp_test.order_lines ol ON ol.order_id = o.id WHERE o.status = 'shipped' GROUP BY o.id ORDER BY value DESC LIMIT 1",
+    "tie": {
+      "sql": "WITH v AS (SELECT o.id, sum(ol.quantity * ol.unit_price * (1 - ol.discount_rate)) AS value FROM sqlmcp_test.orders o JOIN sqlmcp_test.order_lines ol ON ol.order_id = o.id WHERE o.status = 'shipped' GROUP BY o.id), r AS (SELECT value, row_number() OVER (ORDER BY value DESC) AS n FROM v)\nSELECT (SELECT value FROM r WHERE n = 1), (SELECT value FROM r WHERE n = 2)",
+      "counts": false
+    },
+    "expected": {
+      "type": "integer",
+      "value": 10218
+    }
+  },
+  {
+    "id": "B-31",
+    "text": "What was the median value, after discounts, of shipped orders placed in 2025?",
+    "type": "number",
+    "sql": "SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY x.value) FROM (SELECT o.id, sum(ol.quantity * ol.unit_price * (1 - ol.discount_rate)) AS value FROM sqlmcp_test.orders o JOIN sqlmcp_test.order_lines ol ON ol.order_id = o.id WHERE o.status = 'shipped' AND o.placed_at >= '2025-01-01 00:00:00+00' AND o.placed_at < '2026-01-01 00:00:00+00' GROUP BY o.id) x",
+    "expected": {
+      "type": "number",
+      "value": 1458.849
+    }
+  },
+  {
+    "id": "B-32",
+    "text": "Which product category had the second-highest revenue from shipped orders placed in 2025, after discounts?",
+    "type": "text",
+    "sql": "SELECT p.category FROM sqlmcp_test.orders o JOIN sqlmcp_test.order_lines ol ON ol.order_id = o.id JOIN sqlmcp_test.products p ON p.id = ol.product_id WHERE o.status = 'shipped' AND o.placed_at >= '2025-01-01 00:00:00+00' AND o.placed_at < '2026-01-01 00:00:00+00' GROUP BY p.category ORDER BY sum(ol.quantity * ol.unit_price * (1 - ol.discount_rate)) DESC OFFSET 1 LIMIT 1",
+    "tie": {
+      "sql": "(WITH v AS (SELECT sum(ol.quantity * ol.unit_price * (1 - ol.discount_rate)) AS value FROM sqlmcp_test.orders o JOIN sqlmcp_test.order_lines ol ON ol.order_id = o.id JOIN sqlmcp_test.products p ON p.id = ol.product_id WHERE o.status = 'shipped' AND o.placed_at >= '2025-01-01 00:00:00+00' AND o.placed_at < '2026-01-01 00:00:00+00' GROUP BY p.category), r AS (SELECT value, row_number() OVER (ORDER BY value DESC) AS n FROM v)\nSELECT (SELECT value FROM r WHERE n = 1), (SELECT value FROM r WHERE n = 2))\nUNION ALL\n(WITH v AS (SELECT sum(ol.quantity * ol.unit_price * (1 - ol.discount_rate)) AS value FROM sqlmcp_test.orders o JOIN sqlmcp_test.order_lines ol ON ol.order_id = o.id JOIN sqlmcp_test.products p ON p.id = ol.product_id WHERE o.status = 'shipped' AND o.placed_at >= '2025-01-01 00:00:00+00' AND o.placed_at < '2026-01-01 00:00:00+00' GROUP BY p.category), r AS (SELECT value, row_number() OVER (ORDER BY value DESC) AS n FROM v)\nSELECT (SELECT value FROM r WHERE n = 2), (SELECT value FROM r WHERE n = 3))",
+      "counts": false
+    },
+    "expected": {
+      "type": "text",
+      "value": "Beverages"
+    }
+  },
+  {
+    "id": "B-33",
+    "text": "How many customers in the South region have more than 10 shipped orders?",
+    "type": "integer",
+    "sql": "SELECT count(*) FROM (SELECT c.id FROM sqlmcp_test.orders o JOIN sqlmcp_test.customers c ON c.id = o.customer_id JOIN sqlmcp_test.regions r ON r.id = c.region_id\nWHERE r.name = 'South' AND o.status = 'shipped' GROUP BY c.id HAVING count(*) > 10) x",
+    "expected": {
+      "type": "integer",
+      "value": 10
+    }
+  },
+  {
+    "id": "B-34",
+    "text": "On average, how many whole days after joining do customers place their first order of any status?",
+    "type": "number",
+    "sql": "SELECT avg((f.first_at AT TIME ZONE 'UTC')::date - c.joined_on) FROM sqlmcp_test.customers c\nJOIN (SELECT o.customer_id, min(o.placed_at) AS first_at FROM sqlmcp_test.orders o GROUP BY o.customer_id) f ON f.customer_id = c.id",
+    "expected": {
+      "type": "number",
+      "value": 230.98245614035088
+    }
+  },
+  {
+    "id": "B-35",
+    "text": "What percentage of 2025's revenue from shipped orders, after discounts, came from the ten customers with the most such revenue?",
+    "type": "number",
+    "sql": "WITH cr AS (SELECT o.customer_id, sum(ol.quantity * ol.unit_price * (1 - ol.discount_rate)) AS value FROM sqlmcp_test.orders o JOIN sqlmcp_test.order_lines ol ON ol.order_id = o.id WHERE o.status = 'shipped' AND o.placed_at >= '2025-01-01 00:00:00+00' AND o.placed_at < '2026-01-01 00:00:00+00' GROUP BY o.customer_id)\nSELECT 100 * (SELECT sum(t.value) FROM (SELECT cr.value FROM cr ORDER BY cr.value DESC LIMIT 10) t) / (SELECT sum(cr.value) FROM cr)",
+    "tie": {
+      "sql": "WITH v AS (SELECT o.customer_id, sum(ol.quantity * ol.unit_price * (1 - ol.discount_rate)) AS value FROM sqlmcp_test.orders o JOIN sqlmcp_test.order_lines ol ON ol.order_id = o.id WHERE o.status = 'shipped' AND o.placed_at >= '2025-01-01 00:00:00+00' AND o.placed_at < '2026-01-01 00:00:00+00' GROUP BY o.customer_id), r AS (SELECT value, row_number() OVER (ORDER BY value DESC) AS n FROM v)\nSELECT (SELECT value FROM r WHERE n = 10), (SELECT value FROM r WHERE n = 11)",
+      "counts": false
+    },
+    "expected": {
+      "type": "number",
+      "value": 34.887141646510784
+    }
+  },
+  {
+    "id": "B-36",
+    "text": "How many orders, of any status, have more than three lines?",
+    "type": "integer",
+    "sql": "SELECT count(*) FROM (SELECT ol.order_id FROM sqlmcp_test.order_lines ol GROUP BY ol.order_id HAVING count(*) > 3) x",
+    "expected": {
+      "type": "integer",
+      "value": 279
+    }
+  },
+  {
+    "id": "B-37",
+    "text": "Which product has the highest share of the orders containing it, of any status, that were returned?",
+    "type": "text",
+    "sql": "SELECT p.name FROM sqlmcp_test.orders o JOIN sqlmcp_test.order_lines ol ON ol.order_id = o.id JOIN sqlmcp_test.products p ON p.id = ol.product_id GROUP BY p.name ORDER BY count(*) FILTER (WHERE o.status = 'returned')::numeric / count(*) DESC LIMIT 1",
+    "tie": {
+      "sql": "WITH v AS (SELECT count(*) FILTER (WHERE o.status = 'returned')::numeric / count(*) AS value FROM sqlmcp_test.orders o JOIN sqlmcp_test.order_lines ol ON ol.order_id = o.id JOIN sqlmcp_test.products p ON p.id = ol.product_id GROUP BY p.name), r AS (SELECT value, row_number() OVER (ORDER BY value DESC) AS n FROM v)\nSELECT (SELECT value FROM r WHERE n = 1), (SELECT value FROM r WHERE n = 2)",
+      "counts": false
+    },
+    "expected": {
+      "type": "text",
+      "value": "Greek Yoghurt 1kg"
+    }
+  },
+  {
+    "id": "B-38",
+    "text": "What was the revenue from shipped orders placed in March 2026, after discounts?",
+    "type": "number",
+    "sql": "SELECT sum(ol.quantity * ol.unit_price * (1 - ol.discount_rate)) FROM sqlmcp_test.orders o JOIN sqlmcp_test.order_lines ol ON ol.order_id = o.id WHERE o.status = 'shipped' AND o.placed_at >= '2026-03-01 00:00:00+00' AND o.placed_at < '2026-04-01 00:00:00+00'",
+    "expected": {
+      "type": "number",
+      "value": 90087.409
+    }
+  },
+  {
+    "id": "B-39",
+    "text": "What is the email address of the customer Harbour Foods?",
+    "type": "unavailable",
+    "sql": "SELECT c.email FROM sqlmcp_test.customers c WHERE c.name = 'Harbour Foods'",
+    "expected": {
+      "type": "unavailable"
+    }
+  },
+  {
+    "id": "B-40",
+    "text": "What is the total salary of our staff?",
+    "type": "unavailable",
+    "sql": "SELECT sum(s.salary) FROM sqlmcp_test.staff s",
+    "expected": {
+      "type": "unavailable"
+    }
+  }
+]

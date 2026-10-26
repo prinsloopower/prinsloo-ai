@@ -684,3 +684,20 @@ Rationale: the product owner's answers to the gate-2 hold: "Apply all, then pass
 The 40 Questions are the benchmark for this iteration. A benchmark invocation makes one run unless `--runs N` asks for more, which supersedes D-093's three. A single run's figures stand for a release, and several runs add their mean, minimum and maximum.
 Alternatives rejected: three runs by default (tens of US dollars an invocation); a third critique before passing.
 
+## D-095 — How S-004's sample Database and expected answers are built
+Decided by: model | Date: 2026-10-25 | Phase: implement (S-004)
+Rationale: choices made building T-001 to T-003 that the spec leaves open:
+- **The sample is generated, then committed literally.** `bench/src/sample.ts` builds the SQL from a seed with a fixed pseudo-random generator. `bench/build-sample.ts` tries seeds in order against Docker PostgreSQL until every tie check holds, then writes `bench/sample-db.sql` and the expected answers. The file's first line names its seed, and the determinism test checks that the generator rebuilds the file byte for byte.
+- **Clear answers are built in where chance would make them close:**
+  - one customer orders far more than the rest (B-12);
+  - one shipped order is six times the usual size (B-30);
+  - one product's orders are returned more often (B-37);
+  - weekday and month weights favour one day and one month (B-24, B-15);
+  - Q4 2025's targets sit 6–12% either side of actual revenue (B-19).
+
+  Seed 2 is the first whose remaining margins all clear 1%, such as B-35's tenth and eleventh customers.
+- **The Questions' source is `bench/src/question-set.ts`.** `bench/questions.json` is that set with the expected answers added, and a test checks the two agree.
+- **Every reference query is one the Server would accept,** with each table schema-qualified and each column qualified (S-003). The test for B-39 and B-40 then asserts that the Server refuses them because the data is withheld, rather than for how the query is written. When B-39 was first written unqualified, it was refused for qualification, and the test passed for the wrong reason.
+- **The sample creates no role.** It grants to `sqlmcp_reader`, which exists in Supabase with a password set out of band (S-002). Locally, the test and the build script create it first.
+Alternatives rejected: computing the tie margins in TypeScript beside the generator (a second implementation of every answer); searching seeds with no answers built in (B-30's top order rarely clears 1% by chance).
+
