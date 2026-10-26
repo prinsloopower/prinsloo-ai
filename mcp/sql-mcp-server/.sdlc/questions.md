@@ -191,3 +191,8 @@ An Operator tracing the record (J-008) may look at the Database first. The optio
 - add a fourth outcome, such as Server fault, with its own sentence, Audit `kind` and data-model entry;
 - class it as a Refusal.
 Answered by the product owner, 2026-10-25: "accepted", the first option. See D-090. The domain model's wording waits for its next revision, with Q-030 and Q-033.
+
+## Q-037 — How does a container Deployment name the release it runs?
+Raised by: slice-spec (S-004) | Blocks: slice-spec for S-006 and S-008 (benchmark run on MS SQL Server)
+On Workers, S-004 has `initialize` report `<package version>+<Worker version id>` from the `VERSION_METADATA` binding, so a benchmark report names the deployed release. Containers have no such binding, so S-006's Azure image would report the package version alone, which does not change between deploys. One option is that the Bicep template passes the image tag (`X.Y.Z`) or the commit SHA (operations.md) as a setting, and the Node adapter reports it the same way. environments.md also needs the `VERSION_METADATA` binding in its table. That waits for the next system-spec revision, with Q-030 and Q-033.
+

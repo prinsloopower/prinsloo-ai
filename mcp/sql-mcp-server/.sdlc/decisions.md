@@ -672,3 +672,15 @@ Rationale: the gate-1 critique showed the benchmark would partly measure the mod
 - **400,000 input tokens per Question** is the cap, with a cost estimate in the spec and the real cost in the first report.
 - **Expected answers** are stored once from the reference SQL, reviewed at code review, and cross-checked across Questions. This is so a wrong reference SQL is caught by more than its own output.
 Alternatives rejected: putting a time-zone and revenue convention in the system prompt (a Semantic model by another name); one run per release (no measure of noise); five runs (more than twice the cost for a modest gain in precision).
+
+## D-094 — Resolving S-004's spec hold; one run by default; the question set approved
+Decided by: human | Date: 2026-10-25 | Phase: slice-spec (S-004)
+Rationale: the product owner's answers to the gate-2 hold: "Apply all, then pass", "Approve the set" and "1 run by default". The four gaps are resolved as the spec's Revision 3 note records:
+- seed rules and rewordings;
+- Judge format tolerance;
+- Refusals recorded by sentence;
+- the `VERSION_METADATA` binding, with Q-037 for containers.
+
+The 40 Questions are the benchmark for this iteration. A benchmark invocation makes one run unless `--runs N` asks for more, which supersedes D-093's three. A single run's figures stand for a release, and several runs add their mean, minimum and maximum.
+Alternatives rejected: three runs by default (tens of US dollars an invocation); a third critique before passing.
+

@@ -250,7 +250,7 @@
     {
       "id": "S-004",
       "title": "Measuring answer correctness on PostgreSQL",
-      "status": "planned",
+      "status": "specified",
       "traces": [
         "R-012"
       ],
@@ -260,9 +260,10 @@
       },
       "gates": {
         "slice-spec": {
-          "result": "hold",
-          "by": "model",
-          "at": "2026-10-26T00:56:33+00:00"
+          "result": "pass",
+          "by": "human",
+          "at": "2026-10-26T02:07:57+00:00",
+          "quote": "Apply all, then pass / Approve the set / 1 run by default"
         }
       }
     },
@@ -369,7 +370,7 @@
       "size_at_creation": "product"
     }
   ],
-  "blocked_on": "slice-spec: Gate 2: 0 blockers, 4 gaps, 6 nits (docs/slices/S-004/spec.md)",
+  "blocked_on": null,
   "open_questions": [],
-  "phase": "slice-spec"
+  "phase": null
 }
