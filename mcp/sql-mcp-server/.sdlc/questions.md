@@ -162,6 +162,7 @@ Raised by: slice-spec (S-003) | Blocks: nothing; apply at the next revision of t
 - security.md, Query check: the Agent's query runs with `search_path` pinned to `pg_catalog`, and tables must be schema-qualified. `reg*` casts and schema-qualified functions, operators and types outside `pg_catalog` are refused. Plan-stage failures are Refusals with one shared sentence (D-082).
 - data-model.md, Audit record: `submitted_sql` is kept for every Agent-written query that was not sent, refused or ended before sending, not for refusals only (D-089). Logged SQL kept by its length reads `<unparsed: N chars>`.
 - data-model.md, Audit record: `inputs` is `{}` for `query`, because the SQL is in `statements` or `submitted_sql`. A Statement's `rows` is the count returned to the Agent (D-082).
+- domain-model.md, Database error: it also covers a fault in the Server's own work during a Tool call, when nothing was sent (D-090).
 - security.md, Redaction rule: the normaliser's `$n` placeholders are written as `?` (D-082).
 - security.md, Query check: columns must be qualified, `NATURAL`/`USING` joins are refused, casts name only an allow-list of built-in types, and a column whose type reaches a `reg*` type or a composite, at any depth, cannot be read (D-085). Partitions, inheritance children and row-level security policy tables are read under the named table's grant (D-082).
 - security.md, "every user-defined function is refused (D-038)": add that row-level security policy functions (D-083) and casts on user-defined column types (D-085) run as their owners wrote them.
@@ -189,3 +190,4 @@ An Operator tracing the record (J-008) may look at the Database first. The optio
 - accept this, and add the case to the Database error definition;
 - add a fourth outcome, such as Server fault, with its own sentence, Audit `kind` and data-model entry;
 - class it as a Refusal.
+Answered by the product owner, 2026-10-25: "accepted", the first option. See D-090. The domain model's wording waits for its next revision, with Q-030 and Q-033.

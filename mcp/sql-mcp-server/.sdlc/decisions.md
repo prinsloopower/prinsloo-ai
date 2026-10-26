@@ -615,3 +615,13 @@ Rationale: review 3 failed on one blocker: a string written as a type modifier s
 - **Blame and line endings.** `.git-blame-ignore-revs` lists the line-ending commit, and `.gitattributes` also pins the slice's own documents to LF.
 - **Re-recorded:** `query_check_casts_only_to_listed_types` and `redaction_replaces_every_literal`, after their bodies grew, each recorded failing first.
 Alternatives rejected: refusing all type modifiers (it would refuse `numeric(12,2)` and `varchar(5)`); a fixed recursion depth limit in the walk (the stack's own limit already bounds it, and the size limit bounds the input).
+
+## D-090 — A fault in the Server's own work is a Database error of class `other`; answers Q-036
+Decided by: human | Date: 2026-10-25 | Phase: deploy (S-003)
+Rationale: the product owner's answer to Q-036 ("accepted"). When the Server's own work fails during a Tool call, the Tool call ends as a Database error of class `other`, as D-089 built it. The parser failing to load is one example:
+- the Agent gets D-080's sentence and reference;
+- the Audit record says `database_error`;
+- a `server_fault` line tells the Operator, and operations.md alerts on it.
+
+The domain model's definition of Database error widens to cover this case, so a Tool call still has exactly three outcomes. That wording waits for the domain model's next revision (Q-030, Q-033).
+Alternatives rejected: a fourth outcome, Server fault, with its own sentence, Audit `kind` and data-model entry (more change across the domain model and data-model for a rare case); classing it as a Refusal (the Server did not decline anything).
