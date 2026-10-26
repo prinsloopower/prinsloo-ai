@@ -19,6 +19,11 @@ Both passed on the deployed Worker, 6/6 and 7/7. `healthz reaches the Database` 
 
 Rollback: `npx wrangler rollback c9bbfbb0-c8ca-4abb-868a-f32e080ec65c`, the S-002 version. Code only: the Server writes nothing to the Database. The 500 added test orders stay after a rollback, and do no harm to S-002, which only lists tables. They can be removed with `DELETE FROM sqlmcp_test.orders WHERE id BETWEEN 105 AND 604;`.
 
+**Since S-004** (2026-10-26), `sqlmcp_test` holds the benchmark's sample Database, so the counts below no longer apply:
+- **The 504 fixture orders** were kept as schema `sqlmcp_test_s003`, outside the Boundary. The rollback's `DELETE … BETWEEN 105 AND 604` now touches nothing, because the sample's order ids start at 10001.
+- **Step 1's answer is now** 1,179 orders across four regions.
+- **Step 2 still holds:** listing every order is cut short at the Row limit.
+
 Try it:
 1. In Claude or ChatGPT, with the SQL MCP connector signed in, ask "How many orders are there per region?". The answer should come from a `query` call and say North 336, South 168.
 2. Ask "List every order". The answer should say the result was cut short at the Row limit of 500 rows.

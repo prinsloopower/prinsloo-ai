@@ -16,6 +16,8 @@ Rollback: `npx wrangler rollback 8f666e42-0a9b-4bbb-83a4-e39828464114`, the S-00
 - The Hyperdrive change is outside the Worker version and stays after a rollback. S-001 only pings, so it works as `sqlmcp_reader` too.
 - The `sqlmcp_test` schema and the `sqlmcp_reader` role stay in Supabase unless removed with `DROP SCHEMA sqlmcp_test CASCADE; DROP ROLE sqlmcp_reader;`.
 
+**Since S-004** (2026-10-26), `sqlmcp_test` holds the benchmark's sample Database instead of these fixtures, so the tables and columns named below no longer apply. The fixtures were kept as schema `sqlmcp_test_s003`, outside the Boundary. Ask the same question and expect the S-004 tables: every table but `staff`, and every `customers` column but `email`.
+
 Try it:
 - In Claude or ChatGPT, with the SQL MCP connector signed in, ask "Which tables can I query?". The answer should list `sqlmcp_test.orders` (all columns) and `sqlmcp_test.customers` with only `id`, `name` and `region`, and nothing else: not `staff`, not `email`, nothing outside `sqlmcp_test`.
 - Then, in Supabase's SQL editor for AI Golf App, run `REVOKE SELECT ON sqlmcp_test.orders FROM sqlmcp_reader;` and ask again. `orders` should be gone. Restore it with `GRANT SELECT ON sqlmcp_test.orders TO sqlmcp_reader;`.
