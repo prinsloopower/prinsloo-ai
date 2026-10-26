@@ -625,3 +625,32 @@ Rationale: the product owner's answer to Q-036 ("accepted"). When the Server's o
 
 The domain model's definition of Database error widens to cover this case, so a Tool call still has exactly three outcomes. That wording waits for the domain model's next revision (Q-030, Q-033).
 Alternatives rejected: a fourth outcome, Server fault, with its own sentence, Audit `kind` and data-model entry (more change across the domain model and data-model for a rare case); classing it as a Refusal (the Server did not decline anything).
+
+## D-091 — The benchmark harness is its own MCP client running Claude Sonnet 5.5, judged by a fixed answer line
+Decided by: human | Date: 2026-10-25 | Phase: slice-spec (S-004)
+Rationale: the product owner's answers on specifying S-004:
+- "Harness is its own MCP client". A script signs in to the Deployment, offers the Server's tools to the model, and forwards each tool call itself, so any model provider could be used later.
+- "Claude Sonnet 5.5". The model named in this iteration's run report is `claude-sonnet-5-5`.
+- "Fixed answer line, checked by code". The model ends with `ANSWER: <value>`, and code compares it with the expected answer by type.
+- "I draft ~40, you approve". The question set and sample Database are drafted by the model and approved at S-004's spec gate.
+
+This reads D-037's "one AI tool and model" as this harness with one model. Claude and ChatGPT are not driven by script, so a run can be repeated identically.
+Alternatives rejected: the Claude API's MCP connector (ties the harness to one provider); manual runs in Claude or ChatGPT (cannot be rerun identically); an LLM grader (its grade can itself be wrong, and it costs more); a smaller first set of about 15 Questions.
+
+## D-092 — Choices made specifying S-004
+Decided by: model | Date: 2026-10-25 | Phase: slice-spec (S-004)
+Rationale: the S-004 spec needs answers D-037, D-042 and D-091 do not give:
+- **No refusal fallbacks.** If a safety classifier declines, the Question ends as an error. A fallback would answer with a different model than the one the report names.
+- **Effort and caps.** Effort is `high`, Claude Sonnet 5.5's default, stated explicitly so a rerun matches. Thinking is adaptive, with `max_tokens` 16,000 and 20 model turns per Question.
+- **A refused query** is a `query` result whose text starts "The query was not accepted" (D-082). The third refused query ends the Question as given up, with no further model call (D-042).
+- **The sample Database replaces `sqlmcp_test`'s S-002/S-003 fixture tables** with a deterministic sales Database. Ungranted `staff` and an ungranted `customers.email` keep the hidden-object cases alive. S-002's and S-003's "Try it" counts no longer apply.
+- **Judging tolerances:**
+  - numbers within 0.5%, or 0.01 when the expected value is under 2;
+  - text ignoring case, spaces and a trailing full stop;
+  - lists as sets;
+  - maps by key.
+
+  Two Questions expect `UNAVAILABLE`, so declining hidden data counts as correct.
+- **The run report is committed.** It names everything a rerun needs, and nothing secret. The Sign-in's Refresh token is cached in a gitignored file.
+- **Missing a target is not a failure of the slice.** A first run below 90% correct (D-045), or above 5% given up, is raised as a Q-### for the product owner, because the slice delivers the measurement.
+Alternatives rejected: a separate benchmark schema outside the project test Deployment's Boundary (it would need a second Boundary or a Deployment of its own); judging by exact strings (rounding differences would count as wrong answers).
