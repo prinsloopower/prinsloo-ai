@@ -20,6 +20,8 @@ export interface Deps {
   now?: () => number;
   /** The Database the Tools read; without one, no Tools are offered. */
   database?: Database;
+  /** The deployed Worker's version id, which `initialize` adds to the Server's version (S-004). */
+  serverVersion?: string;
   /** Loads the Engine's half of the Query check and of Redaction, once per isolate or process (ADR-005). */
   queryEngine?: () => Promise<QueryEngine>;
   /** The setting naming the Database account in config_invalid lines (D-077). */
@@ -120,7 +122,7 @@ export function createApp(deps: Deps) {
           redaction: config.redaction,
         }
       : undefined;
-    return handleMcp(c.req.raw, signedIn.staff, tools);
+    return handleMcp(c.req.raw, signedIn.staff, tools, deps.serverVersion);
   };
   app.all("/mcp/*", mcp);
   app.all("/mcp", mcp);

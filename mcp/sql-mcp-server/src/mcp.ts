@@ -141,8 +141,9 @@ async function readCatalog(database: Database): Promise<CatalogRead> {
  * The signed-in Staff member reaches tool handlers as `extra.authInfo.extra.staff` (R-009).
  * Without a Database there are no Tools, and `tools/list` answers an empty list.
  */
-export async function handleMcp(request: Request, staff?: Staff, tools?: ToolContext): Promise<Response> {
-  const server = new McpServer(SERVER_INFO);
+export async function handleMcp(request: Request, staff?: Staff, tools?: ToolContext, workerVersion?: string): Promise<Response> {
+  // The deployed Worker's version id names the release a benchmark report measured (S-004, D-093).
+  const server = new McpServer(workerVersion ? { ...SERVER_INFO, version: SERVER_INFO.version + "+" + workerVersion } : SERVER_INFO);
   const body: unknown = await request
     .clone()
     .json()

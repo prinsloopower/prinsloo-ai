@@ -12,6 +12,8 @@
     "enabled": true,
     "head_sampling_rate": 1
   },
+  // The deployed version's id, which the Server reports in `initialize` (S-004).
+  "version_metadata": { "binding": "VERSION_METADATA" },
   "hyperdrive": [
     {
       "binding": "HYPERDRIVE",

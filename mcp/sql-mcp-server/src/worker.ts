@@ -9,6 +9,7 @@ import { PostgresDatabase } from "./engine/postgres.js";
 /** Cloudflare runtime adapter (ADR-001, ADR-002). */
 interface Env {
   HYPERDRIVE: Hyperdrive;
+  VERSION_METADATA?: WorkerVersionMetadata;
 }
 
 // One app per isolate, so the Identity provider's discovery and keys stay cached
@@ -24,6 +25,7 @@ export default {
         database,
         queryEngine: async () => postgresQueryEngine(await loadPgParser(parserWasm as WebAssembly.Module)),
         connectionSetting: "HYPERDRIVE",
+        ...(env.VERSION_METADATA ? { serverVersion: env.VERSION_METADATA.id } : {}),
         env: env as unknown as RuntimeVariables,
       });
     }

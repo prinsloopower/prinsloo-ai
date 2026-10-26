@@ -154,7 +154,7 @@ export interface Harness {
 /** One app over a fake Identity provider. `realMcp` swaps the spy handler for the SDK one. */
 export async function harness(
   envOver: Env = {},
-  opts: { realMcp?: boolean; clock?: Clock; database?: Database; queryEngine?: () => Promise<QueryEngine> } = {},
+  opts: { realMcp?: boolean; clock?: Clock; database?: Database; queryEngine?: () => Promise<QueryEngine>; serverVersion?: string } = {},
 ): Promise<Harness> {
   const clock = opts.clock ?? new Clock();
   const env = baseEnv(envOver);
@@ -167,6 +167,7 @@ export async function harness(
     now: clock.now,
     ...(opts.database ? { database: opts.database } : {}),
     ...(opts.queryEngine ? { queryEngine: opts.queryEngine } : {}),
+    ...(opts.serverVersion ? { serverVersion: opts.serverVersion } : {}),
     ...(opts.realMcp
       ? {}
       : {

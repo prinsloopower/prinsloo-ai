@@ -26,9 +26,11 @@
     "zod": "^4.6.7"
   },
   "devDependencies": {
+    "@anthropic-ai/sdk": "^1.3.0",
     "@cloudflare/workers-types": "^5.20261011.1",
     "@types/node": "^24.0.0",
     "@types/pg": "^8.23.1",
+    "tsx": "^4.23.15",
     "typescript": "^5.9.0",
     "vitest": "^5.0.3",
     "wrangler": "^4.149.0"
