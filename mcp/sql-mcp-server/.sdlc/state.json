@@ -254,7 +254,17 @@
       "traces": [
         "R-012"
       ],
-      "size_at_creation": "product"
+      "size_at_creation": "product",
+      "rework": {
+        "slice-spec": 1
+      },
+      "gates": {
+        "slice-spec": {
+          "result": "fail",
+          "by": "model",
+          "at": "2026-10-26T00:46:28+00:00"
+        }
+      }
     },
     {
       "id": "S-005",
@@ -361,5 +371,7 @@
   ],
   "blocked_on": null,
   "open_questions": [],
-  "phase": null
+  "phase": "slice-spec",
+  "phase_started_at": "2026-10-26T00:48:04+00:00",
+  "phase_paused_s": 0
 }

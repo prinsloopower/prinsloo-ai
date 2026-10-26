@@ -654,3 +654,21 @@ Rationale: the S-004 spec needs answers D-037, D-042 and D-091 do not give:
 - **The run report is committed.** It names everything a rerun needs, and nothing secret. The Sign-in's Refresh token is cached in a gitignored file.
 - **Missing a target is not a failure of the slice.** A first run below 90% correct (D-045), or above 5% given up, is raised as a Q-### for the product owner, because the slice delivers the measurement.
 Alternatives rejected: a separate benchmark schema outside the project test Deployment's Boundary (it would need a second Boundary or a Deployment of its own); judging by exact strings (rounding differences would count as wrong answers).
+
+## D-093 — Choices made revising S-004's spec after its first critique
+Decided by: model | Date: 2026-10-25 | Phase: slice-spec (S-004)
+Rationale: the gate-1 critique showed the benchmark would partly measure the model's guesses, and could not tell releases or noise apart:
+- **Definitions live in the Questions,** not the system prompt. Each Question that needs a definition states it: shipped orders, after discounts, any status, Johannesburg time. That is what a careful Staff member would type, and it keeps the system prompt free of a Semantic model (D-037).
+- **The sample Database removes ambiguity:**
+  - a `discount_rate` fraction;
+  - every timestamp at 12:00 UTC except one deliberate cancelled batch;
+  - no ties within 1% or one unit;
+  - an odd count for the median;
+  - no `,` or `=` in names;
+  - order ids from 10001.
+- **Three runs per invocation,** with each run's correctness and give-up, and their mean, minimum and maximum. Sonnet 5.5 fixes its sampling, so one run cannot separate a release's change from the model's own variance. The PRD's targets are judged on the mean.
+- **The Server's version names the deployed Worker.** `initialize` reports `<package version>+<Worker version id>` through Cloudflare's `version_metadata` binding, so each report states the release it measured. This changes the Server, and ships with S-004.
+- **The give-up count is cumulative per Question.** It counts only results starting "The query was not accepted" (D-082, D-092).
+- **400,000 input tokens per Question** is the cap, with a cost estimate in the spec and the real cost in the first report.
+- **Expected answers** are stored once from the reference SQL, reviewed at code review, and cross-checked across Questions. This is so a wrong reference SQL is caught by more than its own output.
+Alternatives rejected: putting a time-zone and revenue convention in the system prompt (a Semantic model by another name); one run per release (no measure of noise); five runs (more than twice the cost for a modest gain in precision).
