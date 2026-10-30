@@ -250,7 +250,7 @@
     {
       "id": "S-004",
       "title": "Measuring answer correctness on PostgreSQL",
-      "status": "specified",
+      "status": "built",
       "traces": [
         "R-012"
       ],
@@ -264,6 +264,11 @@
           "by": "human",
           "at": "2026-10-26T02:07:57+00:00",
           "quote": "Apply all, then pass / Approve the set / 1 run by default"
+        },
+        "build": {
+          "result": "pass",
+          "by": "script",
+          "at": "2026-10-30T21:09:14+00:00"
         }
       }
     },
