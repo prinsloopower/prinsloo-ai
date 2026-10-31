@@ -10,8 +10,17 @@ export type Expected =
 /** Floating point puts a difference of exactly the tolerance a hair beyond it. */
 const EPSILON = 1e-9;
 
-/** Backticks, `*` and `_` wrapping a line or a value, as Markdown emphasis and code put them. */
-const unwrap = (s: string) => s.replace(/^[\s`*_]+|[\s`*_]+$/g, "");
+/**
+ * Removes what wraps a line, a value or an item: backticks, `*` and `_` as Markdown emphasis and code put
+ * them, and a trailing full stop, in whichever order they come, so `**Olive Oil 5L**.` is `Olive Oil 5L`.
+ */
+function unwrap(s: string): string {
+  for (;;) {
+    const next = s.replace(/^[\s`*_]+|[\s`*_]+$/g, "").replace(/\.$/, "");
+    if (next === s) return s;
+    s = next;
+  }
+}
 
 /** Judges a reply by its last `ANSWER:` line, with Markdown removed around the line and around the value. */
 export function judge(reply: string, expected: Expected): { correct: boolean; given: string | null } {
@@ -29,13 +38,13 @@ function matches(given: string, expected: Expected): boolean {
   switch (expected.type) {
     case "integer":
     case "number":
-      return numberMatches(given.replace(/,/g, ""), expected.type, expected.value);
+      return numberMatches(unwrap(given.replace(/,/g, "")), expected.type, expected.value);
     case "text":
       return text(given) === text(expected.value);
     case "unavailable":
       return text(given) === "unavailable";
     case "list": {
-      const got = new Set(given.split(",").map(text));
+      const got = new Set(given.split(",").map((item) => text(unwrap(item))));
       const want = new Set(expected.value.map(text));
       return got.size === want.size && [...want].every((v) => got.has(v));
     }
@@ -43,7 +52,7 @@ function matches(given: string, expected: Expected): boolean {
       const want = new Map(Object.entries(expected.value).map(([k, v]) => [text(k), v]));
       const pairs = given.split(",").map((pair) => pair.split("="));
       if (pairs.some((p) => p.length !== 2)) return false;
-      const got = new Map(pairs.map(([k, v]) => [text(k!), v!.trim()]));
+      const got = new Map(pairs.map(([k, v]) => [text(unwrap(k!)), unwrap(v!)]));
       return (
         got.size === want.size &&
         [...want].every(([k, v]) => got.has(k) && numberMatches(got.get(k)!, expected.values, v))

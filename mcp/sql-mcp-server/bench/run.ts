@@ -34,12 +34,14 @@ try {
   const questions = JSON.parse(questionFile.toString("utf8")) as Question[];
   const anthropic = new Anthropic();
 
-  // One browser Sign-in at most; later renewals use the cached Refresh token.
+  // One browser Sign-in at most, at the start; renewals mid-run use the cached Refresh token only (D-098).
   const deps = { fetch, openBrowser: openSystemBrowser, listen: listenOnLoopback, cachePath: CACHE };
   const issued: string[] = [];
+  let connected = false;
   const server = await renewingServer({
     connect: async () => {
-      const session = await signIn(deploymentUrl, deps);
+      const session = await signIn(deploymentUrl, { ...deps, interactive: !connected });
+      connected = true;
       issued.push(session.accessToken, session.refreshToken ?? "");
       return { server: await connectServer(deploymentUrl, session.accessToken, fetch), expiresAt: Date.now() + session.expiresIn * 1000 };
     },
@@ -85,6 +87,8 @@ try {
     console.log(`Run ${i + 1}: ${(r.totals.correctness * 100).toFixed(1)}% correct, ${(r.totals.giveUp * 100).toFixed(1)}% given up.`);
   }
   if (report.stopped) console.log(`Stopped early at ${report.stopped}.`);
+  // A run cut short because the Sign-in could not be renewed did not complete (D-098).
+  if (report.stopped?.startsWith("the Sign-in could not be renewed")) process.exitCode = 1;
   console.log(`About US$${report.costUsd.toFixed(2)}. Report: ${paths.md}`);
 } catch (e) {
   console.error(`The benchmark could not run: ${e instanceof Error ? e.message : String(e)}`);

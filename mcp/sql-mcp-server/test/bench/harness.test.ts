@@ -1,6 +1,6 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import { describe, expect, it } from "vitest";
-import { type Server, type ServerResult, SYSTEM_PROMPT, runBenchmark } from "../../bench/src/harness.js";
+import { type Server, type ServerResult, StopInvocation, SYSTEM_PROMPT, runBenchmark } from "../../bench/src/harness.js";
 import type { Question } from "../../bench/src/reference.js";
 
 type Params = Anthropic.Messages.MessageCreateParamsNonStreaming;
@@ -179,5 +179,24 @@ describe("S-004 the harness", () => {
     const twice = await runBenchmark({ questions, runs: 2, model: two.model, server: fakeServer(() => ok()) });
     expect(two.calls).toHaveLength(6);
     expect(twice.runs[1]!.map((r) => r.outcome)).toEqual(["correct", "not reached", "not reached", "not reached", "not reached"]);
+  });
+});
+
+describe("S-004 the harness, after review 2 (D-098)", () => {
+  it("harness_stops_invocation_when_renewal_is_refused", async () => {
+    const questions = ["B-01", "B-02", "B-03", "B-04"].map((id) => question(id));
+    const { model, calls } = fakeModel((params) =>
+      params.messages.length === 1 ? { content: [toolUse("list_tables", { request_text: "q" })] } : { content: [text("ANSWER: 12")] },
+    );
+    let toolCalls = 0;
+    const server = fakeServer(() => {
+      if (++toolCalls === 2) throw new StopInvocation("the Sign-in could not be renewed: the cached Refresh token was refused");
+      return ok();
+    });
+    const report = await runBenchmark({ questions, runs: 1, model, server });
+    expect(calls).toHaveLength(3);
+    expect(report.runs[0]!.map((r) => r.outcome)).toEqual(["correct", "error", "not reached", "not reached"]);
+    expect(report.runs[0]![1]!.error).toMatch(/could not be renewed/);
+    expect(report.stopped).toMatch(/could not be renewed/);
   });
 });

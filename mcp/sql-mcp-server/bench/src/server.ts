@@ -1,12 +1,13 @@
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
-import type { Server, ServerResult } from "./harness.js";
+import { type Server, type ServerResult, StopInvocation } from "./harness.js";
 
 type Connection = { server: Server & { close(): Promise<void> }; expiresAt: number };
 
 /**
  * The Server over a Sign-in that is renewed before its access token expires. The new connection replaces
- * the old one only once it is up, so a failed renewal is retried on the next call, not lost for the run.
+ * the old one only once it is up. A failed renewal leaves the run on the current connection while its token
+ * lasts, and is tried again on the next call; once the token has expired unrenewed, the invocation stops (D-098).
  */
 export async function renewingServer(opts: { connect: () => Promise<Connection>; now: () => number; renewBeforeMs: number }): Promise<Server & { close(): Promise<void> }> {
   let current = await opts.connect();
@@ -16,10 +17,14 @@ export async function renewingServer(opts: { connect: () => Promise<Connection>;
     tools: current.server.tools,
     call: async (name, input) => {
       if (opts.now() > current.expiresAt - opts.renewBeforeMs) {
-        const next = await opts.connect();
-        const old = current;
-        current = next;
-        await old.server.close().catch(() => {});
+        try {
+          const next = await opts.connect();
+          const old = current;
+          current = next;
+          await old.server.close().catch(() => {});
+        } catch (e) {
+          if (opts.now() >= current.expiresAt) throw new StopInvocation(`the Sign-in could not be renewed: ${e instanceof Error ? e.message : String(e)}`);
+        }
       }
       return current.server.call(name, input);
     },

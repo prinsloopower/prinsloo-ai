@@ -7,6 +7,8 @@ Tests: `npm test` → 40 files, 223 passed, 0 failed; `npx tsc --noEmit -p .` �
 
 The spec-and-scope reviewer also checked every Question's reference SQL against its stated definitions, with read-only spot checks on Docker, and found no expected answer wrong.
 
+The product owner answered the hold with "Fix nine, defer T-010", and for the Judge, "Tighten to the spec" (D-096). Nine gaps were fixed in commit 86b14d2. T-010, the live run, is deferred to verification. Review 2 checked the rework.
+
 ## gap — The live run (T-010) has not been made, so the Delivers measurement does not exist yet
 Where: docs/slices/S-004/spec.md:236
 Axis: spec and scope
@@ -108,3 +110,60 @@ Axis: standards and naming
 Only final replies count as "answered". Questions that end given up, in error or not reached never increment it, so the counter looks as if the run stopped early.
 
 Verdict: hold (0 blockers, 10 gaps, 10 nits)
+
+## Review 2 (2026-10-30)
+
+Reviewed: commit 86b14d2 (0aacb67..86b14d2), in the context of the whole slice, on two axes in separate fresh contexts.
+Tests: `npm test` → 41 files, 229 passed, 0 failed; `npx tsc --noEmit -p .` → clean.
+
+How Review 1's gaps stand:
+
+| Gap | Status | Evidence |
+|---|---|---|
+| T-010 live run | Deferred by D-096 to verification | — |
+| README root | Resolved | — |
+| Fixture rename on the record | Resolved | D-097 |
+| Version test bypasses the adapter | Partly resolved, still open | Reading `.id` is tested; worker.ts's wiring is not (below) |
+| Credentials in redaction | Resolved | — |
+| Failed reconnect | Resolved | Its interaction with the Sign-in timeout is new (below) |
+| Sign-in waits forever | Resolved | Same interaction (below) |
+| Judge leniency | Resolved as D-096 decided | One edge is now too strict (below) |
+| Tool names and prefix | Resolved | — |
+| `close()` | Resolved | — |
+
+## gap — A full stop after the Markdown now fails a correct answer
+Where: bench/src/judge.ts:14
+Axis: both
+`unwrap` strips `` ` ``, `*` and `_` only at the very ends, and `text()` removes the trailing full stop only afterwards. Both reviewers ran the replies:
+- `ANSWER: **Olive Oil 5L**.` becomes `Olive Oil 5L**`, which is judged incorrect.
+- `ANSWER: **42**.` keeps a stray `**`, so the number is rejected.
+- Markdown on each list item or map key, as in `` `Feta Tub`, `Seed Crackers` `` or `**Elm Street Deli**=3`, also fails now.
+
+The previous Judge accepted all of these. The spec ignores a trailing full stop and removes Markdown around the value, and a reply doing both is the obvious case. The correctness figure could mark right answers wrong on punctuation.
+
+## gap — A refused renewal opens a browser and waits 10 minutes on every later tool call
+Where: bench/src/server.ts:16
+Axis: both
+After a failed `connect()`, the expiry stays past its renewal point, so every later call connects again. In run.ts, `connect` signs in, so a refused cached Refresh token means a browser tab and a 10-minute wait per tool call, each ending as "Server failure". An unattended run could stall for hours and open dozens of tabs. The renewing call also fails even though the old token has up to five minutes left. run.ts's comment "One browser Sign-in at most" is no longer true, and the 10-minute default is stated in neither the spec nor D-096.
+
+## gap — The adapter test copies the adapter's wiring instead of running it
+Where: test/bench/rework.test.ts:92
+Axis: spec and scope
+`worker_adapter_reads_version_metadata_id` calls `workerVersionOf` and then repeats `...(version ? { serverVersion: version } : {})` itself. It never loads src/worker.ts. If worker.ts stopped calling the helper or dropped the spread (src/worker.ts:30), the test would pass and every report would name the bare package version. Review 1's gap is therefore half closed.
+
+## gap — The report reads the Sign-in cache with its own copy of the cache's fields
+Where: bench/src/report.ts:31
+Axis: standards and naming
+signin.ts owns the cache's type and `readCache()`. `credentialsInUse` parses the same file again and hard-codes `clientId` and `refreshToken`. If the cache gained or renamed a secret field, redaction would miss it silently, which is the leak this fix was meant to close.
+
+## nit — The rework's tests are filed by review round, not by subject
+Where: test/bench/rework.test.ts:1
+Axis: standards and naming
+Every other bench test file is named for its module. Someone changing the Judge reads judge.test.ts and doesn't see the test that enforces the spec's text rule. `node:fs` is also imported on two lines.
+
+## nit — D-096 pointed at answers the review file did not hold
+Where: .sdlc/decisions.md:711
+Axis: spec and scope
+D-096 cites the product owner's answers as recorded in review.md, which held only Review 1's findings. The disposition paragraph under Review 1 now records them.
+
+Verdict: hold (0 blockers, 4 gaps, 2 nits)

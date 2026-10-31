@@ -1,10 +1,9 @@
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { readFileSync } from "node:fs";
 import type Anthropic from "@anthropic-ai/sdk";
 import { describe, expect, it } from "vitest";
-import { REFUSED_QUERY, runBenchmark, type Server, type ServerResult } from "../../bench/src/harness.js";
+import { REFUSED_QUERY, StopInvocation, runBenchmark, type Server, type ServerResult } from "../../bench/src/harness.js";
 import { judge } from "../../bench/src/judge.js";
 import type { Question } from "../../bench/src/reference.js";
 import { buildReport, credentialsInUse } from "../../bench/src/report.js";
@@ -13,7 +12,7 @@ import { signIn } from "../../bench/src/signin.js";
 import { REQUEST_TEXT_REFUSAL } from "../../src/tools/answer.js";
 import { LIST_TABLES } from "../../src/tools/list-tables.js";
 import { QUERY, queryRefusals } from "../../src/tools/query.js";
-import { workerVersionOf } from "../../src/worker-version.js";
+import { workerDeps } from "../../src/worker-deps.js";
 import { queryDatabase } from "../query/catalog.js";
 import { ORIGIN, callMcp, harness, signIn as signInToApp } from "../signin/helpers.js";
 
@@ -67,10 +66,15 @@ describe("S-004 rework: the harness uses the Server's own names", () => {
 describe("S-004 rework: the Server's version comes from the Worker's binding", () => {
   it("worker_adapter_reads_version_metadata_id", async () => {
     const id = "4dc70716-52c2-411c-8fc8-1b65af40d0ff";
-    expect(workerVersionOf({ VERSION_METADATA: { id, tag: "release-tag", timestamp: "2026-10-30T00:00:00Z" } })).toBe(id);
-    expect(workerVersionOf({})).toBeUndefined();
-    const version = workerVersionOf({ VERSION_METADATA: { id, tag: "", timestamp: "" } });
-    const h = await harness({}, { realMcp: true, database: queryDatabase(), ...(version ? { serverVersion: version } : {}) });
+    const HYPERDRIVE = { connectionString: "postgres://reader:pw@localhost:1/db" } as unknown as Hyperdrive;
+    const notLoaded = async () => {
+      throw new Error("the parser is not loaded in this test");
+    };
+    // The dependencies worker.ts gives createApp, built the way it builds them.
+    const deps = workerDeps({ HYPERDRIVE, VERSION_METADATA: { id, tag: "release-tag", timestamp: "2026-10-30T00:00:00Z" } }, notLoaded);
+    expect(deps.serverVersion).toBe(id);
+    expect(workerDeps({ HYPERDRIVE }, notLoaded).serverVersion).toBeUndefined();
+    const h = await harness({}, { realMcp: true, database: queryDatabase(), serverVersion: deps.serverVersion! });
     const token = (await signInToApp(h)).access_token;
     const init = { jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "t", version: "0" } } };
     const body = (await (await callMcp(h, token, "/mcp", init)).json()) as { result: { serverInfo: { version: string } } };
@@ -122,21 +126,31 @@ describe("S-004 rework: renewing the Sign-in mid-run", () => {
   it("benchmark_renewal_survives_failed_reconnect", async () => {
     let clock = 0;
     let connects = 0;
+    let failFrom = Infinity;
     const connect = async () => {
       connects++;
-      if (connects === 2) throw new Error("network blip");
+      if (connects === 2 || connects >= failFrom) throw new Error("network blip");
+      const n = connects;
       return {
-        server: { name: "s", version: "v", tools: [], call: async () => ({ content: [{ type: "text", text: `via connection ${connects}` }] }), close: async () => {} },
+        server: { name: "s", version: "v", tools: [], call: async () => ({ content: [{ type: "text", text: `via connection ${n}` }] }), close: async () => {} },
         expiresAt: clock + 3_600_000,
       };
     };
     const server = await renewingServer({ connect, now: () => clock, renewBeforeMs: 300_000 });
-    expect((await server.call("q", {})).content[0]!.text).toBe("via connection 1");
+    const via = async () => (await server.call("q", {})).content[0]!.text;
+    expect(await via()).toBe("via connection 1");
+    // Renewal is due but fails: the current token is still valid, so the call goes through on it (D-098).
     clock = 3_400_000;
-    await expect(server.call("q", {})).rejects.toThrow("network blip");
-    // The next call tries again rather than using the closed connection.
-    expect((await server.call("q", {})).content[0]!.text).toBe("via connection 3");
+    expect(await via()).toBe("via connection 1");
+    // The next call renews again, and this time it works.
+    expect(await via()).toBe("via connection 3");
     expect(connects).toBe(3);
+    // Renewal fails from here on: the run carries on while the token lasts, then stops.
+    failFrom = 4;
+    clock = 6_800_000;
+    expect(await via()).toBe("via connection 3");
+    clock = 7_100_000;
+    await expect(server.call("q", {})).rejects.toBeInstanceOf(StopInvocation);
   });
 });
 

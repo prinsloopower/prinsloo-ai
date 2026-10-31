@@ -29,11 +29,13 @@ To make several runs in one go, add `--runs N`. One run is the default.
 
 **Signing in.** The first time, your browser opens at the Server's sign-in. Sign in as the Staff member, and the browser then says you can close it. The harness keeps the resulting Refresh token in `bench/.signin.json`, which git ignores. Later runs within 30 days need no browser. Delete that file to sign in again, or to switch Deployments.
 
+The browser opens only at the start, and waits up to ten minutes for you. During a run the harness renews its sign-in from the cached Refresh token alone. If the Server refuses that token, the run carries on until the current sign-in expires, then stops. The Questions it didn't reach are marked so, and the report is still written.
+
 **What you see.** While it runs, the harness prints progress, one line per answered Question. At the end it prints each run's correctness and give-up, the approximate cost, and the report's path.
 
 The command exits:
 - **0** when every run completed, whatever the score;
-- **1** when it could not run, for example when the sign-in failed or the API key is missing;
+- **1** when it could not run, for example when the sign-in failed or the API key is missing, or when it stopped because its sign-in could not be renewed (a report is written in that case);
 - **2** when its arguments are wrong.
 
 ## What it costs

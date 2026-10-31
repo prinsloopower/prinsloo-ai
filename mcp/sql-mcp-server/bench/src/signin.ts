@@ -12,6 +12,8 @@ export type SignInDeps = {
   cachePath: string;
   /** How long to wait for the browser sign-in to come back; ten minutes unless given. */
   timeoutMs?: number;
+  /** False for a renewal mid-run: only the cached Refresh token is used, and the browser is never opened (D-098). */
+  interactive?: boolean;
   log?: (line: string) => void;
 };
 
@@ -45,8 +47,10 @@ export async function signIn(deploymentUrl: string, deps: SignInDeps): Promise<{
       writeCache(deps.cachePath, { ...cached, refreshToken: t.refresh_token ?? cached.refreshToken });
       return { accessToken: t.access_token, expiresIn: t.expires_in, ...(t.refresh_token ? { refreshToken: t.refresh_token } : {}) };
     }
+    if (deps.interactive === false) throw new Error(`the cached Refresh token was refused (${res.status})`);
     (deps.log ?? console.log)(`The cached Refresh token was refused (${res.status}), so the Staff member signs in again in the browser.`);
   }
+  if (deps.interactive === false) throw new Error("there is no cached Refresh token for this Deployment");
 
   const registration = await deps.fetch(`${base}/register`, {
     method: "POST",
@@ -106,6 +110,13 @@ function tokenRequest(deps: SignInDeps, base: string, form: Record<string, strin
     headers: { "content-type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams(form).toString(),
   });
+}
+
+/** What the Sign-in cache at `path` holds that a report must never show: every field but the Deployment URL. */
+export function cacheSecrets(path: string): string[] {
+  const cache = readCache(path);
+  if (!cache) return [];
+  return Object.entries(cache).flatMap(([field, value]) => (field !== "deploymentUrl" && typeof value === "string" ? [value] : []));
 }
 
 function readCache(path: string): Cache | null {

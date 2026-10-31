@@ -20,6 +20,14 @@ const RUN_INPUT_TOKENS = 8_000_000;
 /** A refused query's result starts with this; a Database error or an input refusal does not (D-082). */
 export const REFUSED_QUERY = "The query was not accepted";
 
+/**
+ * Thrown by the Server when the invocation cannot go on, such as a Sign-in that could not be renewed (D-098).
+ * The Question in hand ends as an error with what it spent, and the rest are not reached.
+ */
+export class StopInvocation extends Error {
+  partial?: QuestionResult;
+}
+
 export type ServerResult = { content: { type: string; text?: string }[]; isError?: boolean };
 /** The deployed Server as the harness reaches it: its `initialize` name and version, `tools/list`, and `tools/call`. */
 export type Server = {
@@ -55,12 +63,23 @@ export async function runBenchmark(opts: { questions: Question[]; runs: number; 
   for (let r = 0; r < opts.runs; r++) {
     const run: QuestionResult[] = [];
     for (const q of opts.questions) {
+      if (stopped) {
+        run.push({ ...empty(q), outcome: "not reached" });
+        continue;
+      }
       if (spent >= ceiling) {
         stopped = "8,000,000 input tokens per run";
         run.push({ ...empty(q), outcome: "not reached" });
         continue;
       }
-      const result = await runQuestion(q, opts.model, opts.server);
+      let result: QuestionResult;
+      try {
+        result = await runQuestion(q, opts.model, opts.server);
+      } catch (e) {
+        if (!(e instanceof StopInvocation)) throw e;
+        stopped = e.message;
+        result = e.partial ?? { ...empty(q), outcome: "error", error: e.message };
+      }
       spent += inputTokens(result.tokens);
       run.push(result);
     }
@@ -123,6 +142,10 @@ async function runQuestion(q: Question, model: Model, server: Server): Promise<Q
       try {
         answer = await server.call(use.name, use.input);
       } catch (e) {
+        if (e instanceof StopInvocation) {
+          e.partial = end("error", e.message);
+          throw e;
+        }
         return end("error", `Server failure: ${e instanceof Error ? e.message : String(e)}`);
       }
       const text = answer.content.flatMap((c) => (c.type === "text" && c.text !== undefined ? [c.text] : []));

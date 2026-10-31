@@ -216,16 +216,16 @@ Verified by: reference_sql_yields_expected_answers, expected_answers_have_no_tie
 Verified by: question_set_is_well_formed
 
 ### T-004 — The Judge decides each answer by its type
-Verified by: judge_numbers_within_tolerance, judge_text_lists_and_maps, judge_reads_last_answer_line, judge_missing_answer_line_is_incorrect, judge_tolerates_markdown_and_number_formats, judge_compares_text_as_spec_says
+Verified by: judge_numbers_within_tolerance, judge_text_lists_and_maps, judge_reads_last_answer_line, judge_missing_answer_line_is_incorrect, judge_tolerates_markdown_and_number_formats, judge_compares_text_as_spec_says, judge_tolerates_markdown_around_a_full_stop
 
 ### T-005 — The harness puts each Question to the model with the Server's own tools, and ends it as D-042 and the caps say
-Verified by: harness_offers_tools_from_tools_list, harness_forwards_calls_and_results, harness_gives_up_after_three_refused_queries, harness_caps_turns_tokens_and_records_refusals, harness_stops_at_invocation_token_ceiling, harness_counts_server_tool_names_and_refusals
+Verified by: harness_offers_tools_from_tools_list, harness_forwards_calls_and_results, harness_gives_up_after_three_refused_queries, harness_caps_turns_tokens_and_records_refusals, harness_stops_at_invocation_token_ceiling, harness_counts_server_tool_names_and_refusals, harness_stops_invocation_when_renewal_is_refused
 
 ### T-006 — The run report states each run's figures and their spread, what a rerun needs, and no secret
 Verified by: report_totals_spread_and_metadata, report_lists_refusal_sentences, report_paths_do_not_collide, report_holds_no_tokens_or_keys, report_redacts_every_credential_in_use
 
 ### T-007 — The harness signs in once per invocation through the Server's broker, and reuses its Refresh token
-Verified by: harness_signs_in_with_loopback_and_pkce, harness_reuses_cached_refresh_token, signin_cache_is_gitignored, benchmark_renewal_survives_failed_reconnect, harness_signin_times_out_and_says_why
+Verified by: harness_signs_in_with_loopback_and_pkce, harness_reuses_cached_refresh_token, signin_cache_is_gitignored, benchmark_renewal_survives_failed_reconnect, harness_signin_times_out_and_says_why, harness_renewal_never_opens_browser
 
 ### T-008 — The Server reports its deployed version
 Verified by: server_version_names_worker_version, worker_adapter_reads_version_metadata_id

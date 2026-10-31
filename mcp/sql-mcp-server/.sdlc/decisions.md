@@ -730,3 +730,19 @@ Rationale: the Supabase connector declined `DROP SCHEMA sqlmcp_test CASCADE`, an
 The old schema can be dropped by anyone with `postgres` access, `DROP SCHEMA sqlmcp_test_s003 CASCADE;`, once no rollback to S-003's data is wanted.
 Alternatives rejected: asking the product owner to paste the 158 KB file into the SQL editor; dropping the old tables one by one, which the connector would also decline.
 
+## D-098 — Resolving S-004's second review; a run stops when its Sign-in cannot be renewed
+Decided by: human | Date: 2026-10-31 | Phase: review (S-004)
+Rationale: the product owner's answers to Review 2's hold (docs/slices/S-004/review.md): "Fix all four" and, for a refused renewal, "Stop and report". The four fixes:
+- **The Judge** removes Markdown and a trailing full stop around the value in either order, and around each list item, map key and map value. `**Olive Oil 5L**.` is then judged as `Olive Oil 5L`.
+- **Mid-run renewal** uses the cached Refresh token only and never opens a browser. While the current access token is still valid, a failed renewal leaves the run on the current connection, and the next call tries again. Once that token has expired with no renewal, the invocation stops:
+  - the Question in hand ends as an error naming the reason;
+  - the rest are marked "not reached";
+  - the report is written with what it has;
+  - the command exits non-zero, because not every run completed.
+
+  The browser Sign-in, at the start of an invocation only, waits at most ten minutes. D-096 left that value unstated.
+- **The Worker's dependencies** are built by a function the tests call, so `VERSION_METADATA` → `serverVersion` is tested as worker.ts wires it.
+- **The Sign-in cache's secrets** are listed by signin.ts, which owns the cache, rather than read a second time by the report.
+
+Alternatives rejected: one browser attempt per refused renewal (an unattended run would still stall for ten minutes); accepting the version-test and cache gaps.
+

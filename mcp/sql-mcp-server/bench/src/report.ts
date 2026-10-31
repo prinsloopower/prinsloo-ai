@@ -1,6 +1,7 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { Outcome, QuestionResult } from "./harness.js";
+import { cacheSecrets } from "./signin.js";
 
 /** What a rerun needs (S-004 spec, The run report). */
 export type ReportMeta = {
@@ -29,16 +30,7 @@ export type Report = ReportMeta & {
 
 /** Every credential an invocation holds: the Anthropic ones in its environment, and what the Sign-in cache keeps. */
 export function credentialsInUse(env: Record<string, string | undefined>, cachePath: string): string[] {
-  const found = [env.ANTHROPIC_API_KEY, env.ANTHROPIC_AUTH_TOKEN];
-  if (existsSync(cachePath)) {
-    try {
-      const cache = JSON.parse(readFileSync(cachePath, "utf8")) as Record<string, unknown>;
-      found.push(...[cache.clientId, cache.refreshToken].filter((v): v is string => typeof v === "string"));
-    } catch {
-      // An unreadable cache holds nothing a report could have taken from it.
-    }
-  }
-  return found.filter((s): s is string => typeof s === "string" && s.length > 0);
+  return [env.ANTHROPIC_API_KEY, env.ANTHROPIC_AUTH_TOKEN, ...cacheSecrets(cachePath)].filter((s): s is string => typeof s === "string" && s.length > 0);
 }
 
 /** An Anthropic credential's shape, caught even when it came from somewhere no list names, such as an `ant auth login` profile. */

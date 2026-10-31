@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { base64url } from "jose";
@@ -96,5 +96,21 @@ describe("S-004 the harness's Sign-in", () => {
   it("signin_cache_is_gitignored", () => {
     expect(readFileSync(".gitignore", "utf8").split(/\r?\n/)).toContain("bench/.signin.json");
     execFileSync("git", ["check-ignore", "-q", "bench/.signin.json"]);
+  });
+});
+
+describe("S-004 the harness's Sign-in, after review 2 (D-098)", () => {
+  it("harness_renewal_never_opens_browser", async () => {
+    const h = await harness({}, { realMcp: true, database: queryDatabase(), queryEngine: nodeQueryEngine });
+    const w = world(h);
+    const cachePath = cacheFile();
+    await signIn(ORIGIN, { ...w.deps, cachePath });
+    expect(w.opened).toHaveLength(1);
+    // A renewal mid-run uses the Refresh token and nothing else.
+    const renewed = await signIn(ORIGIN, { ...w.deps, cachePath, interactive: false });
+    expect(renewed.accessToken.length).toBeGreaterThan(0);
+    writeFileSync(cachePath, JSON.stringify({ deploymentUrl: ORIGIN, clientId: "not-a-client", refreshToken: "not-a-token" }));
+    await expect(signIn(ORIGIN, { ...w.deps, cachePath, interactive: false, log: () => {} })).rejects.toThrow(/refused/);
+    expect(w.opened).toHaveLength(1);
   });
 });

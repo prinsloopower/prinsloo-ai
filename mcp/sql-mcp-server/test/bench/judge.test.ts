@@ -62,3 +62,17 @@ describe("S-004 the Judge", () => {
     expect(ok("_ANSWER: 1,234.56_", { type: "number", value: 1234.56 })).toBe(true);
   });
 });
+
+describe("S-004 the Judge, after review 2 (D-098)", () => {
+  it("judge_tolerates_markdown_around_a_full_stop", () => {
+    expect(judge("ANSWER: **Olive Oil 5L**.", { type: "text", value: "Olive Oil 5L" })).toEqual({ correct: true, given: "Olive Oil 5L" });
+    expect(judge("**ANSWER: Olive Oil 5L**.", { type: "text", value: "Olive Oil 5L" }).correct).toBe(true);
+    expect(judge("ANSWER: **42**.", { type: "integer", value: 42 }).correct).toBe(true);
+    expect(judge("`ANSWER: 42`.", { type: "integer", value: 42 }).correct).toBe(true);
+    expect(judge("ANSWER: `Feta Tub`, `Seed Crackers`", { type: "list", value: ["Feta Tub", "Seed Crackers"] }).correct).toBe(true);
+    expect(judge("ANSWER: **Elm Street Deli**=3", { type: "map", value: { "Elm Street Deli": 3 }, values: "integer" }).correct).toBe(true);
+    expect(judge("ANSWER: North=`10.00`, South=**20**", { type: "map", value: { North: 10, South: 20 }, values: "number" }).correct).toBe(true);
+    // Markdown inside a value is still part of it.
+    expect(judge("ANSWER: **Olive_Oil 5L**.", { type: "text", value: "Olive Oil 5L" }).correct).toBe(false);
+  });
+});
