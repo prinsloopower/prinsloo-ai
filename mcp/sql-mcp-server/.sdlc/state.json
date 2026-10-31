@@ -250,7 +250,7 @@
     {
       "id": "S-004",
       "title": "Measuring answer correctness on PostgreSQL",
-      "status": "deployed",
+      "status": "verified",
       "traces": [
         "R-012"
       ],
@@ -279,6 +279,12 @@
           "result": "pass",
           "by": "script",
           "at": "2026-10-31T15:44:59+00:00"
+        },
+        "verify": {
+          "result": "pass",
+          "by": "human",
+          "at": "2026-10-31T21:33:39+00:00",
+          "quote": "Count my run; Confirm both; Accept as-is"
         }
       }
     },
@@ -387,5 +393,7 @@
   ],
   "blocked_on": null,
   "open_questions": [],
-  "phase": null
+  "phase": "slice-spec",
+  "phase_started_at": "2026-10-31T21:33:39+00:00",
+  "phase_paused_s": 0
 }

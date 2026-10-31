@@ -685,7 +685,7 @@ The 40 Questions are the benchmark for this iteration. A benchmark invocation ma
 Alternatives rejected: three runs by default (tens of US dollars an invocation); a third critique before passing.
 
 ## D-095 — How S-004's sample Database and expected answers are built
-Decided by: model | Date: 2026-10-25 | Phase: implement (S-004)
+Decided by: human (confirmed 2026-10-31 at the S-004 verification gate) | Date: 2026-10-25 | Phase: implement (S-004)
 Rationale: choices made building T-001 to T-003 that the spec leaves open:
 - **The sample is generated, then committed literally.** `bench/src/sample.ts` builds the SQL from a seed with a fixed pseudo-random generator. `bench/build-sample.ts` tries seeds in order against Docker PostgreSQL until every tie check holds, then writes `bench/sample-db.sql` and the expected answers. The file's first line names its seed, and the determinism test checks that the generator rebuilds the file byte for byte.
 - **Clear answers are built in where chance would make them close:**
@@ -722,7 +722,7 @@ T-010 is not a gap to fix here. It is the live run, made after deploy and checke
 Alternatives rejected: keeping the lenient Judge and amending the spec; accepting the gaps as they stand.
 
 ## D-097 — The S-002/S-003 fixtures were kept as `sqlmcp_test_s003`, and the sample was loaded in compact form
-Decided by: model | Date: 2026-10-30 | Phase: build (S-004, T-009)
+Decided by: human (confirmed 2026-10-31 at the S-004 verification gate) | Date: 2026-10-30 | Phase: build (S-004, T-009)
 Rationale: the Supabase connector declined `DROP SCHEMA sqlmcp_test CASCADE`, and an UPDATE with no WHERE clause, without asking the product owner. The old schema was therefore renamed to `sqlmcp_test_s003` rather than dropped. Its tables (`customers`, `orders` with 504 rows, `staff`) stay owned by `postgres` with their S-002 grants to `sqlmcp_reader`. They are outside the Deployment's Boundary (`{"schemas":["sqlmcp_test"]}`), so the Server neither lists nor queries them.
 
 `sqlmcp_test` was built from `bench/sample-db.sql`'s statements, with the two large INSERTs sent as compact `unnest` forms in chunks. The result was verified against Docker by per-table md5, every table identical. The md5s order rows with `COLLATE "C"`, because Supabase's collation sorts text differently from Docker's.
