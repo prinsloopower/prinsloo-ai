@@ -250,7 +250,7 @@
     {
       "id": "S-004",
       "title": "Measuring answer correctness on PostgreSQL",
-      "status": "reviewed",
+      "status": "deployed",
       "traces": [
         "R-012"
       ],
@@ -274,6 +274,11 @@
           "result": "pass",
           "by": "model",
           "at": "2026-10-31T15:39:11+00:00"
+        },
+        "deploy": {
+          "result": "pass",
+          "by": "script",
+          "at": "2026-10-31T15:44:59+00:00"
         }
       }
     },
