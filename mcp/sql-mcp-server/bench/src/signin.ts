@@ -10,7 +10,12 @@ export type SignInDeps = {
   listen(): Promise<Loopback>;
   /** `bench/.signin.json`, which is gitignored. */
   cachePath: string;
+  /** How long to wait for the browser sign-in to come back; ten minutes unless given. */
+  timeoutMs?: number;
+  log?: (line: string) => void;
 };
+
+const SIGN_IN_TIMEOUT_MS = 10 * 60 * 1000;
 
 /** What `bench/.signin.json` holds: one Deployment's client and Refresh token. Never written to a report. */
 type Cache = { deploymentUrl: string; clientId: string; refreshToken: string };
@@ -40,6 +45,7 @@ export async function signIn(deploymentUrl: string, deps: SignInDeps): Promise<{
       writeCache(deps.cachePath, { ...cached, refreshToken: t.refresh_token ?? cached.refreshToken });
       return { accessToken: t.access_token, expiresIn: t.expires_in, ...(t.refresh_token ? { refreshToken: t.refresh_token } : {}) };
     }
+    (deps.log ?? console.log)(`The cached Refresh token was refused (${res.status}), so the Staff member signs in again in the browser.`);
   }
 
   const registration = await deps.fetch(`${base}/register`, {
@@ -66,7 +72,12 @@ export async function signIn(deploymentUrl: string, deps: SignInDeps): Promise<{
       state,
     });
     await deps.openBrowser(`${base}/authorize?${q}`);
-    const back = await loopback.result;
+    const timeoutMs = deps.timeoutMs ?? SIGN_IN_TIMEOUT_MS;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const timedOut = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(new Error(`the browser sign-in did not complete within ${Math.round(timeoutMs / 1000)} seconds`)), timeoutMs);
+    });
+    const back = await Promise.race([loopback.result, timedOut]).finally(() => clearTimeout(timer));
     if (back.get("state") !== state) throw new Error("the sign-in came back with a different state");
     const c = back.get("code");
     if (!c) throw new Error(`the sign-in did not complete: ${back.get("error") ?? "no code"}`);

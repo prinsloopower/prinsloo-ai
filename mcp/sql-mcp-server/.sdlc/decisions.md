@@ -701,3 +701,32 @@ Rationale: choices made building T-001 to T-003 that the spec leaves open:
 - **The sample creates no role.** It grants to `sqlmcp_reader`, which exists in Supabase with a password set out of band (S-002). Locally, the test and the build script create it first.
 Alternatives rejected: computing the tie margins in TypeScript beside the generator (a second implementation of every answer); searching seeds with no answers built in (B-30's top order rarely clears 1% by chance).
 
+## D-096 — Resolving S-004's code review; the Judge follows the spec's text rules
+Decided by: human | Date: 2026-10-30 | Phase: review (S-004)
+Rationale: the product owner's answers to the review hold (docs/slices/S-004/review.md): "Fix nine, defer T-010" and, for the Judge, "Tighten to the spec". Nine gaps are fixed in this slice:
+- **Docs and register:**
+  - the README names the package folder;
+  - the fixture rename is recorded (D-097);
+  - `close()` is renamed.
+- **Behaviour, each with a test:**
+  - the Worker adapter's reading of `VERSION_METADATA`;
+  - redaction of every credential in use;
+  - token renewal that survives a failed reconnect;
+  - a Sign-in that times out and says why;
+  - the Server's own tool names and Refusal prefix.
+- **The Judge:**
+  - text compares ignoring case, surrounding spaces and a trailing full stop, with inner runs of space collapsed rather than removed;
+  - Markdown is stripped only around the line and around the value.
+
+T-010 is not a gap to fix here. It is the live run, made after deploy and checked at verification, as the spec's task list already says.
+Alternatives rejected: keeping the lenient Judge and amending the spec; accepting the gaps as they stand.
+
+## D-097 — The S-002/S-003 fixtures were kept as `sqlmcp_test_s003`, and the sample was loaded in compact form
+Decided by: model | Date: 2026-10-30 | Phase: build (S-004, T-009)
+Rationale: the Supabase connector declined `DROP SCHEMA sqlmcp_test CASCADE`, and an UPDATE with no WHERE clause, without asking the product owner. The old schema was therefore renamed to `sqlmcp_test_s003` rather than dropped. Its tables (`customers`, `orders` with 504 rows, `staff`) stay owned by `postgres` with their S-002 grants to `sqlmcp_reader`. They are outside the Deployment's Boundary (`{"schemas":["sqlmcp_test"]}`), so the Server neither lists nor queries them.
+
+`sqlmcp_test` was built from `bench/sample-db.sql`'s statements, with the two large INSERTs sent as compact `unnest` forms in chunks. The result was verified against Docker by per-table md5, every table identical. The md5s order rows with `COLLATE "C"`, because Supabase's collation sorts text differently from Docker's.
+
+The old schema can be dropped by anyone with `postgres` access, `DROP SCHEMA sqlmcp_test_s003 CASCADE;`, once no rollback to S-003's data is wanted.
+Alternatives rejected: asking the product owner to paste the 158 KB file into the SQL editor; dropping the old tables one by one, which the connector would also decline.
+

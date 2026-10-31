@@ -1,5 +1,7 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import { judge } from "./judge.js";
+import { LIST_TABLES } from "../../src/tools/list-tables.js";
+import { QUERY } from "../../src/tools/query.js";
 import type { Question } from "./reference.js";
 
 export const MODEL = "claude-sonnet-5-5";
@@ -16,7 +18,7 @@ const QUESTION_INPUT_TOKENS = 400_000;
 const RUN_INPUT_TOKENS = 8_000_000;
 
 /** A refused query's result starts with this; a Database error or an input refusal does not (D-082). */
-const REFUSED = "The query was not accepted";
+export const REFUSED_QUERY = "The query was not accepted";
 
 export type ServerResult = { content: { type: string; text?: string }[]; isError?: boolean };
 /** The deployed Server as the harness reaches it: its `initialize` name and version, `tools/list`, and `tools/call`. */
@@ -124,11 +126,11 @@ async function runQuestion(q: Question, model: Model, server: Server): Promise<Q
         return end("error", `Server failure: ${e instanceof Error ? e.message : String(e)}`);
       }
       const text = answer.content.flatMap((c) => (c.type === "text" && c.text !== undefined ? [c.text] : []));
-      if (use.name === "list_tables") result.listTables++;
-      if (use.name === "query") {
+      if (use.name === LIST_TABLES) result.listTables++;
+      if (use.name === QUERY) {
         result.queries++;
         const first = text[0] ?? "";
-        if (first.startsWith(REFUSED)) {
+        if (first.startsWith(REFUSED_QUERY)) {
           result.refusedQueries++;
           result.refusals.push(first.replace(/ \(reference [^)]*\)$/, ""));
           if (result.refusedQueries >= REFUSED_QUERIES) return end("given up");

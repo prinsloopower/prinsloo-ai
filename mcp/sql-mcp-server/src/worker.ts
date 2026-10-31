@@ -5,6 +5,7 @@ import type { RuntimeVariables } from "./config.js";
 import { loadPgParser } from "./engine/pg-parser.js";
 import { postgresQueryEngine } from "./engine/postgres-query-engine.js";
 import { PostgresDatabase } from "./engine/postgres.js";
+import { workerVersionOf } from "./worker-version.js";
 
 /** Cloudflare runtime adapter (ADR-001, ADR-002). */
 interface Env {
@@ -19,13 +20,14 @@ let app: ReturnType<typeof createApp> | undefined;
 export default {
   fetch(request: Request, env: Env, ctx: ExecutionContext): Response | Promise<Response> {
     if (!app) {
+      const serverVersion = workerVersionOf(env);
       const database = new PostgresDatabase(env.HYPERDRIVE.connectionString);
       app = createApp({
         ping: () => database.ping(),
         database,
         queryEngine: async () => postgresQueryEngine(await loadPgParser(parserWasm as WebAssembly.Module)),
         connectionSetting: "HYPERDRIVE",
-        ...(env.VERSION_METADATA ? { serverVersion: env.VERSION_METADATA.id } : {}),
+        ...(serverVersion ? { serverVersion } : {}),
         env: env as unknown as RuntimeVariables,
       });
     }

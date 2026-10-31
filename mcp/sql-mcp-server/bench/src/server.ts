@@ -2,6 +2,31 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import type { Server, ServerResult } from "./harness.js";
 
+type Connection = { server: Server & { close(): Promise<void> }; expiresAt: number };
+
+/**
+ * The Server over a Sign-in that is renewed before its access token expires. The new connection replaces
+ * the old one only once it is up, so a failed renewal is retried on the next call, not lost for the run.
+ */
+export async function renewingServer(opts: { connect: () => Promise<Connection>; now: () => number; renewBeforeMs: number }): Promise<Server & { close(): Promise<void> }> {
+  let current = await opts.connect();
+  return {
+    name: current.server.name,
+    version: current.server.version,
+    tools: current.server.tools,
+    call: async (name, input) => {
+      if (opts.now() > current.expiresAt - opts.renewBeforeMs) {
+        const next = await opts.connect();
+        const old = current;
+        current = next;
+        await old.server.close().catch(() => {});
+      }
+      return current.server.call(name, input);
+    },
+    close: () => current.server.close(),
+  };
+}
+
 /**
  * The deployed Server as the harness reaches it: its own MCP client over Streamable HTTP, signed in
  * with `accessToken` (D-091). Reads the name and version from `initialize` and the tools from `tools/list`.

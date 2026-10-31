@@ -10,15 +10,18 @@ export type Expected =
 /** Floating point puts a difference of exactly the tolerance a hair beyond it. */
 const EPSILON = 1e-9;
 
-/** Judges a reply by its last `ANSWER:` line, read after Markdown emphasis is stripped. */
+/** Backticks, `*` and `_` wrapping a line or a value, as Markdown emphasis and code put them. */
+const unwrap = (s: string) => s.replace(/^[\s`*_]+|[\s`*_]+$/g, "");
+
+/** Judges a reply by its last `ANSWER:` line, with Markdown removed around the line and around the value. */
 export function judge(reply: string, expected: Expected): { correct: boolean; given: string | null } {
   const answers = reply
     .split(/\r?\n/)
-    .map((line) => line.replace(/[`*_]/g, "").replace(/^\s*>\s*/, "").trim())
+    .map((line) => unwrap(line.replace(/^\s*>\s*/, "")))
     .filter((line) => line.startsWith("ANSWER:"));
   const last = answers.at(-1);
   if (last === undefined) return { correct: false, given: null };
-  const given = last.slice("ANSWER:".length).trim();
+  const given = unwrap(last.slice("ANSWER:".length));
   return { correct: matches(given, expected), given };
 }
 
@@ -57,7 +60,7 @@ function numberMatches(given: string, type: "integer" | "number", value: number)
   return Math.abs(n - value) <= Math.max(Math.abs(value) * 0.005, 0.01) + EPSILON;
 }
 
-/** Text compares ignoring case, spaces and a trailing full stop. */
+/** Text compares ignoring case, surrounding spaces and a trailing full stop; a run of inner spaces counts as one. */
 function text(s: string): string {
-  return s.replace(/\s/g, "").replace(/\.$/, "").toLowerCase();
+  return s.trim().replace(/\.$/, "").trim().replace(/\s+/g, " ").toLowerCase();
 }

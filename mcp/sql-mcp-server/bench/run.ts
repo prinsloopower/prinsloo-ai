@@ -6,10 +6,10 @@ import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import Anthropic from "@anthropic-ai/sdk";
-import { EFFORT, MODEL, type Model, type Server, SYSTEM_PROMPT, runBenchmark } from "./src/harness.js";
+import { EFFORT, MODEL, type Model, SYSTEM_PROMPT, runBenchmark } from "./src/harness.js";
 import type { Question } from "./src/reference.js";
-import { buildReport, writeReport } from "./src/report.js";
-import { connectServer } from "./src/server.js";
+import { buildReport, credentialsInUse, writeReport } from "./src/report.js";
+import { connectServer, renewingServer } from "./src/server.js";
 import { listenOnLoopback, openSystemBrowser, signIn } from "./src/signin.js";
 
 const CACHE = "bench/.signin.json";
@@ -37,25 +37,15 @@ try {
   // One browser Sign-in at most; later renewals use the cached Refresh token.
   const deps = { fetch, openBrowser: openSystemBrowser, listen: listenOnLoopback, cachePath: CACHE };
   const issued: string[] = [];
-  let session = await signIn(deploymentUrl, deps);
-  let expires = Date.now() + session.expiresIn * 1000;
-  let connection = await connectServer(deploymentUrl, session.accessToken, fetch);
-  issued.push(session.accessToken, session.refreshToken ?? "");
-  const server: Server = {
-    name: connection.name,
-    version: connection.version,
-    tools: connection.tools,
-    call: async (name, input) => {
-      if (Date.now() > expires - RENEW_BEFORE_MS) {
-        await connection.close();
-        session = await signIn(deploymentUrl, deps);
-        expires = Date.now() + session.expiresIn * 1000;
-        connection = await connectServer(deploymentUrl, session.accessToken, fetch);
-        issued.push(session.accessToken, session.refreshToken ?? "");
-      }
-      return connection.call(name, input);
+  const server = await renewingServer({
+    connect: async () => {
+      const session = await signIn(deploymentUrl, deps);
+      issued.push(session.accessToken, session.refreshToken ?? "");
+      return { server: await connectServer(deploymentUrl, session.accessToken, fetch), expiresAt: Date.now() + session.expiresIn * 1000 };
     },
-  };
+    now: Date.now,
+    renewBeforeMs: RENEW_BEFORE_MS,
+  });
   console.log(`Signed in to ${server.name} ${server.version} at ${deploymentUrl}. ${questions.length} Questions, ${runs} run(s).`);
 
   const model: Model = (params) => anthropic.messages.stream(params).finalMessage();
@@ -71,7 +61,7 @@ try {
       return reply;
     },
   });
-  await connection.close();
+  await server.close();
 
   const commit = execFileSync("git", ["rev-parse", "--short", "HEAD"], { encoding: "utf8" }).trim();
   const dirty = execFileSync("git", ["status", "--porcelain", "--", "bench", "src"], { encoding: "utf8" }).trim() !== "";
@@ -88,7 +78,7 @@ try {
       startedAt,
     },
     result,
-    [process.env.ANTHROPIC_API_KEY ?? "", ...issued].filter(Boolean),
+    [...credentialsInUse(process.env, CACHE), ...issued].filter(Boolean),
   );
   const paths = writeReport("bench/reports", report);
   for (const [i, r] of report.results.entries()) {

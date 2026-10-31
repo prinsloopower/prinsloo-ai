@@ -18,7 +18,7 @@ const rows = async (sql: string) => (await client.query({ text: sql, rowMode: "a
 await client.query(`DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'sqlmcp_reader') THEN
   CREATE ROLE sqlmcp_reader LOGIN PASSWORD 'sqlmcp_reader_pw'; END IF; END $$;`);
 
-async function close(): Promise<string[]> {
+async function failedTieChecks(): Promise<string[]> {
   const failed: string[] = [];
   for (const q of QUESTION_SET.filter((q) => q.tie)) {
     const r = await rows(q.tie!.sql);
@@ -32,7 +32,7 @@ for (;; seed++) {
   if (seed > 10_000) throw new Error("no seed up to 10000 gives an answer set with no ties");
   const sql = sampleSql(seed);
   await client.query(sql);
-  const failed = await close();
+  const failed = await failedTieChecks();
   if (failed.length === 0) {
     writeFileSync("bench/sample-db.sql", sql);
     break;

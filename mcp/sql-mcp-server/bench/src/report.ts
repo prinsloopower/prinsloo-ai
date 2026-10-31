@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { Outcome, QuestionResult } from "./harness.js";
 
@@ -26,6 +26,23 @@ export type Report = ReportMeta & {
   costUsd: number;
   stopped: string | null;
 };
+
+/** Every credential an invocation holds: the Anthropic ones in its environment, and what the Sign-in cache keeps. */
+export function credentialsInUse(env: Record<string, string | undefined>, cachePath: string): string[] {
+  const found = [env.ANTHROPIC_API_KEY, env.ANTHROPIC_AUTH_TOKEN];
+  if (existsSync(cachePath)) {
+    try {
+      const cache = JSON.parse(readFileSync(cachePath, "utf8")) as Record<string, unknown>;
+      found.push(...[cache.clientId, cache.refreshToken].filter((v): v is string => typeof v === "string"));
+    } catch {
+      // An unreadable cache holds nothing a report could have taken from it.
+    }
+  }
+  return found.filter((s): s is string => typeof s === "string" && s.length > 0);
+}
+
+/** An Anthropic credential's shape, caught even when it came from somewhere no list names, such as an `ant auth login` profile. */
+const ANTHROPIC_CREDENTIAL = /sk-ant-[A-Za-z0-9_-]+/g;
 
 /** Claude Sonnet 5.5's prices in US dollars per million tokens; cache writes are five-minute writes. */
 const PRICE = { input: 2, cacheWrite: 2.5, cacheRead: 0.2, output: 10 };
@@ -66,9 +83,8 @@ const sum = <T>(xs: T[], f: (x: T) => number) => xs.reduce((a, x) => a + f(x), 0
 const spread = (xs: number[]): Spread => ({ mean: sum(xs, (x) => x) / xs.length, min: Math.min(...xs), max: Math.max(...xs) });
 
 function redact<T>(value: T, secrets: string[]): T {
-  if (secrets.length === 0) return value;
   const walk = (v: unknown): unknown => {
-    if (typeof v === "string") return secrets.reduce((s, secret) => s.split(secret).join("[redacted]"), v);
+    if (typeof v === "string") return secrets.reduce((s, secret) => s.split(secret).join("[redacted]"), v).replace(ANTHROPIC_CREDENTIAL, "[redacted]");
     if (Array.isArray(v)) return v.map(walk);
     if (v && typeof v === "object") return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, walk(x)]));
     return v;

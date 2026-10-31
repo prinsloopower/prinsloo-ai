@@ -10,7 +10,7 @@ A run reports two figures:
 
 You need four things:
 
-1. **Node.js 24 or later,** as `package.json` requires, and `npm install` run in this folder's parent, the repository root.
+1. **Node.js 24 or later,** as `package.json` requires, and `npm install` run in `mcp/sql-mcp-server`, this folder's parent and the package's root.
 2. **An Anthropic API key,** in the `ANTHROPIC_API_KEY` environment variable of the shell you run from. Set it in that shell only, never in a file in this repository:
    - PowerShell: `$env:ANTHROPIC_API_KEY = "<your key>"`
    - bash: `export ANTHROPIC_API_KEY=<your key>`
@@ -19,7 +19,7 @@ You need four things:
 
 ## Run it
 
-From the repository root:
+From `mcp/sql-mcp-server`:
 
 ```
 npm run benchmark -- https://sql-mcp-server.prinsloopower.workers.dev
