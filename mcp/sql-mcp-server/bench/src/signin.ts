@@ -15,8 +15,6 @@ export type SignInDeps = {
   /** False for a renewal mid-run: only the cached Refresh token is used, and the browser is never opened (D-098). */
   interactive?: boolean;
   log?: (line: string) => void;
-  /** Collects every token issued, so the report can redact them. */
-  issued?: string[];
 };
 
 const SIGN_IN_TIMEOUT_MS = 10 * 60 * 1000;

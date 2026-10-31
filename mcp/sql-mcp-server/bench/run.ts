@@ -34,7 +34,7 @@ try {
 
   // One browser Sign-in at most, at the start; renewals mid-run use the cached Refresh token only (D-098).
   const issued: string[] = [];
-  const server = await signedInServer(deploymentUrl, { fetch, openBrowser: openSystemBrowser, listen: listenOnLoopback, cachePath: CACHE, issued });
+  const server = await signedInServer(deploymentUrl, { fetch, openBrowser: openSystemBrowser, listen: listenOnLoopback, cachePath: CACHE }, Date.now, issued);
   console.log(`Signed in to ${server.name} ${server.version} at ${deploymentUrl}. ${questions.length} Questions, ${runs} run(s).`);
 
   const model: Model = (params) => anthropic.messages.stream(params).finalMessage();

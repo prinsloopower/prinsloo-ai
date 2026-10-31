@@ -1,6 +1,6 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import { describe, expect, it } from "vitest";
-import { type Server, type ServerResult, InvocationStopped, SYSTEM_PROMPT, runBenchmark } from "../../bench/src/harness.js";
+import { type Server, type ServerResult, InvocationStopped, SYSTEM_PROMPT, exitCodeFor, runBenchmark } from "../../bench/src/harness.js";
 import type { Question } from "../../bench/src/reference.js";
 
 type Params = Anthropic.Messages.MessageCreateParamsNonStreaming;
@@ -198,5 +198,28 @@ describe("S-004 the harness, after review 2 (D-098)", () => {
     expect(report.runs[0]!.map((r) => r.outcome)).toEqual(["correct", "error", "not reached", "not reached"]);
     expect(report.runs[0]![1]!.error).toMatch(/could not be renewed/);
     expect(report.stopped).toMatch(/could not be renewed/);
+  });
+});
+
+describe("S-004 the harness, after review 4", () => {
+  it("harness_reports_what_stopped_it", async () => {
+    const answer = () => ({ content: [text("ANSWER: 12")], input: 3_000_000 });
+    const questions = ["B-01", "B-02", "B-03", "B-04"].map((id) => question(id));
+    const full = await runBenchmark({ questions: questions.slice(0, 2), runs: 1, model: fakeModel(answer).model, server: fakeServer(() => ok()) });
+    expect(full.stoppedBy).toBeNull();
+    const capped = await runBenchmark({ questions, runs: 1, model: fakeModel(answer).model, server: fakeServer(() => ok()) });
+    expect(capped.stoppedBy).toBe("ceiling");
+    const tools = fakeModel((params) => (params.messages.length === 1 ? { content: [toolUse("list_tables", {})] } : { content: [text("ANSWER: 12")] }));
+    const signin = await runBenchmark({
+      questions,
+      runs: 1,
+      model: tools.model,
+      server: fakeServer(() => {
+        throw new InvocationStopped("the Sign-in could not be renewed: refused");
+      }),
+    });
+    expect(signin.stoppedBy).toBe("signin");
+    // So a run cut short by its Sign-in exits 1, and one stopped by the ceiling exits 0.
+    expect([full, capped, signin].map((r) => exitCodeFor(r.stoppedBy))).toEqual([0, 0, 1]);
   });
 });

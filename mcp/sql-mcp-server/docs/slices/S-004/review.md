@@ -220,3 +220,34 @@ Axis: standards and naming
 The codebase's error classes are named for the condition, such as `ParseError` and `IdTokenInvalid`. Setting `partial` on the caught error is also a pattern nothing else uses.
 
 Verdict: hold (0 blockers, 1 gap, 6 nits)
+
+The product owner answered with "Fix the gap and nits, then deploy". The fixes are commit fe57eae.
+
+## Review 4 (2026-10-31)
+
+Reviewed: commit fe57eae (0f68e68..fe57eae) only, on two axes in separate fresh contexts.
+Tests: `npm test` → 41 files, 234 passed, 0 failed; `npx tsc --noEmit -p .` → clean.
+
+Review 3's gap is resolved, apart from one untested link (below). All six of its nits are resolved.
+
+## gap — A full stop after a list item or map entry is now rejected
+Where: bench/src/judge.ts:47
+Axis: both
+Moving the full stop from `text()` to the answer line means items lose none. Both reviewers ran the previous and current Judge on the same replies. `ANSWER: Feta Tub., Seed Crackers.`, `` `Feta Tub.`, `Seed Crackers.` ``, `North=10., South=20.` and `North.=10, South=20` were accepted at 0f68e68 and are rejected now. The spec compares list items and map keys "as text", and text ignores a trailing full stop. D-098 removes one "around each list item, map key and map value". No test covers it.
+
+## gap — Nothing tests that a Sign-in stop sets `stoppedBy: "signin"`, or that renewed tokens are collected for redaction
+Where: bench/src/harness.ts:85
+Axis: both
+`benchmark_renews_sign_in_without_browser_and_exits_1` calls `exitCodeFor` with literals only, and no test asserts the `stoppedBy` that `runBenchmark` returns. If the stop callback set `"ceiling"`, a cut-short run would exit 0 and every test would pass. Likewise `deps.issued?.push` in `signedInServer` (bench/src/server.ts:79) is never exercised. Dropping it would leave renewed tokens unredacted, again with every test passing.
+
+## nit — An expected text ending in a full stop can no longer match
+Where: bench/src/judge.ts:74
+Axis: spec and scope
+`text()` no longer removes a full stop from either side, so an expected `Acme Inc.` matches neither `Acme Inc.` nor `Acme Inc`. No current expected value ends in one.
+
+## nit — `issued` sits on `SignInDeps`, which `signIn` ignores
+Where: bench/src/signin.ts:19
+Axis: standards and naming
+Only `signedInServer` reads it. A caller passing it to `signIn` collects nothing.
+
+Verdict: hold (0 blockers, 2 gaps, 2 nits)

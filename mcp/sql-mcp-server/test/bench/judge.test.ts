@@ -85,3 +85,30 @@ describe("S-004 the Judge, after review 3", () => {
     expect(judge("ANSWER: Olive Oil 5L..", { type: "text", value: "Olive Oil 5L" }).correct).toBe(false);
   });
 });
+
+describe("S-004 the Judge, after review 4", () => {
+  it("judge_drops_one_full_stop_per_item", () => {
+    const list = { type: "list" as const, value: ["Feta Tub", "Seed Crackers"] };
+    const map = { type: "map" as const, value: { North: 10, South: 20 }, values: "number" as const };
+    const ok = (reply: string, e: Parameters<typeof judge>[1]) => judge(reply, e).correct;
+    // Each list item, map key and map value may end in one full stop, with or without Markdown around it.
+    expect(ok("ANSWER: Feta Tub., Seed Crackers.", list)).toBe(true);
+    expect(ok("ANSWER: `Feta Tub.`, `Seed Crackers.`", list)).toBe(true);
+    expect(ok("ANSWER: **Feta Tub**, **Seed Crackers**.", list)).toBe(true);
+    expect(ok("ANSWER: North=10., South=20.", map)).toBe(true);
+    expect(ok("ANSWER: North=**10**., South=20", map)).toBe(true);
+    expect(ok("ANSWER: North.=10, South=20", map)).toBe(true);
+    // An expected text that itself ends in a full stop matches with or without it.
+    expect(ok("ANSWER: Acme Inc.", { type: "text", value: "Acme Inc." })).toBe(true);
+    expect(ok("ANSWER: Acme Inc", { type: "text", value: "Acme Inc." })).toBe(true);
+    // Shapes that were right before stay right.
+    expect(ok("> **ANSWER: Olive Oil 5L**.", { type: "text", value: "Olive Oil 5L" })).toBe(true);
+    expect(ok("**ANSWER:** **12.**", { type: "integer", value: 12 })).toBe(true);
+    expect(ok("ANSWER: **12**", { type: "integer", value: 12 })).toBe(true);
+    // Only one.
+    expect(ok("ANSWER: Feta Tub.., Seed Crackers", list)).toBe(false);
+    expect(ok("ANSWER: North=10.., South=20", map)).toBe(false);
+    expect(ok("ANSWER: 12...", { type: "integer", value: 12 })).toBe(false);
+    expect(ok("ANSWER: Olive Oil 5L..", { type: "text", value: "Olive Oil 5L" })).toBe(false);
+  });
+});

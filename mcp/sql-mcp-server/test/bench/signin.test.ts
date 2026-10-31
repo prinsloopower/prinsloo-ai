@@ -147,3 +147,20 @@ describe("S-004 the benchmark's Sign-in over a run, after review 3", () => {
     expect(exitCodeFor(null)).toBe(0);
   });
 });
+
+describe("S-004 the benchmark's Sign-in, after review 4", () => {
+  it("benchmark_collects_issued_tokens_for_redaction", async () => {
+    const h = await harness({}, { realMcp: true, database: queryDatabase(), queryEngine: nodeQueryEngine });
+    const w = world(h);
+    const issued: string[] = [];
+    const server = await signedInServer(ORIGIN, { ...w.deps, cachePath: cacheFile(), log: () => {} }, () => h.clock.t, issued);
+    await server.call(LIST_TABLES, { request_text: "Which tables can I query?" });
+    h.clock.advance(3500);
+    await server.call(LIST_TABLES, { request_text: "Which tables can I query?" });
+    // The first Sign-in's tokens and the renewal's: every access and Refresh token the run held.
+    const tokens = w.requests.filter((r) => r.path === "/token");
+    expect(tokens).toHaveLength(2);
+    expect(issued.filter((t) => t.length > 0).length).toBe(4);
+    expect(new Set(issued).size).toBeGreaterThanOrEqual(3);
+  });
+});

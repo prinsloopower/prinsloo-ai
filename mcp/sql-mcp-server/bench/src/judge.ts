@@ -14,14 +14,20 @@ const EPSILON = 1e-9;
 const markdown = (s: string) => s.replace(/^[\s`*_]+|[\s`*_]+$/g, "");
 
 /**
- * Removes what wraps an answer line: Markdown, and one trailing full stop inside or outside it, so
- * `**ANSWER: Olive Oil 5L**.` and `ANSWER: **Olive Oil 5L.**` both answer `Olive Oil 5L`.
+ * Removes the Markdown around a line, a value or an item, keeping its full stops where they end it:
+ * `**Feta Tub**.` and `**Feta Tub.**` both become `Feta Tub.`.
  */
-const unwrap = (s: string) => markdown(markdown(s).replace(/\.$/, ""));
+function unwrap(s: string): string {
+  const bare = markdown(s);
+  return bare.endsWith(".") ? `${markdown(bare.slice(0, -1))}.` : bare;
+}
+
+/** One trailing full stop, which an answer, a list item, a map key and a map value may each end in. */
+const fullStop = (s: string) => s.replace(/\.$/, "");
 
 /**
  * Judges a reply by its last `ANSWER:` line. Markdown is removed around the line, the value, and each
- * list item, map key and map value; one trailing full stop is removed with the line's.
+ * list item, map key and map value, and each of those may end in one full stop.
  */
 export function judge(reply: string, expected: Expected): { correct: boolean; given: string | null } {
   const answers = reply
@@ -30,8 +36,8 @@ export function judge(reply: string, expected: Expected): { correct: boolean; gi
     .filter((line) => line.startsWith("ANSWER:"));
   const last = answers.at(-1);
   if (last === undefined) return { correct: false, given: null };
-  const given = markdown(last.slice("ANSWER:".length));
-  return { correct: matches(given, expected), given };
+  const value = unwrap(last.slice("ANSWER:".length));
+  return { correct: matches(value, expected), given: fullStop(value) };
 }
 
 function matches(given: string, expected: Expected): boolean {
@@ -44,7 +50,7 @@ function matches(given: string, expected: Expected): boolean {
     case "unavailable":
       return text(given) === "unavailable";
     case "list": {
-      const got = new Set(given.split(",").map((item) => text(markdown(item))));
+      const got = new Set(given.split(",").map((item) => text(unwrap(item))));
       const want = new Set(expected.value.map(text));
       return got.size === want.size && [...want].every((v) => got.has(v));
     }
@@ -52,7 +58,7 @@ function matches(given: string, expected: Expected): boolean {
       const want = new Map(Object.entries(expected.value).map(([k, v]) => [text(k), v]));
       const pairs = given.split(",").map((pair) => pair.split("="));
       if (pairs.some((p) => p.length !== 2)) return false;
-      const got = new Map(pairs.map(([k, v]) => [text(markdown(k!)), markdown(v!)]));
+      const got = new Map(pairs.map(([k, v]) => [text(unwrap(k!)), unwrap(v!)]));
       return (
         got.size === want.size &&
         [...want].every(([k, v]) => got.has(k) && numberMatches(got.get(k)!, expected.values, v))
@@ -62,14 +68,14 @@ function matches(given: string, expected: Expected): boolean {
 }
 
 function numberMatches(given: string, type: "integer" | "number", value: number): boolean {
-  const s = given.replace(/\s/g, "");
+  const s = fullStop(given.replace(/\s/g, ""));
   if (!/^[-+]?\d+(\.\d+)?$/.test(s)) return false;
   const n = Number(s);
   if (type === "integer") return n === value;
   return Math.abs(n - value) <= Math.max(Math.abs(value) * 0.005, 0.01) + EPSILON;
 }
 
-/** Text compares ignoring case and surrounding spaces, and a run of inner spaces counts as one; the answer line has already lost its trailing full stop. */
+/** Text compares ignoring case, surrounding spaces and one trailing full stop; a run of inner spaces counts as one. */
 function text(s: string): string {
-  return s.trim().replace(/\s+/g, " ").toLowerCase();
+  return fullStop(s.trim()).trim().replace(/\s+/g, " ").toLowerCase();
 }

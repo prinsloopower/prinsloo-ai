@@ -67,16 +67,16 @@ const RENEW_BEFORE_MS = 5 * 60 * 1000;
 /**
  * The Server as the benchmark command reaches it: one Sign-in, which may open the browser, then renewals
  * from the cached Refresh token only (D-098). Each token's expiry is counted from before it was asked for,
- * so the local clock never runs past the token's own.
+ * so the local clock never runs past the token's own. Every token issued is added to `issued`, for redaction.
  */
-export function signedInServer(deploymentUrl: string, deps: SignInDeps, now: () => number = Date.now) {
+export function signedInServer(deploymentUrl: string, deps: SignInDeps, now: () => number = Date.now, issued: string[] = []) {
   let signedIn = false;
   return renewingServer({
     connect: async () => {
       const askedAt = now();
       const session = await signIn(deploymentUrl, { ...deps, interactive: !signedIn });
       signedIn = true;
-      deps.issued?.push(session.accessToken, session.refreshToken ?? "");
+      issued.push(session.accessToken, session.refreshToken ?? "");
       return { server: await connectServer(deploymentUrl, session.accessToken, deps.fetch), expiresAt: askedAt + session.expiresIn * 1000 };
     },
     now,
