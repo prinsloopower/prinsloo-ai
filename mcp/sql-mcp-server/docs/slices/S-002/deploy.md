@@ -21,7 +21,7 @@ Rollback: `npx wrangler rollback 8f666e42-0a9b-4bbb-83a4-e39828464114`, the S-00
 Try it:
 - In Claude or ChatGPT, with the SQL MCP connector signed in, ask "Which tables can I query?". The answer should list `sqlmcp_test.orders` (all columns) and `sqlmcp_test.customers` with only `id`, `name` and `region`, and nothing else: not `staff`, not `email`, nothing outside `sqlmcp_test`.
 - Then, in Supabase's SQL editor for AI Golf App, run `REVOKE SELECT ON sqlmcp_test.orders FROM sqlmcp_reader;` and ask again. `orders` should be gone. Restore it with `GRANT SELECT ON sqlmcp_test.orders TO sqlmcp_reader;`.
-- Each question leaves an Audit record. In the Cloudflare dashboard, open Workers → `sql-mcp-server` → Logs and filter on `"type":"audit"`.
+- Each question leaves an Audit record. In the Cloudflare dashboard, open Workers & Pages → `sql-mcp-server` → Observability and filter on `$metadata.type` equals `cf-worker` and `type` equals `audit`. A text search for `"type":"audit"` finds nothing, because Workers Logs splits each record into fields (S-003, T-012).
 
 ## Not covered by the smoke check
 - **`list_tables` itself on the deployed system.** The smoke check does not sign in, so it cannot call a tool. The listing, grant/revoke and Audit records are proven live only by T-009.

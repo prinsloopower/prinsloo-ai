@@ -59,3 +59,7 @@ One JSON line per tool call, kept by the Host's own log facility (ADR-013):
 ## Retention
 
 Audit records stay on the Host for as long as the Host's log facility keeps them, under your own retention policy (D-052). On Cloudflare that is Workers Logs, which keeps logs for **3 days on the Free plan and 7 on Paid** and cannot be extended while records stay on the Host. An organisation that must keep them longer cannot meet that on Cloudflare this release.
+
+Measured on the project's own Deployment on 2026-10-31, on the Free plan (S-003, T-012), records were kept longer than documented. An Audit record 5 days 22 hours old was still there, and records from 2026-10-22, 9 days old, were gone. Plan around the documented figures, not this one: Cloudflare can enforce them at any time, and moves Workers Logs to new pricing on 1 December 2026.
+
+To find Audit records in the Cloudflare dashboard, open Workers & Pages → the Worker → Observability, and filter on `$metadata.type` equals `cf-worker` and `type` equals `audit`. Workers Logs splits each record into fields, so it has no message text, and a text search for `"type":"audit"` finds nothing.

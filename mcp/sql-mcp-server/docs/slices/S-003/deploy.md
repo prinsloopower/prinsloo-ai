@@ -28,7 +28,7 @@ Try it:
 1. In Claude or ChatGPT, with the SQL MCP connector signed in, ask "How many orders are there per region?". The answer should come from a `query` call and say North 336, South 168.
 2. Ask "List every order". The answer should say the result was cut short at the Row limit of 500 rows.
 3. Ask to read `sqlmcp_test.staff`, then to delete an order. Each should be refused, with a sentence that names nothing from the query, and no data should change.
-4. In the Cloudflare dashboard, open Workers → `sql-mcp-server` → Logs and filter on `"type":"audit"`. Each question has one record:
+4. In the Cloudflare dashboard, open Workers & Pages → `sql-mcp-server` → Observability and filter on `$metadata.type` equals `cf-worker` and `type` equals `audit`. A text search for `"type":"audit"` finds nothing, because Workers Logs splits each record into fields (T-012). Each question has one record:
    - `tool` `query`;
    - your Entra identity under `staff`;
    - the Request text;
@@ -37,4 +37,4 @@ Try it:
 ## Not covered by the smoke check
 - **The `query` tool itself on the deployed system.** The smoke checks do not sign in, so they cannot call a tool. The Query check, the cursor through Hyperdrive, the cut-short notice, Refusals and Audit records are proven live only by T-013. That run is also the first to send the extended-protocol cursor transaction through Hyperdrive, which the Docker tests do not use.
 - **The parser's first load on Workers.** It happens on the first `query` call in each isolate. The workerd test (T-001) loads it locally, and the deployed bundle carries it, but the first deployed load is seen only in T-013.
-- **Workers Logs retention** (T-012) is measured on or after 2026-10-30, against S-002's first records of 2026-10-22.
+- **Workers Logs retention** (T-012) was measured on 2026-10-31: on the Free plan it is somewhere from 6 to 9 days, longer than the documented 3. The spec's T-012 has the details.

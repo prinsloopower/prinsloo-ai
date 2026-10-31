@@ -97,4 +97,4 @@ A record is at most 64 KiB. Longer SQL is cut, marked `…[cut]`, and the record
 
 ## Retention
 
-As for every Audit record (visibility.md): Workers Logs keeps **3 days on the Free plan and 7 on Paid**, per Cloudflare's documentation. The project measures the real figure on its own Deployment on or after 2026-10-30 (S-003, T-012), and records it here and in visibility.md.
+As for every Audit record (visibility.md): Workers Logs keeps **3 days on the Free plan and 7 on Paid**, per Cloudflare's documentation. Measured on the project's own Deployment on 2026-10-31, on the Free plan (S-003, T-012), records were kept longer than documented: one 5 days 22 hours old was still there, and records 9 days old were gone. Plan around the documented figures; visibility.md says why.
