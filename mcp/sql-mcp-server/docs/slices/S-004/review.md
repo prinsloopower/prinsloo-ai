@@ -251,3 +251,24 @@ Axis: standards and naming
 Only `signedInServer` reads it. A caller passing it to `signIn` collects nothing.
 
 Verdict: hold (0 blockers, 2 gaps, 2 nits)
+
+The product owner answered with "Fix, then one last check". The fixes are commit 94564d8.
+
+## Review 5 (2026-10-31)
+
+Reviewed: commit 94564d8 (fe57eae..94564d8) only, on two axes in separate fresh contexts.
+Tests: `npm test` → 41 files, 237 passed, 0 failed; `npx tsc --noEmit -p .` → clean.
+
+Review 4's two gaps and two nits are all resolved. The spec-and-scope reviewer ran 65 replies against the Judge at 0f68e68, fe57eae and 94564d8. The replies covered every shape from Reviews 2 to 4 and the spec's Proven-by Judge examples:
+- no verdict at 94564d8 contradicts the Judging rules or D-098;
+- every reply fe57eae wrongly rejected is accepted again;
+- the only changes from 0f68e68 are the intended ones: runs of full stops are now rejected.
+
+The standards-and-naming reviewer also tried edge replies by hand (empty, `.`, `**.**`, `1.`, `.5`, `St. Mary`, `10.5.`, `a. , b`) and found each judged as intended.
+
+## nit — The token-collection test counts tokens rather than comparing them, and run.ts's `issued` argument is untested
+Where: test/bench/signin.test.ts:163
+Axis: spec and scope
+`benchmark_collects_issued_tokens_for_redaction` checks that four non-empty tokens were collected, not that they are the ones `/token` returned. Separately, `signedInServer`'s `issued` defaults to `[]`, and run.ts's passing of it is untested. The report's `sk-ant-` pattern does not cover Server tokens, so a dropped argument would leave renewed tokens unredacted.
+
+Verdict: pass (0 blockers, 0 gaps, 1 nit)
