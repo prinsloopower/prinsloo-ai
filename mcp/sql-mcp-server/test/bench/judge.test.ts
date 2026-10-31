@@ -76,3 +76,12 @@ describe("S-004 the Judge, after review 2 (D-098)", () => {
     expect(judge("ANSWER: **Olive_Oil 5L**.", { type: "text", value: "Olive Oil 5L" }).correct).toBe(false);
   });
 });
+
+describe("S-004 the Judge, after review 3", () => {
+  it("judge_accepts_one_trailing_full_stop", () => {
+    expect(judge("ANSWER: 12.", { type: "integer", value: 12 }).correct).toBe(true);
+    expect(judge("ANSWER: **Olive Oil 5L.**", { type: "text", value: "Olive Oil 5L" }).correct).toBe(true);
+    expect(judge("ANSWER: 12...", { type: "integer", value: 12 }).correct).toBe(false);
+    expect(judge("ANSWER: Olive Oil 5L..", { type: "text", value: "Olive Oil 5L" }).correct).toBe(false);
+  });
+});

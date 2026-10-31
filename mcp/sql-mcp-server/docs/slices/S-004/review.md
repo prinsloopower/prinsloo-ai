@@ -167,3 +167,56 @@ Axis: spec and scope
 D-096 cites the product owner's answers as recorded in review.md, which held only Review 1's findings. The disposition paragraph under Review 1 now records them.
 
 Verdict: hold (0 blockers, 4 gaps, 2 nits)
+
+The product owner answered with "Fix all four" and, for a refused renewal, "Stop and report" (D-098). The fixes are commit 0f68e68.
+
+## Review 3 (2026-10-31)
+
+Reviewed: commit 0f68e68 (86b14d2..0f68e68), in the context of the whole slice, on two axes in separate fresh contexts.
+Tests: `npm test` → 41 files, 232 passed, 0 failed; `npx tsc --noEmit -p .` → clean.
+
+How Review 2's gaps stand:
+
+| Gap | Status | Evidence |
+|---|---|---|
+| A full stop after the Markdown | Resolved | `unwrap` loops over Markdown and a trailing full stop; it is applied to numbers, list items, map keys and map values |
+| A refused renewal opens a browser | Resolved in the library | `signIn` with `interactive: false` never opens a browser; `renewingServer` stays on the current connection while its token is valid, then stops |
+| The adapter test copies the wiring | Resolved | worker.ts passes `workerDeps` to `createApp`, and the test calls `workerDeps`; nothing is lost from the previous worker.ts |
+| The report re-reads the cache | Resolved | `cacheSecrets` in signin.ts |
+
+## gap — run.ts's D-098 wiring is untested, and its exit code depends on a copy of an error message
+Where: bench/run.ts:91
+Axis: both
+Nothing tested decides that renewals are non-interactive (`interactive: !connected`, line 43), or that a stop means exit 1. If run.ts dropped the flag, every test would pass and Review 2's browser-per-call failure would return. The exit decision matches `"the Sign-in could not be renewed"`, a second copy of the message built in bench/src/server.ts. Rewording it would quietly turn a cut-short run into exit 0. This is the same kind of gap Review 2 raised for worker.ts.
+
+## nit — "Stopped early at" reads oddly for a Sign-in stop
+Where: bench/src/report.ts:115
+Axis: both
+It was worded for the token ceiling. A Sign-in stop prints "Stopped early at the Sign-in could not be renewed: …", including in the committed report.
+
+## nit — Any number of trailing full stops is accepted
+Where: bench/src/judge.ts:15
+Axis: standards and naming
+`unwrap` loops, so `ANSWER: 12...` is judged correct. The spec says "a trailing full stop".
+
+## nit — `connected` means signed in
+Where: bench/run.ts:40
+Axis: standards and naming
+The flag is set when `signIn` returns, before the connection is made, so `signedIn` would say what it holds.
+
+## nit — The local expiry runs a few seconds past the token's
+Where: bench/run.ts:46
+Axis: standards and naming
+`expiresAt` is taken after `connectServer`. If renewal keeps failing, a call in that gap reaches the Server with an expired token and ends as "Server failure", not a stop. Taking the time before `signIn` closes it.
+
+## nit — `workerDeps` is typed through `Parameters<typeof createApp>`
+Where: src/worker-deps.ts:14
+Axis: standards and naming
+src/app.ts exports `Deps`, and nothing else in src/ derives a type this way.
+
+## nit — `StopInvocation` is named as a command
+Where: bench/src/harness.ts:27
+Axis: standards and naming
+The codebase's error classes are named for the condition, such as `ParseError` and `IdTokenInvalid`. Setting `partial` on the caught error is also a pattern nothing else uses.
+
+Verdict: hold (0 blockers, 1 gap, 6 nits)

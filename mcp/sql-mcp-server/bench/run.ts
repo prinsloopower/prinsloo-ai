@@ -6,15 +6,13 @@ import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import Anthropic from "@anthropic-ai/sdk";
-import { EFFORT, MODEL, type Model, SYSTEM_PROMPT, runBenchmark } from "./src/harness.js";
+import { EFFORT, MODEL, type Model, SYSTEM_PROMPT, exitCodeFor, runBenchmark } from "./src/harness.js";
 import type { Question } from "./src/reference.js";
 import { buildReport, credentialsInUse, writeReport } from "./src/report.js";
-import { connectServer, renewingServer } from "./src/server.js";
-import { listenOnLoopback, openSystemBrowser, signIn } from "./src/signin.js";
+import { signedInServer } from "./src/server.js";
+import { listenOnLoopback, openSystemBrowser } from "./src/signin.js";
 
 const CACHE = "bench/.signin.json";
-/** Renew the access token this long before it expires, so no tool call meets an expired one. */
-const RENEW_BEFORE_MS = 5 * 60 * 1000;
 
 function usage(message: string): never {
   console.error(`${message}\nUsage: npm run benchmark -- <deployment-url> [--runs N]`);
@@ -35,19 +33,8 @@ try {
   const anthropic = new Anthropic();
 
   // One browser Sign-in at most, at the start; renewals mid-run use the cached Refresh token only (D-098).
-  const deps = { fetch, openBrowser: openSystemBrowser, listen: listenOnLoopback, cachePath: CACHE };
   const issued: string[] = [];
-  let connected = false;
-  const server = await renewingServer({
-    connect: async () => {
-      const session = await signIn(deploymentUrl, { ...deps, interactive: !connected });
-      connected = true;
-      issued.push(session.accessToken, session.refreshToken ?? "");
-      return { server: await connectServer(deploymentUrl, session.accessToken, fetch), expiresAt: Date.now() + session.expiresIn * 1000 };
-    },
-    now: Date.now,
-    renewBeforeMs: RENEW_BEFORE_MS,
-  });
+  const server = await signedInServer(deploymentUrl, { fetch, openBrowser: openSystemBrowser, listen: listenOnLoopback, cachePath: CACHE, issued });
   console.log(`Signed in to ${server.name} ${server.version} at ${deploymentUrl}. ${questions.length} Questions, ${runs} run(s).`);
 
   const model: Model = (params) => anthropic.messages.stream(params).finalMessage();
@@ -86,9 +73,8 @@ try {
   for (const [i, r] of report.results.entries()) {
     console.log(`Run ${i + 1}: ${(r.totals.correctness * 100).toFixed(1)}% correct, ${(r.totals.giveUp * 100).toFixed(1)}% given up.`);
   }
-  if (report.stopped) console.log(`Stopped early at ${report.stopped}.`);
-  // A run cut short because the Sign-in could not be renewed did not complete (D-098).
-  if (report.stopped?.startsWith("the Sign-in could not be renewed")) process.exitCode = 1;
+  if (report.stopped) console.log(`Stopped early (${report.stopped}).`);
+  process.exitCode = exitCodeFor(result.stoppedBy);
   console.log(`About US$${report.costUsd.toFixed(2)}. Report: ${paths.md}`);
 } catch (e) {
   console.error(`The benchmark could not run: ${e instanceof Error ? e.message : String(e)}`);

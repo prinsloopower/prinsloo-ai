@@ -1,6 +1,7 @@
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
-import { type Server, type ServerResult, StopInvocation } from "./harness.js";
+import { InvocationStopped, type Server, type ServerResult } from "./harness.js";
+import { type SignInDeps, signIn } from "./signin.js";
 
 type Connection = { server: Server & { close(): Promise<void> }; expiresAt: number };
 
@@ -23,7 +24,7 @@ export async function renewingServer(opts: { connect: () => Promise<Connection>;
           current = next;
           await old.server.close().catch(() => {});
         } catch (e) {
-          if (opts.now() >= current.expiresAt) throw new StopInvocation(`the Sign-in could not be renewed: ${e instanceof Error ? e.message : String(e)}`);
+          if (opts.now() >= current.expiresAt) throw new InvocationStopped(`the Sign-in could not be renewed: ${e instanceof Error ? e.message : String(e)}`);
         }
       }
       return current.server.call(name, input);
@@ -58,4 +59,27 @@ export async function connectServer(deploymentUrl: string, accessToken: string, 
     call: async (name, input) => (await client.callTool({ name, arguments: input as Record<string, unknown> })) as ServerResult,
     close: () => client.close(),
   };
+}
+
+/** Renew this long before the access token expires, so no tool call meets an expired one. */
+const RENEW_BEFORE_MS = 5 * 60 * 1000;
+
+/**
+ * The Server as the benchmark command reaches it: one Sign-in, which may open the browser, then renewals
+ * from the cached Refresh token only (D-098). Each token's expiry is counted from before it was asked for,
+ * so the local clock never runs past the token's own.
+ */
+export function signedInServer(deploymentUrl: string, deps: SignInDeps, now: () => number = Date.now) {
+  let signedIn = false;
+  return renewingServer({
+    connect: async () => {
+      const askedAt = now();
+      const session = await signIn(deploymentUrl, { ...deps, interactive: !signedIn });
+      signedIn = true;
+      deps.issued?.push(session.accessToken, session.refreshToken ?? "");
+      return { server: await connectServer(deploymentUrl, session.accessToken, deps.fetch), expiresAt: askedAt + session.expiresIn * 1000 };
+    },
+    now,
+    renewBeforeMs: RENEW_BEFORE_MS,
+  });
 }

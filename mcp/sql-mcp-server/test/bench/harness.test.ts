@@ -1,6 +1,6 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import { describe, expect, it } from "vitest";
-import { type Server, type ServerResult, StopInvocation, SYSTEM_PROMPT, runBenchmark } from "../../bench/src/harness.js";
+import { type Server, type ServerResult, InvocationStopped, SYSTEM_PROMPT, runBenchmark } from "../../bench/src/harness.js";
 import type { Question } from "../../bench/src/reference.js";
 
 type Params = Anthropic.Messages.MessageCreateParamsNonStreaming;
@@ -190,7 +190,7 @@ describe("S-004 the harness, after review 2 (D-098)", () => {
     );
     let toolCalls = 0;
     const server = fakeServer(() => {
-      if (++toolCalls === 2) throw new StopInvocation("the Sign-in could not be renewed: the cached Refresh token was refused");
+      if (++toolCalls === 2) throw new InvocationStopped("the Sign-in could not be renewed: the cached Refresh token was refused");
       return ok();
     });
     const report = await runBenchmark({ questions, runs: 1, model, server });

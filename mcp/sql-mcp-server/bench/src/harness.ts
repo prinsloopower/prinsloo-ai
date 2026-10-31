@@ -21,11 +21,17 @@ const RUN_INPUT_TOKENS = 8_000_000;
 export const REFUSED_QUERY = "The query was not accepted";
 
 /**
- * Thrown by the Server when the invocation cannot go on, such as a Sign-in that could not be renewed (D-098).
+ * Thrown by the Server when the invocation cannot go on: its Sign-in could not be renewed (D-098).
  * The Question in hand ends as an error with what it spent, and the rest are not reached.
  */
-export class StopInvocation extends Error {
-  partial?: QuestionResult;
+export class InvocationStopped extends Error {}
+
+/** What cut an invocation short: its token ceiling, or a Sign-in that could not be renewed. */
+export type StoppedBy = "ceiling" | "signin" | null;
+
+/** A run cut short by its Sign-in did not complete, so the command exits 1; the ceiling is a cap it is allowed to meet. */
+export function exitCodeFor(stoppedBy: StoppedBy): 0 | 1 {
+  return stoppedBy === "signin" ? 1 : 0;
 }
 
 export type ServerResult = { content: { type: string; text?: string }[]; isError?: boolean };
@@ -59,6 +65,7 @@ export async function runBenchmark(opts: { questions: Question[]; runs: number; 
   const ceiling = RUN_INPUT_TOKENS * opts.runs;
   let spent = 0;
   let stopped: string | null = null;
+  let stoppedBy: StoppedBy = null;
   const runs: QuestionResult[][] = [];
   for (let r = 0; r < opts.runs; r++) {
     const run: QuestionResult[] = [];
@@ -69,26 +76,23 @@ export async function runBenchmark(opts: { questions: Question[]; runs: number; 
       }
       if (spent >= ceiling) {
         stopped = "8,000,000 input tokens per run";
+        stoppedBy = "ceiling";
         run.push({ ...empty(q), outcome: "not reached" });
         continue;
       }
-      let result: QuestionResult;
-      try {
-        result = await runQuestion(q, opts.model, opts.server);
-      } catch (e) {
-        if (!(e instanceof StopInvocation)) throw e;
-        stopped = e.message;
-        result = e.partial ?? { ...empty(q), outcome: "error", error: e.message };
-      }
+      const result = await runQuestion(q, opts.model, opts.server, (reason) => {
+        stopped = reason;
+        stoppedBy = "signin";
+      });
       spent += inputTokens(result.tokens);
       run.push(result);
     }
     runs.push(run);
   }
-  return { runs, stopped };
+  return { runs, stopped, stoppedBy };
 }
 
-async function runQuestion(q: Question, model: Model, server: Server): Promise<QuestionResult> {
+async function runQuestion(q: Question, model: Model, server: Server, stop: (reason: string) => void): Promise<QuestionResult> {
   const started = Date.now();
   const result = empty(q);
   const end = (outcome: Outcome, error?: string) => ({
@@ -142,9 +146,9 @@ async function runQuestion(q: Question, model: Model, server: Server): Promise<Q
       try {
         answer = await server.call(use.name, use.input);
       } catch (e) {
-        if (e instanceof StopInvocation) {
-          e.partial = end("error", e.message);
-          throw e;
+        if (e instanceof InvocationStopped) {
+          stop(e.message);
+          return end("error", e.message);
         }
         return end("error", `Server failure: ${e instanceof Error ? e.message : String(e)}`);
       }

@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type Anthropic from "@anthropic-ai/sdk";
 import { describe, expect, it } from "vitest";
-import { REFUSED_QUERY, StopInvocation, runBenchmark, type Server, type ServerResult } from "../../bench/src/harness.js";
+import { REFUSED_QUERY, InvocationStopped, runBenchmark, type Server, type ServerResult } from "../../bench/src/harness.js";
 import { judge } from "../../bench/src/judge.js";
 import type { Question } from "../../bench/src/reference.js";
 import { buildReport, credentialsInUse } from "../../bench/src/report.js";
@@ -150,7 +150,7 @@ describe("S-004 rework: renewing the Sign-in mid-run", () => {
     clock = 6_800_000;
     expect(await via()).toBe("via connection 3");
     clock = 7_100_000;
-    await expect(server.call("q", {})).rejects.toBeInstanceOf(StopInvocation);
+    await expect(server.call("q", {})).rejects.toBeInstanceOf(InvocationStopped);
   });
 });
 

@@ -112,7 +112,7 @@ export function reportMarkdown(report: Report): string {
     `- Runs: ${report.runs}`,
     `- Tokens: ${report.tokens.input} input, ${report.tokens.cacheWrite} cache write, ${report.tokens.cacheRead} cache read, ${report.tokens.output} output`,
     `- Approximate cost: US$${report.costUsd.toFixed(2)}`,
-    ...(report.stopped ? [`- Stopped early at ${report.stopped}; the Questions not reached are marked so.`] : []),
+    ...(report.stopped ? [`- Stopped early (${report.stopped}); the Questions not reached are marked so.`] : []),
     "",
     "## Summary",
     "",

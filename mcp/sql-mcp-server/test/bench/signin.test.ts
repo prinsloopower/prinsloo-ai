@@ -4,7 +4,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { base64url } from "jose";
 import { describe, expect, it } from "vitest";
-import { connectServer } from "../../bench/src/server.js";
+import { exitCodeFor, InvocationStopped } from "../../bench/src/harness.js";
+import { connectServer, signedInServer } from "../../bench/src/server.js";
+import { LIST_TABLES } from "../../src/tools/list-tables.js";
 import { type Loopback, signIn } from "../../bench/src/signin.js";
 import { queryDatabase } from "../query/catalog.js";
 import { nodeQueryEngine } from "../query/node-parser.js";
@@ -112,5 +114,36 @@ describe("S-004 the harness's Sign-in, after review 2 (D-098)", () => {
     writeFileSync(cachePath, JSON.stringify({ deploymentUrl: ORIGIN, clientId: "not-a-client", refreshToken: "not-a-token" }));
     await expect(signIn(ORIGIN, { ...w.deps, cachePath, interactive: false, log: () => {} })).rejects.toThrow(/refused/);
     expect(w.opened).toHaveLength(1);
+  });
+});
+
+describe("S-004 the benchmark's Sign-in over a run, after review 3", () => {
+  it("benchmark_renews_sign_in_without_browser_and_exits_1", async () => {
+    const h = await harness({}, { realMcp: true, database: queryDatabase(), queryEngine: nodeQueryEngine });
+    const w = world(h);
+    const cachePath = cacheFile();
+    // The wiring bench/run.ts uses, on the app's clock.
+    const server = await signedInServer(ORIGIN, { ...w.deps, cachePath, log: () => {} }, () => h.clock.t);
+    expect(w.opened).toHaveLength(1);
+    const ask = async () => (await server.call(LIST_TABLES, { request_text: "Which tables can I query?" })).isError ?? false;
+    expect(await ask()).toBe(false);
+
+    // Near the hour, the Sign-in is renewed from the cache, with no browser.
+    h.clock.advance(3500);
+    expect(await ask()).toBe(false);
+    expect(w.opened).toHaveLength(1);
+
+    // Then the cached token is refused: the run goes on while the current token lasts, and then stops.
+    writeFileSync(cachePath, JSON.stringify({ deploymentUrl: ORIGIN, clientId: "not-a-client", refreshToken: "not-a-token" }));
+    h.clock.advance(3400);
+    expect(await ask()).toBe(false);
+    h.clock.advance(300);
+    await expect(server.call(LIST_TABLES, { request_text: "Which tables can I query?" })).rejects.toBeInstanceOf(InvocationStopped);
+    expect(w.opened).toHaveLength(1);
+
+    // A run stopped because its Sign-in could not be renewed did not complete, so the command exits 1.
+    expect(exitCodeFor("signin")).toBe(1);
+    expect(exitCodeFor("ceiling")).toBe(0);
+    expect(exitCodeFor(null)).toBe(0);
   });
 });

@@ -1,4 +1,4 @@
-import type { createApp } from "./app.js";
+import type { Deps } from "./app.js";
 import type { RuntimeVariables } from "./config.js";
 import type { QueryEngine } from "./engine/database.js";
 import { PostgresDatabase } from "./engine/postgres.js";
@@ -11,7 +11,7 @@ export interface WorkerEnv {
 }
 
 /** The app's dependencies on Workers. Kept apart from worker.ts, which imports the parser's WebAssembly, so tests can build them. */
-export function workerDeps(env: WorkerEnv, queryEngine: () => Promise<QueryEngine>): Parameters<typeof createApp>[0] {
+export function workerDeps(env: WorkerEnv, queryEngine: () => Promise<QueryEngine>): Deps {
   const database = new PostgresDatabase(env.HYPERDRIVE.connectionString);
   return {
     ping: () => database.ping(),
