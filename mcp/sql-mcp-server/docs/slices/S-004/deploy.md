@@ -27,7 +27,7 @@ Rollback: `npx wrangler rollback 4dc70716-52c2-411c-8fc8-1b65af40d0ff`, the S-00
 
   The connector declines the DROP, so this runs in the Supabase SQL editor.
 
-Try it (T-010, the live run, made by the product owner):
+Try it: T-010, the live run, made by the product owner:
 1. In a PowerShell window, in `mcp/sql-mcp-server`, with `ANTHROPIC_API_KEY` set in that window only, run:
 
    ```

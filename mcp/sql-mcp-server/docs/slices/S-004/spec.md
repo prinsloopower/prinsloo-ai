@@ -200,7 +200,7 @@ The `.md` form is the same, as a table and a summary. Neither holds a Sign-in, a
 ## Needs before live verification
 An Anthropic API key for whoever runs it. The sample Database applied to `sqlmcp_test` in the AI Golf App Supabase project, with its grants. The Staff member's Entra account.
 
-**Cost.** A run puts 40 Questions to the model, each over several turns that resend the growing conversation, including result rows. At Claude Sonnet 5.5's $2 / $10 per million tokens, expect about US$5–15 per run and tens of dollars for three. The caps above bound the worst case at 8,000,000 input tokens per run, about US$16 of input. The first report records the real figure.
+**Cost.** A run puts 40 Questions to the model, each over several turns that resend the growing conversation, including result rows. At Claude Sonnet 5.5's $2 / $10 per million tokens, this spec estimated about US$5–15 per run. The first report measured US$0.45, because most input is read from the prompt cache (T-010). The caps above bound the worst case at 8,000,000 input tokens per run, about US$16 of input.
 
 **Earlier records.** The sample Database replaces the S-002/S-003 fixtures (D-092). S-003's deploy record's rollback `DELETE … BETWEEN 105 AND 604` then touches nothing, because the sample's order ids start at 10001. S-002's and S-003's "Try it" counts no longer apply, and T-007 notes this in both deploy records.
 
@@ -235,6 +235,14 @@ Verified by: manual. In the AI Golf App Supabase project, `bench/sample-db.sql` 
 
 ### T-010 — The first live run is made and its figures recorded
 Verified by: manual. `npm run benchmark -- https://sql-mcp-server.prinsloopower.workers.dev` completes a run of all 40 Questions. Its report is committed under `bench/reports/`, and its figures and cost are recorded in this spec, with a Q-### for any target missed.
+
+Result, 2026-10-31: the product owner made one invocation, and it completed all 40 Questions against Server `0.0.1+3359c4f5-cbc4-4124-bfff-727ee8ac4768` with harness commit 4875a94. The report is `bench/reports/2026-10-31T20-06-53Z-claude-sonnet-5-5.md`, with its `.json`.
+- **Correctness: 100.0%.** 40 correct, 0 incorrect and 0 errors, against the 90% target (D-045).
+- **Give-up: 0.0%,** against the 5% target (PRD). No Question reached three refused queries. B-19 had the most, two.
+- **Cost: about US$0.45.** The run used 380 input, 83,331 cache-write, 148,485 cache-read and 21,515 output tokens. Each Question took 3–15 seconds.
+- **Refusals:** 19 in all, each with the same sentence: "qualify every table with its schema and every column with its table or alias". Each time the model's next query was accepted. This is the cost Q-032 and Q-034 left for the benchmark to show: an extra query in about half the Questions, and no wrong answer.
+
+Both targets are met, so no Q-### is raised. This was a single run, so the run-to-run spread is not yet measured (`--runs N`).
 
 ### T-011 — Anyone can rerun the benchmark from the docs alone
 Verified by: manual. `bench/README.md` states the command, the API key and Sign-in it needs, what a run costs, how to apply the sample Database, and how to read a report. It is checked by following it from a clean checkout.

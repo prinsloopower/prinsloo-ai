@@ -40,7 +40,7 @@ The command exits:
 
 ## What it costs
 
-A run usually costs about **US$5–15** of Anthropic API credit. Each Question takes several model turns, and each turn resends the conversation so far, including the rows the Server returned. The report states the actual token use and cost.
+A run costs about **US$0.50** of Anthropic API credit; the first, on 2026-10-31, cost US$0.45. Each Question takes several model turns, and each turn resends the conversation so far, including the rows the Server returned. The report states the actual token use and cost.
 
 Caps bound the worst case:
 
