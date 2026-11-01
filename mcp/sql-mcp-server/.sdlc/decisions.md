@@ -746,3 +746,63 @@ Rationale: the product owner's answers to Review 2's hold (docs/slices/S-004/rev
 
 Alternatives rejected: one browser attempt per refused renewal (an unattended run would still stall for ten minutes); accepting the version-test and cache gaps.
 
+## D-099 — S-005's trial holds R-013's hour; the time to a first answer is recorded without a target
+Decided by: human | Date: 2026-10-31 | Phase: slice-spec (S-005)
+Rationale: the product owner's answer, "R-013's hour, log the rest". The slice backlog's S-005 line puts Sign-in and Staff members answering inside the hour. R-013 and the PRD metric end the hour when the Deployment is deployed, connected and reachable, and leave Identity provider setup and granting outside it. The trial is held to R-013, and also records the clock time at Sign-in working and at the first answered question.
+Alternatives rejected: holding the whole run to the hour, which is stricter than R-013 and would need it amended.
+
+## D-100 — The product owner runs S-005's deployment trial, and the log says they are not new to the project
+Decided by: human | Date: 2026-10-31 | Phase: slice-spec (S-005)
+Rationale: the product owner's answer, "Me, with a caveat". Their time is a lower bound, because they wrote the Server and know its accounts. It still tests whether the docs are complete, since every stall is recorded and fixed. The PRD metric's run by an engineer new to the project stays owed for the release (Q-039).
+Alternatives rejected: waiting for a person new to the project before S-005 can pass; a fresh Claude session following the docs, which is not the engineer the metric names.
+
+## D-101 — The Deployment kit runs on Workers Free and recommends Paid for real use
+Decided by: human | Date: 2026-10-31 | Phase: slice-spec (S-005)
+Rationale: the product owner's answer, "Free works; Paid for production". The project test Deployment has run on Workers Free from S-002 to S-004, the benchmark included, with a 595.70 KiB gzipped bundle. ADR-005 says the parser's WebAssembly does not fit the free plan, and that no longer holds (Q-038). Paid is recommended because Free limits CPU time per request and requests per day, and keeps Workers Logs 3 days, not 7.
+Alternatives rejected: requiring Paid, as ADR-005 has it, which charges every Operator before they can try it; documenting Free alone with no recommendation.
+
+## D-102 — The Deployment kit includes a setup command that runs Wrangler for the Operator
+Decided by: human | Date: 2026-10-31 | Phase: slice-spec (S-005)
+Rationale: the product owner's answer, "Add a setup script". `npm run setup` asks for the values and runs Wrangler's own commands: Hyperdrive with caching disabled, the config, `SERVER_SECRET`, the deploy and the smoke checks. `npm run setup -- signin` adds the Identity provider later. It stays within ADR-009: each step is a Wrangler command the guide also names, so nothing is click-through console work.
+Alternatives rejected: docs, a config template and the SQL script alone, which leave the Operator to type each Wrangler command and its secrets by hand.
+
+## D-103 — How S-005's setup command handles its files and the Database account's password
+Decided by: model | Date: 2026-10-31 | Phase: slice-spec (S-005)
+Rationale: choices the spec makes that the answers above leave open:
+- **The Operator's config** is written to `wrangler.<worker name>.jsonc` at the package root, which `.gitignore` covers. The project's own `wrangler.jsonc` stays the project test Deployment's.
+- **The Database account's password** goes only in the body of a request to Cloudflare's Hyperdrive API, authorised with the token Wrangler's sign-in holds, read through `wrangler auth token`. Wrangler's `hyperdrive create` and `update` take it only as an argument (Wrangler 4.149), where it would show in the process list. Revised after the spec's first critique, which found this route.
+- **Wrangler is run** as `process.execPath` with `node_modules/wrangler/bin/wrangler.js` and an argument array, never through a shell, `npx` or `npm`. That keeps command lines out of npm's log, and avoids `cmd.exe` on Windows.
+- **The deployment trial log** is `docs/deployment-trials.md`, one entry per trial, newest first.
+- **Names:** the Database account script takes the role's name as a placeholder, suggesting `sqlmcp_reader`, and stops if the role exists. The Hyperdrive config is named after the Worker.
+This departs from D-102's "each step is a Wrangler command" in one place, the Hyperdrive config, which setup makes through Cloudflare's API. The guide names that call, so it is no more hidden than a Wrangler command.
+Alternatives rejected: overwriting `wrangler.jsonc`, which would lose the project's own config; Wrangler's own Hyperdrive commands, which put the password on a command line; asking the Operator for a separate Cloudflare API token, which is one more credential to create inside the hour; a fixed role name, which collides with an existing Deployment's account in the same Database.
+
+## D-104 — Until the first release is tagged, Operators deploy from the default branch
+Decided by: model | Date: 2026-10-31 | Phase: slice-spec (S-005)
+Rationale: operations.md's release model, a `vX.Y.Z` tag that CI builds, does not exist yet: there is no tag and no CI. S-005's kit therefore deploys from a clone of the repository's default branch. An Operator upgrades with `git pull`, then redeploys with their config. Rollback is `wrangler rollback`. The token format's `v` has been 1 since it was written (`src/signin/tokens.ts`), so no rollback yet crosses a format change. Until releases carry notes, a commit that changes `v` says so in its message, and the guide tells Operators to look for it. The tagged release is owed before the release ships (Q-039).
+Alternatives rejected: building the tag-and-CI release inside S-005, which is not what the slice delivers and would set S-006's container release for it; leaving the ref unstated.
+
+## D-105 — The Database account script lists what the new role can read, and the guide says to set a Boundary if it is not empty
+Decided by: model | Date: 2026-10-31 | Phase: slice-spec (S-005)
+Rationale: S-002's deploy record asks S-005 to settle Supabase's grants to `PUBLIC`, which an Operator Deployment with no Boundary would show. On the AI Golf App project, on 2026-10-31, a login role with no grants could read no table or view outside the schemas granted to it, so the kit's default of no Boundary (D-075) shows nothing. Other Supabase versions or extensions may differ. So the script's last statement lists every table, view and column the new role can read outside the system schemas. If that is not empty, the guide tells the Operator to name their own schemas in the Boundary when setup asks.
+Alternatives rejected: defaulting the Boundary to `public`, which contradicts D-075 and hides the Operator's other schemas; excluding Supabase's own schemas in the Server, a Server change with a list Supabase can change; saying nothing, which S-002's record ruled out.
+
+## D-106 — S-005's setup command generates the Database password, rebuilds the shared config on every deploy, and can adopt its own Worker
+Decided by: human | Date: 2026-11-01 | Phase: slice-spec (S-005)
+Rationale: the product owner's answer to the spec's gate-2 hold, "Fix all five", the fixes as offered:
+- **The Database account's password** is generated by the setup command and never shown. Supabase receives only its SCRAM-SHA-256 verifier, in SQL the command prints for the Operator to run, as S-002 did for the project test Database. The plain password reaches only Hyperdrive, through D-103's API request. It never sits in Supabase's saved SQL snippets or PostgreSQL's statement log.
+- **Shared config fields** live in `deploy/cloudflare/wrangler.template.jsonc`, kept equal to the project's own `wrangler.jsonc` by a test. The Operator's file holds only their own part. `npm run setup -- deploy` merges the two at every deploy, so an upgrade by `git pull` (D-104) never deploys stale fields.
+- **A lost config file** is recovered by adopting the Worker: setup recognises a Worker it made by its same-named Hyperdrive config, and adopts it once the Operator types the name again.
+- **Cloudflare account:** asked when Wrangler's sign-in reaches more than one, and written to the config.
+- **Monitoring:** the guide gives each signal in operations.md's monitoring table and where to watch it on Cloudflare.
+Alternatives rejected: a password the Operator types into Supabase's SQL editor; a config file copied once at setup; deferring monitoring to a later slice.
+
+## D-107 — S-005's spec passes after gate 3's two fixes, without a fourth critique
+Decided by: human | Date: 2026-11-01 | Phase: slice-spec (S-005)
+Rationale: the product owner's answer to gate 3's hold, "Fix both, then pass".
+- **A rerun after an orphaned role** issues `ALTER ROLE` with a new verifier.
+- **A rerun keeps the fields it did not ask about,** and adoption reads the Worker's current settings back from Cloudflare.
+- **The monitoring test checks thresholds too.**
+
+The gate is recorded as passed on these fixes. Code review and the trial are the next checks.
+Alternatives rejected: a fourth critique, which each earlier round showed would likely find something in the newest fixes; accepting both gaps.

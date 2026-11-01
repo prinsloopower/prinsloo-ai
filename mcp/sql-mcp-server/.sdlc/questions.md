@@ -196,3 +196,16 @@ Answered by the product owner, 2026-10-25: "accepted", the first option. See D-0
 Raised by: slice-spec (S-004) | Blocks: slice-spec for S-006 and S-008 (benchmark run on MS SQL Server)
 On Workers, S-004 has `initialize` report `<package version>+<Worker version id>` from the `VERSION_METADATA` binding, so a benchmark report names the deployed release. Containers have no such binding, so S-006's Azure image would report the package version alone, which does not change between deploys. One option is that the Bicep template passes the image tag (`X.Y.Z`) or the commit SHA (operations.md) as a setting, and the Node adapter reports it the same way. environments.md also needs the `VERSION_METADATA` binding in its table. That waits for the next system-spec revision, with Q-030 and Q-033.
 
+## Q-038 — Corrections S-005 owes the slice backlog, ADR-005 and operations.md
+Raised by: slice-spec (S-005) | Blocks: nothing; apply at the next revision of each document
+- **The slice backlog's S-005 line** puts Sign-in and Staff members answering inside the hour. R-013 does not, and D-099 holds the trial to R-013.
+- **ADR-005's consequence and operations.md's Worker bundle row** say the parser does not fit Workers Free. The project test Deployment runs on Free with a 595.70 KiB gzipped bundle, not the 218 KiB operations.md states (D-101). The release build's check should hold Free's 3 MiB limit, not Paid's 10 MiB, since the kit now supports Free.
+- **operations.md's configuration table** gives the project test Deployment's log retention as 7 days on a paid plan. Its account is on Free, and S-003's T-012 measured 6 to 9 days.
+- **operations.md's release model** describes tags and CI that do not exist yet. D-104 says what Operators deploy until they do.
+These are left out of the gated documents for now, because editing them re-gates the slice backlog (Q-028).
+
+## Q-039 — What the release still owes before it ships: the PRD's trial by an engineer new to the project, and a tagged release
+Raised by: slice-spec (S-005) | Blocks: the release
+- **The deployment-time metric** is measured by an engineer new to the project, working from the docs alone (PRD). S-005's trial is the product owner's, a lower bound (D-100). Who runs the real one, and when?
+- **A tagged release** with CI-built artifacts (operations.md). Until it exists, Operators deploy from the default branch (D-104).
+
