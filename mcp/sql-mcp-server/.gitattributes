@@ -3,3 +3,7 @@
 *.jsonc text eol=lf
 docs/security-material/*.md text eol=lf
 docs/slices/**/*.md text eol=lf
+deploy/**/*.md text eol=lf
+deploy/**/*.sql text eol=lf
+README.md text eol=lf
+docs/deployment-trials.md text eol=lf

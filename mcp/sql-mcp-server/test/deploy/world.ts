@@ -1,3 +1,4 @@
+import { operatorPath } from "../../deploy/cloudflare/lib/config.js";
 import type { Prompt, RunResult, SetupDeps } from "../../deploy/cloudflare/lib/setup.js";
 
 /** A fake Cloudflare account and terminal for the setup command: Wrangler, the API, the Operator's answers and files. */
@@ -20,6 +21,11 @@ export function world(answers: Record<string, string> = {}) {
     failOn: null as null | ((args: string[]) => boolean),
     smokeFailures: 0,
     hyperdriveRefuses: false,
+    /** Pauses to abandon, as an Operator pressing Ctrl-C at the SQL prompt would. */
+    abandonPauses: 0,
+    /** An API path, after the account, answered with this status and no result. */
+    apiFails: null as null | { path: string; status: number },
+    tokenOutput: null as string | null,
   };
   const calls: { args: string[]; accountId?: string; stdin?: string }[] = [];
   const requests: { method: string; url: string; headers: Record<string, string>; body?: string }[] = [];
@@ -29,6 +35,8 @@ export function world(answers: Record<string, string> = {}) {
   const paused: string[] = [];
   const files = new Map<string, string>();
   const deployed: { config: Record<string, unknown>; path: string }[] = [];
+  /** Every pause, Wrangler call and API request, in the order they happened. */
+  const events: string[] = [];
   let counter = 0;
   let slept = 0;
   let nextId = 1;
@@ -47,18 +55,24 @@ export function world(answers: Record<string, string> = {}) {
     },
     async pause(text) {
       paused.push(text);
+      events.push(`pause ${text.includes("ROLE") ? "sql" : "other"}`);
+      if (state.abandonPauses > 0) {
+        state.abandonPauses--;
+        throw new Error("abandoned at the prompt");
+      }
     },
     say(text) {
       said.push(text);
     },
     async wrangler(args, opts = {}) {
       calls.push({ args, ...opts });
+      events.push(`wrangler ${args.slice(0, 2).join(" ")}`);
       if (state.failOn?.(args)) return { code: 1, stdout: "", stderr: `failed: ${args.join(" ")}` };
       const [cmd, sub] = args;
       if (cmd === "whoami") {
         return state.loggedIn ? ok(JSON.stringify({ loggedIn: true, accounts: state.accounts })) : { code: 1, stdout: "", stderr: "not logged in" };
       }
-      if (cmd === "auth" && sub === "token") return ok(JSON.stringify({ type: "oauth", token: OAUTH_TOKEN }));
+      if (cmd === "auth" && sub === "token") return ok(state.tokenOutput ?? JSON.stringify({ type: "oauth", token: OAUTH_TOKEN }));
       const name = args[args.indexOf("--name") + 1]!;
       if (cmd === "secret" && sub === "list") return ok(JSON.stringify([...(state.workers.get(name)?.secrets ?? [])].map((n) => ({ name: n, type: "secret_text" }))));
       if (cmd === "secret" && sub === "put") {
@@ -95,6 +109,8 @@ export function world(answers: Record<string, string> = {}) {
       const m = path.match(/^\/accounts\/([^/]+)(\/.*)$/);
       if (!m || m[1] !== ACCOUNT) return json(404, { success: false, errors: [{ message: "no such account" }] });
       const rest = m[2]!;
+      events.push(`api ${req.method} ${rest}`);
+      if (state.apiFails?.path === rest) return new Response("<html>busy</html>", { status: state.apiFails.status });
       if (rest === "/workers/subdomain") {
         return state.subdomain ? json(200, { success: true, result: { subdomain: state.subdomain } }) : json(404, { success: false, errors: [{ code: 10007 }] });
       }
@@ -164,7 +180,7 @@ export function world(answers: Record<string, string> = {}) {
     return out;
   };
 
-  return { deps, state, calls, requests, scripts, asked, said, paused, files, deployed, secrets, slept: () => slept };
+  return { deps, state, calls, requests, scripts, asked, said, paused, files, deployed, events, secrets, slept: () => slept };
 }
 
 /** Answers for a first run that deploys the trial Deployment. */
@@ -179,4 +195,4 @@ export const TRIAL = {
   rowLimit: "500",
 };
 
-export const operatorFile = (worker = TRIAL.worker) => `wrangler.${worker}.jsonc`;
+export const operatorFile = (worker = TRIAL.worker) => operatorPath(worker);

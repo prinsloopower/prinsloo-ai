@@ -8,7 +8,7 @@ import { existsSync, readFileSync, readdirSync, rmSync, writeFileSync } from "no
 import { join } from "node:path";
 import { createInterface } from "node:readline";
 import { type Form, type Prompt, SetupStopped, setup } from "./lib/setup.js";
-import { wranglerRunner } from "./lib/wrangler.js";
+import { nodeRunner, wranglerRunner } from "./lib/wrangler.js";
 
 const ROOT = process.cwd();
 const FORMS: Form[] = ["setup", "deploy", "signin", "password", "remove"];
@@ -25,13 +25,20 @@ if (!existsSync(join(ROOT, "node_modules", "wrangler", "bin", "wrangler.js"))) {
 
 /** One line from the terminal; a hidden prompt echoes nothing of what is typed. */
 function ask(p: Prompt): Promise<string> {
+  // Without a TTY (Git Bash's mintty, for one), the terminal itself echoes input, so nothing here can hide it.
+  if (p.hidden && !process.stdin.isTTY) {
+    throw new SetupStopped("This terminal cannot hide what you type, and the next answer is a secret. Run the command in PowerShell or Windows Terminal, or as winpty npm run setup, and rerun it.");
+  }
   const options = p.choices ? ` [${p.choices.join(" / ")}]` : "";
   const fallback = p.default ? ` (${p.default})` : "";
   const rl = createInterface({ input: process.stdin, output: process.stdout, terminal: true });
   if (p.hidden) {
-    const write = (rl as unknown as { _writeToOutput: (s: string) => void })._writeToOutput.bind(rl);
+    // readline has no option to hide input. Replacing its private echo, after the prompt is written,
+    // is the usual way to do it in Node, and is deliberate here.
+    const internal = rl as unknown as { _writeToOutput: (s: string) => void };
+    const write = internal._writeToOutput.bind(rl);
     let prompted = false;
-    (rl as unknown as { _writeToOutput: (s: string) => void })._writeToOutput = (s) => {
+    internal._writeToOutput = (s) => {
       if (!prompted) {
         prompted = true;
         write(s);
@@ -47,16 +54,7 @@ function ask(p: Prompt): Promise<string> {
   });
 }
 
-const runScript = (path: string, url: string) =>
-  new Promise<{ code: number; stdout: string; stderr: string }>((resolve, reject) => {
-    const child = spawn(process.execPath, [join(ROOT, path), url], { cwd: ROOT, shell: false, windowsHide: true });
-    let stdout = "";
-    let stderr = "";
-    child.stdout.on("data", (d: Buffer) => (stdout += d.toString()));
-    child.stderr.on("data", (d: Buffer) => (stderr += d.toString()));
-    child.on("error", reject);
-    child.on("close", (code) => resolve({ code: code ?? 1, stdout, stderr }));
-  });
+const node = nodeRunner(ROOT, spawn);
 
 try {
   await setup(form, {
@@ -65,7 +63,7 @@ try {
     say: (text) => console.log(text),
     wrangler: wranglerRunner(ROOT, spawn),
     fetch,
-    script: runScript,
+    script: (path, url) => node(path, [url]),
     files: {
       read: (p) => (existsSync(join(ROOT, p)) ? readFileSync(join(ROOT, p), "utf8") : undefined),
       write: (p, text) => writeFileSync(join(ROOT, p), text),
@@ -76,10 +74,7 @@ try {
     sleep: (ms) => new Promise((r) => setTimeout(r, ms)),
   });
 } catch (e) {
-  if (e instanceof SetupStopped) {
-    console.error(`\nStopped: ${e.message}`);
-    process.exitCode = 1;
-  } else {
-    throw e;
-  }
+  // One line, as bench/run.ts does. A stop already says what to do; anything else is named, not traced.
+  console.error(e instanceof SetupStopped ? `\nStopped: ${e.message}` : `\nSetup could not run: ${e instanceof Error ? e.message : String(e)}`);
+  process.exitCode = 1;
 }

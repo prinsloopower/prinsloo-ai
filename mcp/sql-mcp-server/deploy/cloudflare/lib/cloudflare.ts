@@ -3,6 +3,7 @@ export type Credentials = { type: "oauth" | "api_token"; token: string } | { typ
 
 export type HyperdriveOrigin = { scheme: "postgres"; host: string; port: number; database: string; user: string; password?: string };
 export type HyperdriveConfig = { id: string; name: string; origin: Omit<HyperdriveOrigin, "password"> };
+/** A Worker's binding as its settings list it: `plain_text` vars, `secret_text` secrets (names only), and others. */
 export type Binding = { type: string; name: string; text?: string; id?: string };
 
 export class CloudflareError extends Error {
@@ -25,12 +26,14 @@ export function cloudflare(fetchFn: typeof fetch, credentials: Credentials, acco
       headers: { ...headers, ...(body === undefined ? {} : { "content-type": "application/json" }) },
       body: body === undefined ? undefined : JSON.stringify(body),
     });
+    // A body that does not parse leaves no reason to report, and no result to return.
     const json = (await res.json().catch(() => ({}))) as { success?: boolean; result?: T; errors?: { message?: string; code?: number }[] };
     if (!res.ok || json.success === false) {
       const why = (json.errors ?? []).map((e) => e.message ?? `code ${e.code}`).join("; ");
       throw new CloudflareError(res.status, why || `HTTP ${res.status}`);
     }
-    return json.result as T;
+    if (json.result === undefined) throw new CloudflareError(res.status, `${method} ${path} answered with no result`);
+    return json.result;
   }
   const absent = async <T>(p: Promise<T>) => p.catch((e: unknown) => (e instanceof CloudflareError && e.status === 404 ? undefined : Promise.reject(e)));
   return {

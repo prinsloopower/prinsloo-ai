@@ -39,7 +39,7 @@ The SQL ends with a listing of every table and column the new role can already r
 - **Expect no rows.** A new role has no grants.
 - **If rows appear,** something in your Database is granted to `PUBLIC`, which every role inherits: Supabase itself, or an extension. When setup then asks for the Boundary, name the schemas that hold your own data, so nothing else is visible.
 
-The SQL refuses to run if a role of that name already exists, because another Deployment may be using it. Choose another name.
+Setup marks the role it creates with a comment naming this Deployment. Run again, for a rerun or a new password, the same SQL gives that role a new password. It refuses any other role of that name, which another Deployment may be using: choose another name.
 
 ## 3. Setup
 
@@ -60,15 +60,15 @@ It asks:
 | Database account | the new role's name, such as `sqlmcp_reader` |
 | schemas in the Boundary | the Boundary (`BOUNDARY`). Blank means none, so the grants alone decide. Name your schemas if section 2's listing showed rows |
 | Row limit | the Row limit (`ROW_LIMIT`), 500 unless you choose otherwise |
-| Cloudflare account | asked only if your Wrangler sign-in reaches more than one |
+| Cloudflare account | asked only if Wrangler's Cloudflare login reaches more than one |
 
 Then it works through these steps, stopping at the first failure with what failed and what to do. Rerunning `npm run setup` with the same Worker name resumes where it stopped.
-1. **Signs in.** It runs `wrangler whoami --json` to check Wrangler's sign-in and list your accounts, then `wrangler auth token --json` to read the token that sign-in holds. It also calls `GET /accounts/<account>/workers/subdomain` to check that your account has a `workers.dev` subdomain.
+1. **Uses Wrangler's Cloudflare login.** It runs `wrangler whoami --json` to check the login and list your accounts, then `wrangler auth token --json` to read the token that login holds. It also calls `GET /accounts/<account>/workers/subdomain` to check that your account has a `workers.dev` subdomain.
 2. **Checks the Worker name.** It calls `GET /accounts/<account>/workers/scripts/<worker>/settings` to see whether a Worker of that name exists, and `GET /accounts/<account>/hyperdrive/configs` to list your Hyperdrive configs. It never deploys over a Worker it did not make.
 3. **Prints the Database account's SQL** (section 2) and waits while you run it.
 4. **Creates the Hyperdrive config** with `POST /accounts/<account>/hyperdrive/configs`, with query caching disabled. A rerun updates it with `PATCH /accounts/<account>/hyperdrive/configs/<id>`. The password goes only in that request's body. Wrangler's own Hyperdrive commands would put it on a command line, so setup does not use them.
-5. **Writes `wrangler.<worker>.jsonc`** in this folder. That file holds this Deployment's own settings: its name, account, Hyperdrive config id, Database account and `vars`. It holds no secret. **Keep a backup of it.** It is gitignored, so it stays on this machine. Section 9 says what to do if it is lost.
-6. **Sets `SERVER_SECRET`,** the secret every key derives from: 32 random bytes, through `wrangler secret list` and `wrangler secret put` on standard input. A rerun keeps the one already set.
+5. **Writes `wrangler.<worker>.jsonc`** in this folder. A first version is written at step 3, before the SQL is shown, so a rerun after a stop there finds it. That file holds this Deployment's own settings: its name, account, Hyperdrive config id, Database account and `vars`. It holds no secret. **Keep a backup of it.** It is gitignored, so it stays on this machine. Section 9 says what to do if it is lost.
+6. **Sets `SERVER_SECRET`,** the secret every key derives from: 32 random bytes, through `wrangler secret put` on standard input. A rerun keeps the one already set: the Worker's settings from step 2 list its secrets by name.
 7. **Deploys.** It merges [wrangler.template.jsonc](wrangler.template.jsonc), the settings every Deployment shares, with your file, then runs `wrangler deploy -c` on the result and deletes it.
 8. **Runs the smoke checks** (section 4), retrying for up to two minutes while a new hostname starts resolving.
 9. **Prints** the Deployment's URL and the redirect URI for section 5.
@@ -111,7 +111,7 @@ Staff members sign in with their Entra ID accounts.
    - **Redirect URI:** platform **Web**, and the URI setup printed: `https://<worker>.<subdomain>.workers.dev/oauth/callback`.
 2. From the registration's overview, copy the **Application (client) ID** and the **Directory (tenant) ID**.
 3. Under **Certificates & secrets**, add a client secret and copy its **Value**. Entra shows it once.
-4. Run `npm run setup -- signin`. It asks for the tenant id (for `IDP_ISSUER`), the client id (`IDP_CLIENT_ID`) and the secret (`IDP_CLIENT_SECRET`, hidden as you type). It puts the secret on standard input, redeploys, and runs the Sign-in smoke checks, which go as far as Entra's own sign-in page.
+4. Run `npm run setup -- signin`. It asks for the tenant id (for `IDP_ISSUER`), the client id (`IDP_CLIENT_ID`) and the secret (`IDP_CLIENT_SECRET`, hidden as you type). Run it in PowerShell or Windows Terminal: Git Bash's own terminal cannot hide input, so setup stops there before asking for the secret. It puts the secret on standard input, redeploys, and runs the Sign-in smoke checks, which go as far as Entra's own sign-in page.
 
 `IDP_SCOPES` is optional. It defaults to `openid profile email offline_access`, which Entra needs.
 
@@ -151,17 +151,17 @@ Send Staff members [staff.md](staff.md), with the address `https://<worker>.<sub
 
 **Rotating secrets:**
 - `IDP_CLIENT_SECRET`: add a new client secret in Entra ID, run `npm run setup -- signin` with it, then delete the old secret in Entra ID.
-- The Database account's password: run `npm run setup -- password`. It makes a new password, prints `ALTER ROLE` with its verifier for the SQL editor, and gives the password to Hyperdrive. A redeploy alone does not change the password Hyperdrive holds.
+- The Database account's password: run `npm run setup -- password`. It makes a new password, prints section 2's SQL with the new verifier for the SQL editor, and gives the password to Hyperdrive. A redeploy alone does not change the password Hyperdrive holds.
 - `SERVER_SECRET`: setup never shows it, so you cannot set it as `SERVER_SECRET_PREVIOUS` to keep Sign-ins working through a rotation. Rotating it therefore signs every Staff member out, as for a leaked secret (security.md). Set a new value with `npx wrangler secret put SERVER_SECRET --name <worker>`, which asks for it without echoing, then run `npm run setup -- deploy`. To make one: `node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"`.
 
 **Audit records.** In the Cloudflare dashboard, open **Workers & Pages**, then your Worker, then **Observability**. Filter on `$metadata.type` equals `cf-worker` and `type` equals `audit`. Workers Logs splits each record into fields, so a text search for `"type":"audit"` finds nothing. Records are kept 3 days on Free and 7 on Paid (section 1). Above 5 billion log lines a day across the account, Workers Logs keeps only a sample and could drop Audit records without trace. On an account shared with busy Workers, watch the daily volume.
 
 **Monitoring.** Nothing in the Server pages anyone, and setup sets no alert up. For each signal below, this is where to watch it and when to call a human. This project has not found a Cloudflare notification for any of them, so save each Workers Logs query in **Observability** and check it, or point your own tooling at it.
 - **`/healthz`:** an external HTTPS uptime monitor on `https://<worker>.<subdomain>.workers.dev/healthz`, because Cloudflare cannot run a health probe for a Worker. Call a human at 3 failures in a row (90 s).
-- **Database errors:** Audit records with `outcome.kind` equals `database_error`, and `outcome.reason_class` `connection` or `timeout`. Call a human at more than 10 within 5 minutes.
-- **Identity provider failures:** the Server's lines with `type` equals `op` and `event` `idp_unreachable` or `idp_invalid_response`. Call a human at more than 5 within 5 minutes.
-- **Server faults:** `type` equals `op` and `event` `signin_error` or `server_fault`. Call a human at any.
-- **Configuration errors:** `type` equals `op` and `event` `config_invalid`. Call a human at any.
+- **Database errors:** in Workers Logs, `$metadata.type` equals `cf-worker`, and Audit records with `outcome.kind` equals `database_error`, and `outcome.reason_class` `connection` or `timeout`. Call a human at more than 10 within 5 minutes.
+- **Identity provider failures:** in Workers Logs, `$metadata.type` equals `cf-worker`, `type` equals `op` and `event` `idp_unreachable` or `idp_invalid_response`. Call a human at more than 5 within 5 minutes.
+- **Server faults:** in Workers Logs, `$metadata.type` equals `cf-worker`, `type` equals `op` and `event` `signin_error` or `server_fault`. Call a human at any.
+- **Configuration errors:** in Workers Logs, `$metadata.type` equals `cf-worker`, `type` equals `op` and `event` `config_invalid`. Call a human at any.
 - **5xx responses:** the Worker's **Metrics** tab, requests and errors. Call a human at more than 1% of requests over 15 minutes, with at least 20 requests.
 
 **Removing a Deployment.** Run `npm run setup -- remove` and type the Worker's name to confirm. It deletes the Worker, its Hyperdrive config and `wrangler.<worker>.jsonc`, and nothing else. Then:
@@ -175,9 +175,11 @@ Send Staff members [staff.md](staff.md), with the address `https://<worker>.<sub
 - `database: unreachable` means Hyperdrive could not connect to Supabase: usually a wrong pooler host, port or project ref, a role whose SQL was never run, or a password that no longer matches. Rerun `npm run setup` with the right details, or rotate the password with `npm run setup -- password`.
 - `database: unsafe` means the Database account bypasses grants: it is `postgres`, has `BYPASSRLS`, or belongs to `pg_read_all_data` or `pg_write_all_data`. Remove that attribute or membership in Supabase; the next check sees the change, with no redeploy.
 
-**Setup stopped partway.** Rerun the same command with the same Worker name. It finds what the earlier run made and carries on, creating nothing twice. If it stopped after you ran the Database account's SQL but before Hyperdrive was made, it prints `ALTER ROLE` with a new password's verifier instead, because the first password is gone. If it stopped before you ran that SQL at all, the `ALTER ROLE` fails because the role does not exist. Delete `wrangler.<worker>.jsonc` and rerun.
+**Setup stopped partway.** Rerun the same command with the same Worker name. It finds what the earlier run made and carries on, creating nothing twice. If it stopped before Hyperdrive was made, it prints the Database account's SQL again with a new password, because the first one is gone. Run it whether or not you ran the first: it creates the role, or gives a new password to the one setup made for this Deployment.
 
 **A lost `wrangler.<worker>.jsonc`.** Restore it from your backup. Without one, rerun `npm run setup` with the same Worker name and answers. Setup recognises a Worker it made by the Hyperdrive config of the same name, and adopts it once you type the Worker's name again. It reads the Worker's current settings back from Cloudflare first, so your Boundary exclusions and Sign-in settings are kept.
+
+**"This terminal cannot hide what you type."** Setup stopped before a secret, because the terminal would echo it. Rerun in PowerShell or Windows Terminal, or as `winpty npm run setup -- signin` in Git Bash.
 
 **No `workers.dev` subdomain.** A new Cloudflare account has none until you choose one. In the dashboard, open **Workers & Pages** and choose a subdomain, then rerun.
 

@@ -415,5 +415,7 @@
   ],
   "blocked_on": null,
   "open_questions": [],
-  "phase": null
+  "phase": "build",
+  "phase_started_at": "2026-11-01T21:00:07+00:00",
+  "phase_paused_s": 0
 }

@@ -59,7 +59,7 @@ The guide names each Server setting by its domain name and its variable, and ref
 ### `database-account.sql`
 A template with two slots, the role's name and its password's SCRAM-SHA-256 verifier. The setup command fills both and prints the result for the Operator to run as `postgres` in the Supabase SQL editor. The password itself never reaches Supabase, its SQL editor's saved snippets or PostgreSQL's statement log (D-106). The SQL creates the role with `LOGIN` and no other attribute: no `BYPASSRLS`, no membership of `pg_read_all_data` or any other role, and no grant. A Deployment using it therefore passes the D-077 check.
 
-If a role of that name already exists, the SQL stops and changes nothing, rather than taking over an account another Deployment may use. Run twice with the same name, the second run reports that.
+If a role of that name already exists, the SQL changes nothing, rather than taking over an account another Deployment may use. The one exception is a role setup made for this same Deployment, which the SQL marks with a comment naming it. For that role, the same SQL sets the new password, which is how a rerun and the `password` form use it (D-109).
 
 **What the role can already read.** Its last statement lists every table, view and column the new role can read outside the system schemas, as the Allow-list would see it (D-074), with no Boundary. That includes anything granted to `PUBLIC`. S-002's deploy record asks the kit to settle this, because Supabase grants `PUBLIC` in its own schemas.
 - **On the AI Golf App project, checked on 2026-10-31:** a login role with no grants reads no table or view outside the schemas granted to it, so the list is empty.
@@ -92,7 +92,7 @@ It then works through these steps, stopping at the first failure with what faile
 
 **Rerunning.** Rerun with the same Worker name, after a stop or to change an answer, `npm run setup` resumes. It finds the config file and the Hyperdrive config the earlier run made, and updates only the fields this run asked about. Everything else in the file is kept, including Boundary table exclusions and the `IDP_*` values. It then continues from step 6. Nothing is created twice. For the Database account:
 - **If the Hyperdrive config exists,** step 3 is skipped and its password kept.
-- **If the role exists but no Hyperdrive config does,** the earlier run stopped after the Operator ran its SQL, and that password is gone. Step 3 then generates a new password and prints `ALTER ROLE` with its verifier, as the `password` form does, and waits while the Operator runs it.
+- **If the role exists but no Hyperdrive config does,** the earlier run stopped after the Operator ran its SQL, and that password is gone. Step 3 then generates a new password and prints the same SQL with its verifier, which resets the password of the role setup marked for this Deployment, and waits while the Operator runs it (D-109).
 
 **Other commands:**
 - `npm run setup -- deploy` asks for the Worker name, if more than one config is on disk. It merges `wrangler.template.jsonc` with the Operator's file into a generated config, deploys it with `wrangler deploy -c`, deletes the generated file, and runs the smoke checks. Because the shared fields come from the current template on every deploy, a `git pull` upgrade never deploys stale ones (D-106).
@@ -184,25 +184,25 @@ No change to the Server's data. The Database account is created in the Operator'
 ## Tasks
 
 ### T-001 — The setup command turns the Operator's answers into a config and a deployed Worker, and stops at the first failure
-Verified by: setup_builds_config_from_answers, setup_runs_steps_in_order, setup_stops_at_first_failure_and_says_what_to_do, setup_refuses_postgres_account_at_the_question, setup_asks_which_cloudflare_account, setup_refuses_worker_it_did_not_make, setup_adopts_its_own_worker_after_confirmation, setup_smoke_retries_then_fails
+Verified by: setup_builds_config_from_answers, setup_runs_steps_in_order, setup_stops_at_first_failure_and_says_what_to_do, setup_refuses_postgres_account_at_the_question, setup_asks_which_cloudflare_account, setup_refuses_worker_it_did_not_make, setup_adopts_its_own_worker_after_confirmation, setup_smoke_retries_then_fails, setup_reuses_hyperdrive_with_new_password, setup_reports_cloudflare_errors_and_unreadable_output
 
 ### T-002 — A rerun resumes where the last run stopped
-Verified by: setup_rerun_resumes_without_duplicates, setup_rerun_keeps_server_secret, setup_rerun_resets_password_of_orphaned_role, setup_rerun_keeps_unasked_fields, setup_adoption_restores_worker_vars
+Verified by: setup_rerun_resumes_without_duplicates, setup_rerun_keeps_server_secret, setup_rerun_resets_password_of_orphaned_role, setup_rerun_keeps_unasked_fields, setup_adoption_restores_worker_vars, setup_reads_server_secret_from_worker_settings
 
 ### T-003 — The setup command keeps secrets out of arguments, files and output
 Verified by: setup_passes_secrets_on_stdin, setup_sends_database_password_only_in_api_body, setup_prints_only_the_password_verifier, setup_writes_no_secret_to_config_or_output, setup_runs_wrangler_without_shell
 
 ### T-004 — An Operator can set up Sign-in, rotate the Database password and remove a Deployment with the setup command
-Verified by: setup_signin_sets_idp_and_redeploys, setup_password_updates_role_and_hyperdrive, setup_remove_deletes_only_what_config_names
+Verified by: setup_signin_sets_idp_and_redeploys, setup_password_updates_role_and_hyperdrive, setup_remove_deletes_only_what_config_names, setup_forms_ask_worker_only_with_choice
 
 ### T-005 — Every deploy uses the current shared config, and that config deploys
 Verified by: setup_deploy_merges_current_template, template_matches_project_config, setup_config_passes_wrangler_dry_run
 
 ### T-006 — The Database account SQL creates a safe, empty role, refuses an existing one, and lists what PUBLIC grants
-Verified by: database_account_sql_creates_safe_role, database_account_sql_refuses_existing_role, database_account_sql_lists_public_grants
+Verified by: database_account_sql_creates_safe_role, database_account_sql_refuses_existing_role, database_account_sql_lists_public_grants, database_account_sql_lists_what_server_sees
 
 ### T-007 — The README, guide and Staff guide cover what an Operator and a Staff member need
-Verified by: kit_guide_names_every_cloudflare_setting, kit_guide_explains_healthz_failures, kit_guide_gives_smoke_checks_as_curl, kit_guide_names_every_setup_call, kit_guide_covers_every_monitoring_signal, readme_states_pairings_ai_tools_and_retention
+Verified by: kit_guide_names_every_cloudflare_setting, kit_guide_explains_healthz_failures, kit_guide_gives_smoke_checks_as_curl, kit_guide_names_every_setup_call, kit_guide_covers_every_monitoring_signal, readme_states_pairings_ai_tools_and_retention, staff_guide_covers_claude_chatgpt_and_refusals
 
 ### T-008 — The deployment trial is run and recorded
 Verified by: manual — the product owner runs the trial described under Proven by, from a fresh clone, with the trial's own names. Its entry in `docs/deployment-trials.md` records the times and every stall, and the docs are fixed for each stall. The trial Deployment is then removed, and the project test Deployment's smoke checks pass. Done when R-013's hour is met. A trial over the hour raises a Q-### naming where the time went.

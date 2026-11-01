@@ -62,6 +62,8 @@ describe("S-005 the setup command", () => {
     // The Database account's SQL is printed and waited on before Hyperdrive is created.
     const sqlAt = w.paused.findIndex((p) => p.includes(`CREATE ROLE "${TRIAL.role}"`));
     expect(sqlAt).toBe(0);
+    expect(w.events.indexOf("pause sql")).toBeGreaterThan(-1);
+    expect(w.events.indexOf("pause sql")).toBeLessThan(w.events.indexOf("api POST /hyperdrive/configs"));
     expect(w.requests.map((r) => `${r.method} ${new URL(r.url).pathname.replace(/^\/client\/v4\/accounts\/[^/]+/, "")}`)).toEqual([
       "GET /workers/subdomain",
       `GET /workers/scripts/${TRIAL.worker}/settings`,
@@ -186,6 +188,106 @@ describe("S-005 rerunning the setup command", () => {
     expect(w.deployed).toHaveLength(1);
     // The Hyperdrive config existed, so the Database account's SQL is not printed a second time.
     expect(w.paused.filter((p) => p.includes("ROLE"))).toHaveLength(1);
+
+    // Stopped at the SQL prompt, before the SQL was run: the rerun prints it again and carries on.
+    const atPrompt = world(TRIAL);
+    atPrompt.state.abandonPauses = 1;
+    await expect(setup("setup", atPrompt.deps)).rejects.toThrow(/abandoned/);
+    expect(atPrompt.state.hyperdrives.size).toBe(0);
+    await setup("setup", atPrompt.deps);
+    expect(atPrompt.paused[1]).toContain(`CREATE ROLE "${TRIAL.role}"`);
+    expect(atPrompt.state.hyperdrives.size).toBe(1);
+    expect(atPrompt.deployed).toHaveLength(1);
+
+    // Stopped at SERVER_SECRET, then at the smoke checks: each rerun creates nothing twice.
+    const later = world(TRIAL);
+    later.state.failOn = (a) => a[0] === "secret";
+    await stopped(setup("setup", later.deps));
+    later.state.failOn = null;
+    later.state.smokeFailures = 1_000;
+    await stopped(setup("setup", later.deps));
+    later.state.smokeFailures = 0;
+    await setup("setup", later.deps);
+    expect(later.state.hyperdrives.size).toBe(1);
+    expect(later.requests.filter((r) => r.method === "POST")).toHaveLength(1);
+    expect(later.calls.filter((c) => c.args[0] === "secret" && c.args[1] === "put" && c.args[2] === "SERVER_SECRET")).toHaveLength(2);
+    expect(later.deployed).toHaveLength(2);
+  });
+
+  it("setup_reads_server_secret_from_worker_settings", async () => {
+    const w = world(TRIAL);
+    await setup("setup", w.deps);
+    // Whatever `wrangler secret list` would say, the Worker's own settings decide, and they list SERVER_SECRET.
+    w.state.failOn = (a) => a[0] === "secret" && a[1] === "list";
+    await setup("setup", w.deps);
+    const puts = w.calls.filter((c) => c.args[0] === "secret" && c.args[1] === "put" && c.args[2] === "SERVER_SECRET");
+    expect(puts).toHaveLength(1);
+    expect(w.calls.some((c) => c.args[0] === "secret" && c.args[1] === "list")).toBe(false);
+    // A failure reading those settings stops setup; it is never read as "no secret".
+    w.state.apiFails = { path: `/workers/scripts/${TRIAL.worker}/settings`, status: 500 };
+    expect(await stopped(setup("setup", w.deps))).toMatch(/Cloudflare refused/);
+    expect(w.calls.filter((c) => c.args[0] === "secret" && c.args[1] === "put")).toHaveLength(1);
+  });
+
+  it("setup_reuses_hyperdrive_with_new_password", async () => {
+    // A same-named Hyperdrive config that no file here names, and the Operator chooses to reuse it.
+    const w = world({ ...TRIAL, reuseHyperdrive: "yes" });
+    w.state.hyperdrives.set("hd-7", { id: "hd-7", name: TRIAL.worker, origin: { host: "old.example.com", password: "old" }, caching: { disabled: false } });
+    await setup("setup", w.deps);
+    expect(w.asked.some((p) => p.key === "reuseHyperdrive")).toBe(true);
+    const patch = w.requests.find((r) => r.method === "PATCH")!;
+    const sent = JSON.parse(patch.body!) as { origin: { password?: string; host: string }; caching: unknown };
+    expect(sent.origin.host).toBe(TRIAL.host);
+    expect(sent.origin.password).toMatch(/^[A-Za-z0-9_-]{43}$/);
+    expect(w.state.hyperdrives.get("hd-7")!.origin.password).toBe(sent.origin.password);
+    expect(sent.caching).toEqual({ disabled: true });
+    expect(w.paused[0]).toContain(`CREATE ROLE "${TRIAL.role}"`);
+    expect(w.requests.filter((r) => r.method === "POST")).toHaveLength(0);
+    expect(operator(w).hyperdrive_id).toBe("hd-7");
+
+    const declined = world({ ...TRIAL, reuseHyperdrive: "no" });
+    declined.state.hyperdrives.set("hd-7", { id: "hd-7", name: TRIAL.worker, origin: {}, caching: {} });
+    expect(await stopped(setup("setup", declined.deps))).toMatch(/Nothing was changed/);
+    expect(declined.paused).toEqual([]);
+  });
+
+  it("setup_reports_cloudflare_errors_and_unreadable_output", async () => {
+    // An API error outside any step's own handling still stops with what to do.
+    const forbidden = world(TRIAL);
+    forbidden.state.apiFails = { path: "/workers/subdomain", status: 403 };
+    expect(await stopped(setup("setup", forbidden.deps))).toMatch(/Cloudflare refused a request: HTTP 403.*npx wrangler login/s);
+
+    // A success with no readable body is an error at the call, before any SQL is shown.
+    const empty = world(TRIAL);
+    empty.state.apiFails = { path: "/hyperdrive/configs", status: 200 };
+    expect(await stopped(setup("setup", empty.deps))).toMatch(/answered with no result/);
+    expect(empty.paused).toEqual([]);
+
+    // Wrangler output setup cannot read is named, never echoed: it may hold a token.
+    const garbled = world(TRIAL);
+    garbled.state.tokenOutput = `token=${OAUTH_TOKEN} (not JSON)`;
+    const msg = await stopped(setup("setup", garbled.deps));
+    expect(msg).toMatch(/wrangler auth token gave output setup cannot read/);
+    expect(msg).not.toContain(OAUTH_TOKEN);
+
+    // A hand-edited Boundary the Server would refuse.
+    const badBoundary = world(TRIAL);
+    await setup("setup", badBoundary.deps);
+    const file = operator(badBoundary);
+    file.vars.BOUNDARY = '{"schemas": "sales"}';
+    badBoundary.files.set(operatorFile(), JSON.stringify(file));
+    expect(await stopped(setup("setup", badBoundary.deps))).toMatch(/BOUNDARY in wrangler\.sql-mcp-trial\.jsonc is not a valid Boundary/);
+  });
+
+  it("setup_forms_ask_worker_only_with_choice", async () => {
+    const w = world(TRIAL);
+    await setup("setup", w.deps);
+    await setup("deploy", w.deps);
+    expect(w.asked.filter((p) => p.key === "worker")).toHaveLength(1);
+    // With two Deployments here, the other forms ask which.
+    w.files.set(operatorFile("other"), w.files.get(operatorFile())!.replace(TRIAL.worker, "other"));
+    await setup("deploy", w.deps);
+    expect(w.asked.filter((p) => p.key === "worker").at(-1)!.choices).toEqual([TRIAL.worker, "other"]);
   });
 
   it("setup_rerun_keeps_server_secret", async () => {
@@ -204,12 +306,17 @@ describe("S-005 rerunning the setup command", () => {
     expect(w.paused[0]).toContain("CREATE ROLE");
     w.state.hyperdriveRefuses = false;
     await setup("setup", w.deps);
+    // The rerun prints the account SQL again with a new password's verifier. That SQL resets the
+    // role only because setup marked it for this Deployment (D-109; database-account.int.test.ts).
     expect(w.paused[1]).toContain(`ALTER ROLE "${TRIAL.role}"`);
-    expect(w.paused[1]).not.toContain("CREATE ROLE");
-    const created = JSON.parse(w.requests.find((r) => r.method === "POST" && r.body?.includes("origin"))!.body!);
-    const verifier = w.paused[1]!.match(/PASSWORD '([^']+)'/)![1]!;
-    expect(verifier).toMatch(/^SCRAM-SHA-256\$4096:/);
-    expect(created.origin.password).not.toBe(verifier);
+    expect(w.paused[1]).toContain(`IS 'sql-mcp-server: the Database account setup made for the Deployment ${TRIAL.worker}'`);
+    const first = w.paused[0]!.match(/PASSWORD '([^']+)'/)![1]!;
+    const second = w.paused[1]!.match(/PASSWORD '([^']+)'/)![1]!;
+    expect(second).toMatch(/^SCRAM-SHA-256\$4096:/);
+    expect(second).not.toBe(first);
+    const created = JSON.parse(w.requests.filter((r) => r.method === "POST").at(-1)!.body!);
+    expect(created.origin.password).toMatch(/^[A-Za-z0-9_-]{43}$/);
+    expect(w.paused[1]).not.toContain(created.origin.password);
   });
 
   it("setup_rerun_keeps_unasked_fields", async () => {

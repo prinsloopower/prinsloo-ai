@@ -59,13 +59,14 @@ describe("S-005 the Deployment kit's docs", () => {
       }
       return `wrangler ${words.join(" ")}`;
     });
-    expect(new Set(commands).size).toBe(7);
     const calls = [...api.matchAll(/\("(GET|POST|PATCH|DELETE)", [`"]([^`"]+)[`"]/g)].map((m) => [m[1]!, m[2]!.replace(/\$\{[^}]+\}/g, "<")] as const);
-    expect(calls.length).toBe(5);
+    // The scan must find the calls at all, or this test would pass on an empty list.
+    expect(commands).toContain("wrangler deploy");
+    expect(calls.map(([m]) => m)).toContain("POST");
     const text = section(3);
     for (const c of new Set(commands)) expect(text, c).toContain(c);
     for (const [method, path] of calls) {
-      const pattern = new RegExp(`${method} \`?/accounts/<[^>]+>${path.split("<").map(escape).join("<[^>]+>")}`);
+      const pattern = new RegExp(`${method} \`?/accounts/<[^>]+>${path.split("<").map(escapeRegExp).join("<[^>]+>")}`);
       expect(text, `${method} ${path}`).toMatch(pattern);
     }
   });
@@ -73,12 +74,15 @@ describe("S-005 the Deployment kit's docs", () => {
   it("kit_guide_covers_every_monitoring_signal", () => {
     const rows = table(read("docs/system-spec/operations.md"), "## Monitoring");
     expect(rows.map((r) => r[0])).toEqual(["`/healthz`", "Database errors", "Identity provider failures", "Server faults", "configuration errors", "5xx responses"]);
-    const running = section(8);
+    // Each signal's own entry: a list item that opens with the signal's name in bold.
+    const entries = section(8).split("\n").filter((l) => l.startsWith("- **"));
     for (const [signal, , threshold] of rows) {
-      const name = signal!.replace(/`/g, "");
-      const at = running.toLowerCase().indexOf(name.toLowerCase());
-      expect(at, name).toBeGreaterThan(-1);
-      expect(running, `${name}: ${threshold}`).toContain(threshold!);
+      const name = signal!.replace(/`/g, "").toLowerCase();
+      const entry = entries.find((l) => l.toLowerCase().replace(/`/g, "").startsWith(`- **${name}`));
+      expect(entry, name).toBeDefined();
+      expect(entry, `${name}: ${threshold}`).toContain(`Call a human at ${threshold}.`);
+      // Workers Logs entries filter on the Server's own lines, so another Worker's lines never match.
+      if (/Audit records|operational lines/.test(rows.find((r) => r[0] === signal)![1]!)) expect(entry, name).toContain("`$metadata.type` equals `cf-worker`");
     }
   });
 
@@ -92,8 +96,23 @@ describe("S-005 the Deployment kit's docs", () => {
     expect(readme).toMatch(/3 days[^\n]*Free[^\n]*7[^\n]*Paid/);
     expect(readme).toContain("deploy/cloudflare/guide.md");
   });
+
+  it("staff_guide_covers_claude_chatgpt_and_refusals", () => {
+    const staff = read("deploy/cloudflare/staff.md");
+    for (const heading of ["## Claude", "## ChatGPT", "## What to expect"]) expect(staff, heading).toContain(heading);
+    // How to connect each tool: the address ending in /mcp, and signing in with the work account.
+    for (const tool of staff.split(/^## /m).filter((s) => /^(Claude|ChatGPT)\n/.test(s))) {
+      expect(tool).toMatch(/address/);
+      expect(tool).toMatch(/work account/);
+    }
+    // What a Staff member meets: a cut-short result, a Refusal that names nothing, signing in again.
+    expect(staff).toMatch(/cut short/);
+    expect(staff).toMatch(/refused[^\n]*names nothing it hides/);
+    expect(staff).toMatch(/sign in again/);
+    expect(staff).toMatch(/recorded with your name/);
+  });
 });
 
-function escape(t: string) {
+function escapeRegExp(t: string) {
   return t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }

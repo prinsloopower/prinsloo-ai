@@ -817,3 +817,13 @@ Rationale: details the spec leaves open, settled while building T-001 to T-007:
 - **`npm run setup -- remove` runs `wrangler delete <worker> --force`.** Setup has already confirmed by having the name typed again, and without `--force` Wrangler would wait on a prompt no one sees.
 - **`PERMISSION_TIER`:** the guide says to leave it unset, because the Server reads only `read-only` this release.
 Alternatives rejected: writing the file only at step 5, which loses the orphaned role; strict GUID checking of the tenant, which refuses tenant domain names Entra accepts.
+
+## D-109 — Review 1's rework: one Database account SQL that resets only the role setup marked, and secrets read from the Worker's settings
+Decided by: model | Date: 2026-11-01 | Phase: review rework (S-005)
+Rationale: S-005's first code review failed on three blockers (docs/slices/S-005/review.md). Fixing them needed these choices:
+- **One SQL for every run.** `database-account.sql` creates the role and marks it with a comment naming its Deployment. Run again with the same Deployment's mark, it sets the new password. Any other existing role is refused and left untouched. Every run prints it: the first run, a rerun after any stop, a reused Hyperdrive config and the `password` form. A rerun can then never give another Deployment's role a new password, and never prints an `ALTER ROLE` for a role that does not exist.
+- **SERVER_SECRET's presence is read from the Worker's settings,** which list secrets by name, and no longer from `wrangler secret list`. A failure to read them stops setup, and is never taken as "no secret". This supersedes D-108's bullet on `secret list`.
+- **A reused Hyperdrive config gets the new password** whenever step 3 made one.
+- **Unexpected failures:** a Cloudflare API error becomes a stop naming the request and `npx wrangler login`. Wrangler output that does not parse is named without being echoed. The entry point prints any other error as one line.
+- **A hidden prompt refuses to run without a TTY,** because the terminal itself would echo the secret.
+Alternatives rejected: separate CREATE and ALTER scripts, chosen by setup's guess at whether the role exists, which is what let a rerun take over another Deployment's role; keeping `wrangler secret list` and stopping on its failure, which keeps two answers to one question.

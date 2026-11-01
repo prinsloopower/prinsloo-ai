@@ -35,7 +35,7 @@ export type ConfigResult = { ok: true; config: Config } | { ok: false; variable:
 export const GOOGLE_ISSUER = "https://accounts.google.com";
 
 /** The largest Row limit an Operator may set (operations.md). */
-const ROW_LIMIT_MAX = 10_000;
+export const ROW_LIMIT_MAX = 10_000;
 
 function value(env: RuntimeVariables, name: string): string | undefined {
   const v = env[name];
@@ -101,7 +101,7 @@ export function readConfig(env: RuntimeVariables): ConfigResult {
 const isName = (v: unknown): v is string => typeof v === "string" && v !== "";
 
 /** `{"schemas":[...],"exclude":[[schema, table], ...]}`, both optional; null when malformed. */
-function parseBoundary(text: string): Boundary | null {
+export function parseBoundary(text: string): Boundary | null {
   let parsed: unknown;
   try {
     parsed = JSON.parse(text);

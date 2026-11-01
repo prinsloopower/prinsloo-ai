@@ -18,12 +18,13 @@ export function scramVerifier(password: string, salt: Uint8Array): string {
   return `SCRAM-SHA-256$${ITERATIONS}:${b64(salt)}$${b64(storedKey)}:${b64(serverKey)}`;
 }
 
-/** `database-account.sql` with the role's name and its verifier filled in. */
-export function createRoleSql(role: string, verifier: string): string {
-  const text = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "..", "database-account.sql"), "utf8");
-  return text.replaceAll("{{role}}", role).replaceAll("{{verifier}}", verifier);
-}
+/** The comment setup puts on a role it made, so a later run resets that role and no other (D-109). */
+export const roleMark = (worker: string) => `sql-mcp-server: the Database account setup made for the Deployment ${worker}`;
 
-export const alterRoleSql = (role: string, verifier: string) => `ALTER ROLE "${role}" PASSWORD '${verifier}';\n`;
+/** `database-account.sql`, filled in: create the role, or give a new password to the one setup made for `worker`. */
+export function accountSql(role: string, worker: string, verifier: string): string {
+  const text = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "..", "database-account.sql"), "utf8");
+  return text.replaceAll("{{role}}", role).replaceAll("{{mark}}", roleMark(worker)).replaceAll("{{verifier}}", verifier);
+}
 
 export const dropRoleSql = (role: string) => `DROP OWNED BY "${role}";\nDROP ROLE "${role}";\n`;
