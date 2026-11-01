@@ -17,7 +17,10 @@ export class CloudflareError extends Error {
   }
 }
 
-/** Cloudflare's code for "no Worker of that name", as distinct from any other 404. */
+/**
+ * Cloudflare's code for "no Worker of that name", as distinct from any other 404. Checked against the
+ * live API first by the T-008 trial; a wrong code fails safe, stopping setup at step 2.
+ */
 const SCRIPT_NOT_FOUND = 10007;
 
 export function cloudflare(fetchFn: typeof fetch, credentials: Credentials, accountId: string) {

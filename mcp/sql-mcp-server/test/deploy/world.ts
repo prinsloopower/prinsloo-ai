@@ -1,5 +1,5 @@
 import { operatorPath } from "../../deploy/cloudflare/lib/config.js";
-import { type Prompt, type RunResult, type SetupDeps, SetupStopped } from "../../deploy/cloudflare/lib/setup.js";
+import { type Prompt, type RunResult, type SetupDeps, SetupStopped, interruptedMessage } from "../../deploy/cloudflare/lib/setup.js";
 
 /** A fake Cloudflare account and terminal for the setup command: Wrangler, the API, the Operator's answers and files. */
 export type World = ReturnType<typeof world>;
@@ -58,7 +58,7 @@ export function world(answers: Record<string, string> = {}) {
       events.push(`pause ${text.includes("ROLE") ? "sql" : "other"}`);
       if (state.abandonPauses > 0) {
         state.abandonPauses--;
-        throw new SetupStopped("setup was interrupted. Rerun npm run setup to carry on from here.");
+        throw new SetupStopped(interruptedMessage("npm run setup"));
       }
     },
     say(text) {

@@ -71,13 +71,14 @@ If a role of that name already exists, the SQL changes nothing, rather than taki
 | question | default | becomes |
 |---|---|---|
 | Worker name | none | the config's `name`, the `workers.dev` hostname, and the Hyperdrive config's name |
+| whether this is a lost Deployment to adopt, asked only when no file for that Worker name is on disk | none: Enter for a new Deployment | the Worker's name typed again starts adoption, and no other question is asked (step 2, D-110) |
 | Supabase session pooler host and port | none, and `5432` for the port, the session pooler's | the Hyperdrive config's origin |
 | database name | `postgres` | as above |
-| Cloudflare account, asked last and only when Wrangler's Cloudflare login reaches more than one | none; chosen from a list | the config's `account_id`, and the account every call and API request uses |
 | Database account | `sqlmcp_reader` | as above. Supabase's pooler wants `<role>.<project ref>`, so the command asks for the project ref and builds the name. The role `postgres` is refused here, as is any `postgres.<ref>` (D-077) |
 | (not asked) its password | generated: 32 random bytes, base64url | the Hyperdrive config, and the verifier in the printed SQL. It is never shown |
 | schemas in the Boundary | none, meaning no Boundary (D-075) | `BOUNDARY` as `{"schemas":[…]}`. The question says to name them if `database-account.sql` listed anything (D-105). Table exclusions are added by editing the config (guide section 8) |
 | Row limit | `500` | `ROW_LIMIT` |
+| Cloudflare account, asked last and only when Wrangler's Cloudflare login reaches more than one | none; chosen from a list | the config's `account_id`, and the account every call and API request uses |
 
 It then works through these steps, stopping at the first failure with what failed and what to do:
 1. **Checks the Cloudflare sign-in** (`wrangler whoami`), and asks the Operator to run `npx wrangler login` if Wrangler is not signed in. It lists the accounts the sign-in reaches, and asks which to use if there is more than one. It also checks that the account has a `workers.dev` subdomain, and if not, says where in the dashboard to choose one.
@@ -91,7 +92,7 @@ It then works through these steps, stopping at the first failure with what faile
 9. **Prints the next steps:** the Deployment's URL, the redirect URI `<url>/oauth/callback` for the Identity provider, and the command for the next step.
 
 **Rerunning.** Rerun with the same Worker name, after a stop or to change an answer, `npm run setup` resumes. It finds the config file and the Hyperdrive config the earlier run made, and updates only the fields this run asked about. Everything else in the file is kept, including Boundary table exclusions and the `IDP_*` values. It then continues from step 6. Nothing is created twice. For the Database account:
-- **If the Hyperdrive config exists,** step 3 is skipped and its password kept.
+- **If the Hyperdrive config exists and the Database account answer is unchanged,** step 3 is skipped and its password kept. A changed answer runs step 3 for the new role, and Hyperdrive gets that role and a new password (D-110). The old role is left as it was; the guide says to drop it.
 - **If the role exists but no Hyperdrive config does,** the earlier run stopped after the Operator ran its SQL, and that password is gone. Step 3 then generates a new password and prints the same SQL with its verifier, which resets the password of the role setup marked for this Deployment, and waits while the Operator runs it (D-109).
 
 **Other commands:**

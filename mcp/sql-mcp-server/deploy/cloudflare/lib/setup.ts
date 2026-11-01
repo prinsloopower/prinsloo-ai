@@ -35,6 +35,9 @@ export interface SetupDeps {
 /** A step failed, or the Operator stopped it; the message says what happened and what to do. */
 export class SetupStopped extends Error {}
 
+/** What the prompt says when Ctrl-C or closed input leaves a question unanswered. */
+export const interruptedMessage = (command: string) => `setup was interrupted. Rerun ${command} to carry on from here.`;
+
 const SMOKE_FOR_MS = 120_000;
 const SMOKE_EVERY_MS = 10_000;
 const WORKER_NAME = /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/;
@@ -144,6 +147,7 @@ async function setUpOrResume(deps: SetupDeps) {
         throw new SetupStopped(`Nothing was changed. Choose another Worker name, or delete the Hyperdrive config ${worker} in the dashboard, and rerun npm run setup.`);
       }
     }
+    // A const, because TypeScript does not narrow `password` across the call below.
     const fresh = generatePassword(deps);
     password = fresh;
     // Written before the SQL is shown, so a rerun after a stop here finds this Deployment's own file.
@@ -200,11 +204,14 @@ async function adopt(deps: SetupDeps, worker: string) {
   if (!hyperdrive) {
     throw new SetupStopped(`The Worker ${worker} does not use a Hyperdrive config named after it, so setup did not make it. Nothing was adopted.`);
   }
-  const role =
-    hyperdrive.origin.user?.split(".")[0] ??
-    (await askValid(deps, { key: "role", text: "Its Database account (the role it connects as)" }, (v) => (ROLE_NAME.test(v) ? undefined : "Give the role's name.")));
+  // Supabase's pooler user is `<role>.<project ref>`, as setup made it.
+  const role = hyperdrive.origin.user?.split(".")[0] ?? "";
+  if (!ROLE_NAME.test(role) || role === "postgres") {
+    throw new SetupStopped(`The Hyperdrive config ${worker} does not connect as a Database account setup could have made, so nothing was adopted.`);
+  }
   const vars = Object.fromEntries(bindings.filter((b) => b.type === "plain_text" && b.name !== "ENGINE").map((b) => [b.name, b.text ?? ""]));
   const config: OperatorConfig = { name: worker, account_id: accountId, hyperdrive_id: hyperdrive.id, database_account: role, vars };
+  // Stops on a Boundary the Server would refuse, before the file is written.
   boundaryOf(config);
   writeOperator(deps, config);
   const opened: OpenedDeployment = { worker, config, accountId, api, subdomain };

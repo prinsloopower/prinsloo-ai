@@ -25,8 +25,8 @@ $setup$;
 
 -- Every table and column the role can read outside the system schemas, as the Server's Allow-list
 -- reads it, with no Boundary. A test keeps this equal to the Server's own read (src/engine/postgres.ts).
--- For a new role, anything here was granted to PUBLIC. Expect no rows. If there are some, name your
--- own schemas in the Boundary when setup asks (D-105).
+-- For a new role, any row here comes from a grant to PUBLIC; setup's prompt says what to do about it
+-- (D-105). For a role already in use, the rows are what the Database administrator granted it.
 SELECT n.nspname AS schema_name, c.relname AS table_name, a.attname AS column_name
 FROM pg_class c
 JOIN pg_namespace n ON n.oid = c.relnamespace

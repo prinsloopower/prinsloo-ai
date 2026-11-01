@@ -34,6 +34,10 @@ export function accountSql(role: string, mark: string, verifier: string): string
 /** Drops the role only if it carries this Deployment's mark; any other role of that name is left alone. */
 export const dropRoleSql = (role: string, mark: string) => `DO $setup$
 BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '${role}') THEN
+    RAISE NOTICE 'The role ${role} does not exist, so there is nothing to drop.';
+    RETURN;
+  END IF;
   IF (SELECT shobj_description(oid, 'pg_authid') FROM pg_roles WHERE rolname = '${role}') IS DISTINCT FROM '${mark}' THEN
     RAISE EXCEPTION 'The role ${role} was not made by setup for this Deployment, so it was not dropped.';
   END IF;

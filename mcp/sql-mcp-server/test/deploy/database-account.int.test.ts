@@ -96,6 +96,8 @@ describe("S-005 the Database account SQL", () => {
     // Its own removes it, with anything it owns.
     await admin(dropRoleSql(ROLE, roleMark(TRIAL.worker, ACCOUNT)));
     expect(await admin(`SELECT 1 FROM pg_roles WHERE rolname = '${ROLE}'`)).toHaveLength(0);
+    // Run again, it reports there is nothing to drop, and does not blame the mark.
+    await expect(admin(dropRoleSql(ROLE, roleMark(TRIAL.worker, ACCOUNT)))).resolves.toEqual([]);
   });
 
   it("database_account_sql_lists_public_grants", async () => {

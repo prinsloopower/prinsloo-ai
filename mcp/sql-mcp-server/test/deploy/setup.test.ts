@@ -143,7 +143,7 @@ describe("S-005 the setup command", () => {
   it("setup_adopts_its_own_worker_after_confirmation", async () => {
     const make = () => {
       const w = world({ ...TRIAL, adopt: TRIAL.worker });
-      w.state.hyperdrives.set("hd-9", { id: "hd-9", name: TRIAL.worker, origin: { host: TRIAL.host }, caching: { disabled: true } });
+      w.state.hyperdrives.set("hd-9", { id: "hd-9", name: TRIAL.worker, origin: { host: TRIAL.host, user: `${TRIAL.role}.${TRIAL.projectRef}` }, caching: { disabled: true } });
       w.state.workers.set(TRIAL.worker, { secrets: new Set(["SERVER_SECRET"]), vars: { ENGINE: "postgres", ROW_LIMIT: "500" }, hyperdriveId: "hd-9" });
       return w;
     };
@@ -151,6 +151,7 @@ describe("S-005 the setup command", () => {
     await setup("setup", w.deps);
     expect(w.asked.some((p) => p.key === "adopt")).toBe(true);
     expect(operator(w).hyperdrive_id).toBe("hd-9");
+    expect(operator(w).database_account).toBe(TRIAL.role);
     expect(w.state.hyperdrives.size).toBe(1);
 
     const wrongName = world({ ...TRIAL, adopt: "something-else" });
@@ -213,6 +214,17 @@ describe("S-005 rerunning the setup command", () => {
     expect(later.requests.filter((r) => r.method === "POST")).toHaveLength(1);
     expect(later.calls.filter((c) => c.args[0] === "secret" && c.args[1] === "put" && c.args[2] === "SERVER_SECRET")).toHaveLength(2);
     expect(later.deployed).toHaveLength(2);
+
+    // Stopped after Hyperdrive was created but before its id was written: the rerun takes that config
+    // as its own, asks nothing about reusing it, and gives it the new password its SQL sets.
+    const gap = world(TRIAL);
+    gap.files.set(operatorFile(), JSON.stringify({ name: TRIAL.worker, account_id: ACCOUNT, database_account: TRIAL.role, vars: { ROW_LIMIT: "500" } }));
+    gap.state.hyperdrives.set("hd-5", { id: "hd-5", name: TRIAL.worker, origin: {}, caching: { disabled: true } });
+    await setup("setup", gap.deps);
+    expect(gap.asked.map((p) => p.key)).not.toContain("reuseHyperdrive");
+    expect(JSON.parse(gap.requests.find((r) => r.method === "PATCH")!.body!).origin.password).toMatch(/^[A-Za-z0-9_-]{43}$/);
+    expect(operator(gap).hyperdrive_id).toBe("hd-5");
+    expect(gap.state.hyperdrives.size).toBe(1);
   });
 
   it("setup_reads_server_secret_from_worker_settings", async () => {
@@ -352,7 +364,7 @@ describe("S-005 rerunning the setup command", () => {
       IDP_ISSUER: "https://login.microsoftonline.com/t/v2.0",
       IDP_CLIENT_ID: "client-1",
     };
-    w.state.hyperdrives.set("hd-9", { id: "hd-9", name: TRIAL.worker, origin: {}, caching: { disabled: true } });
+    w.state.hyperdrives.set("hd-9", { id: "hd-9", name: TRIAL.worker, origin: { user: "sqlmcp_adopted.dwsikgvekndbmowzdcnx" }, caching: { disabled: true } });
     w.state.workers.set(TRIAL.worker, { secrets: new Set(["SERVER_SECRET", "IDP_CLIENT_SECRET"]), vars, hyperdriveId: "hd-9" });
     await setup("setup", w.deps);
     // Every setting comes back from Cloudflare as it is, and none is asked: no default can replace one.
@@ -362,10 +374,19 @@ describe("S-005 rerunning the setup command", () => {
       IDP_ISSUER: "https://login.microsoftonline.com/t/v2.0",
       IDP_CLIENT_ID: "client-1",
     });
-    expect(w.asked.map((p) => p.key)).toEqual(["worker", "adopt", "role"]);
+    expect(w.asked.map((p) => p.key)).toEqual(["worker", "adopt"]);
+    // The Database account is read from the Hyperdrive config's pooler user, `<role>.<project ref>`.
+    expect(operator(w).database_account).toBe("sqlmcp_adopted");
     expect(w.deployed[0]!.config.vars).toMatchObject({ ROW_LIMIT: "100", IDP_ISSUER: vars.IDP_ISSUER, IDP_CLIENT_ID: "client-1" });
     expect(w.paused).toEqual([]);
     expect(w.requests.filter((r) => r.method !== "GET")).toEqual([]);
+
+    // A Hyperdrive config connecting as postgres was not made by setup, and is not adopted.
+    const asPostgres = world({ worker: TRIAL.worker, adopt: TRIAL.worker });
+    asPostgres.state.hyperdrives.set("hd-9", { id: "hd-9", name: TRIAL.worker, origin: { user: "postgres.dwsikgvekndbmowzdcnx" }, caching: {} });
+    asPostgres.state.workers.set(TRIAL.worker, { secrets: new Set(["SERVER_SECRET"]), vars, hyperdriveId: "hd-9" });
+    expect(await stopped(setup("setup", asPostgres.deps))).toMatch(/nothing was adopted/);
+    expect(asPostgres.files.size).toBe(0);
   });
 
   it("setup_rerun_with_new_role_prints_its_sql", async () => {
@@ -477,7 +498,7 @@ describe("S-005 Sign-in, password rotation and removal", () => {
     const rotation = w.paused.at(-1)!;
     expect(rotation).toContain(`IS '${roleMark(TRIAL.worker, ACCOUNT)}'`);
     expect(rotation).toContain("the tables and columns granted to it");
-    expect(rotation).not.toContain("expect no rows");
+    expect(rotation).not.toMatch(/expect no rows/i);
     expect(rotation.match(/PASSWORD '([^']+)'/)![1]).not.toBe(w.paused[0]!.match(/PASSWORD '([^']+)'/)![1]);
     const patch = w.requests.find((r) => r.method === "PATCH")!;
     expect(patch.url).toContain("/hyperdrive/configs/hd-1");

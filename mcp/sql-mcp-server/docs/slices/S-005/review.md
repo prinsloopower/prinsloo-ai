@@ -312,3 +312,22 @@ Where: deploy/cloudflare/lib/setup.ts:208
 Axis: standards and naming
 
 Verdict: hold (0 blockers, 3 gaps, 8 nits)
+
+The product owner answered: "Fix all, then deploy". The fixes, in the commit that records this:
+- **Adoption tests:** both fixtures now give the Hyperdrive config a pooler user. The tests assert the Database account read from it and that no question is asked. A config connecting as `postgres` is not adopted, and an adopted role passes the same name check as an asked one.
+- **The spec's Rerunning section** now says a changed Database account runs step 3. The question table lists the adopt question second and the account last, as asked. The guide says to drop the old role after a change.
+- **Rotation:** the SQL template's comment no longer says "Expect no rows", and the test checks without regard to case.
+- **Nits:**
+  - a rerun after a stop between creating Hyperdrive and writing its id is tested;
+  - the removal SQL reports a missing role as nothing to drop;
+  - the interrupted message is one function, shared by the prompt and the fake;
+  - the `boundaryOf` check and the `fresh` const have comments;
+  - code 10007 is noted as first checked live by T-008.
+
+  The long lines are left: 7 lines over 165 characters, the longest 182.
+
+Tests after the fixes: `npm test` → 45 files, 278 passed; `npm run typecheck` → clean. On the product owner's answer the review is recorded as passed on these fixes, without a fourth review. T-008's live trial is the next check.
+
+The remaining nit is the long lines.
+
+Verdict: pass (0 blockers, 0 gaps, 1 nit)

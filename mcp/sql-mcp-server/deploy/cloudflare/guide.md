@@ -61,6 +61,7 @@ It asks:
 | schemas in the Boundary | the Boundary (`BOUNDARY`). Blank means none, so the grants alone decide. Name your schemas if section 2's listing showed rows |
 | Row limit | the Row limit (`ROW_LIMIT`), 500 unless you choose otherwise |
 | Cloudflare account | asked only if Wrangler's Cloudflare login reaches more than one |
+| whether this is a lost Deployment | asked only when no file for that Worker name is here. Press Enter for a new Deployment; section 9 covers adopting |
 
 Then it works through these steps, stopping at the first failure with what failed and what to do. Rerunning `npm run setup` with the same Worker name resumes where it stopped.
 1. **Uses Wrangler's Cloudflare login.** It runs `wrangler whoami --json` to check the login and list your accounts, then `wrangler auth token --json` to read the token that login holds. It also calls `GET /accounts/<account>/workers/subdomain` to check that your account has a `workers.dev` subdomain.
@@ -146,6 +147,8 @@ Send Staff members [staff.md](staff.md), with the address `https://<worker>.<sub
 `ENGINE` (`postgres`) and the `HYPERDRIVE` binding come from the shared settings. Do not set them in your file.
 
 **Rollback.** `npx wrangler deployments list --name <worker>` shows earlier versions, and `npx wrangler rollback <version-id> --name <worker>` returns to one. The Server keeps no data, so a rollback needs no data step. No commit so far has changed the token format's version, so a rollback keeps everyone's Sign-in. Until releases carry notes, a commit that changes it says so in its message: look for that before rolling back across it.
+
+**Changing the Database account.** Rerun `npm run setup` and give the new role's name. Setup prints that role's SQL, as in section 2, and moves Hyperdrive to it with a new password. The old role keeps its grants and can still log in to the Database, though no Deployment knows its password. Drop it once the checks pass: `DROP OWNED BY "<old role>"; DROP ROLE "<old role>";`.
 
 **Moving to a newer Server.** Until releases are tagged, `git pull`, then `npm ci` and `npm run setup -- deploy`. Your file keeps your settings, and the shared ones come from the new code.
 

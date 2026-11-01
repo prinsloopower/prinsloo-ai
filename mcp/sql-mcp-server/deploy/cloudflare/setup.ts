@@ -7,7 +7,7 @@ import { randomBytes } from "node:crypto";
 import { existsSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { createInterface } from "node:readline";
-import { type Form, type Prompt, SetupStopped, message, setup } from "./lib/setup.js";
+import { type Form, type Prompt, SetupStopped, interruptedMessage, message, setup } from "./lib/setup.js";
 import { nodeRunner, wranglerRunner } from "./lib/wrangler.js";
 
 const ROOT = process.cwd();
@@ -58,7 +58,7 @@ function ask(p: Prompt): Promise<string> {
     let answered = false;
     rl.on("SIGINT", () => rl.close());
     rl.on("close", () => {
-      if (!answered) reject(new SetupStopped(`setup was interrupted. Rerun npm run setup${formArgs} to carry on from here.`));
+      if (!answered) reject(new SetupStopped(interruptedMessage(`npm run setup${formArgs}`)));
     });
     rl.question(`${p.text}${options}${fallback}: `, (answer) => {
       answered = true;
