@@ -291,7 +291,7 @@
     {
       "id": "S-005",
       "title": "Deploying on Cloudflare from the docs alone",
-      "status": "reviewed",
+      "status": "deployed",
       "traces": [
         "J-001",
         "R-001",
@@ -319,6 +319,11 @@
           "by": "human",
           "at": "2026-11-01T22:06:22+00:00",
           "quote": "Fix all, then deploy"
+        },
+        "deploy": {
+          "result": "pass",
+          "by": "script",
+          "at": "2026-11-01T22:13:32+00:00"
         }
       }
     },
