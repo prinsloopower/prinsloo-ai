@@ -291,7 +291,7 @@
     {
       "id": "S-005",
       "title": "Deploying on Cloudflare from the docs alone",
-      "status": "specified",
+      "status": "built",
       "traces": [
         "J-001",
         "R-001",
@@ -307,6 +307,11 @@
           "by": "human",
           "at": "2026-11-01T19:44:18+00:00",
           "quote": "Fix both, then pass"
+        },
+        "build": {
+          "result": "pass",
+          "by": "script",
+          "at": "2026-11-01T20:27:06+00:00"
         }
       }
     },
@@ -404,7 +409,5 @@
   ],
   "blocked_on": null,
   "open_questions": [],
-  "phase": "build",
-  "phase_started_at": "2026-11-01T20:25:06+00:00",
-  "phase_paused_s": 0
+  "phase": null
 }
