@@ -291,7 +291,7 @@
     {
       "id": "S-005",
       "title": "Deploying on Cloudflare from the docs alone",
-      "status": "built",
+      "status": "specified",
       "traces": [
         "J-001",
         "R-001",
@@ -299,7 +299,8 @@
       ],
       "size_at_creation": "product",
       "rework": {
-        "slice-spec": 1
+        "slice-spec": 1,
+        "review": 1
       },
       "gates": {
         "slice-spec": {
@@ -312,6 +313,11 @@
           "result": "pass",
           "by": "script",
           "at": "2026-11-01T20:27:06+00:00"
+        },
+        "review": {
+          "result": "fail",
+          "by": "model",
+          "at": "2026-11-01T20:43:38+00:00"
         }
       }
     },
