@@ -315,9 +315,9 @@
           "at": "2026-11-01T20:27:06+00:00"
         },
         "review": {
-          "result": "fail",
+          "result": "hold",
           "by": "model",
-          "at": "2026-11-01T20:43:38+00:00"
+          "at": "2026-11-01T21:11:15+00:00"
         }
       }
     },
@@ -413,9 +413,7 @@
       "size_at_creation": "product"
     }
   ],
-  "blocked_on": null,
+  "blocked_on": "review: review 2: 0 blockers, 8 gaps, 14 nits; to the product owner",
   "open_questions": [],
-  "phase": "build",
-  "phase_started_at": "2026-11-01T21:00:07+00:00",
-  "phase_paused_s": 0
+  "phase": "build"
 }

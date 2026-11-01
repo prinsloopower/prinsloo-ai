@@ -141,3 +141,115 @@ Where: deploy/cloudflare/database-account.sql:1
 Axis: standards and naming
 
 Verdict: fail (3 blockers, 12 gaps, 12 nits)
+
+Reworked in commit 5f0d8c8 (D-109).
+
+## Review 2 (2026-11-01)
+
+Reviewed: commit 5f0d8c8, review 1's rework, and the whole slice (6a323fd..5f0d8c8), on two axes in separate fresh contexts.
+Tests: `npm test` → 45 files, 276 passed, 0 failed; `npm run typecheck` → clean.
+
+Every review-1 finding is resolved. Two are only partly resolved: the "expect no rows" prompt, which now misleads on the `password` form (below), and the docs test, which still scans setup's source but now asserts that the scan found calls. Both reviewers raised the role mark naming only the Worker. It is listed once, as a gap.
+
+## gap — adoption asks its questions before reading the Worker, so the defaults widen the Boundary and reset the Row limit
+Where: deploy/cloudflare/lib/setup.ts:80
+Axis: spec and scope
+With the config file lost, every question's default is a fresh install's: no Boundary schemas, Row limit 500 and role `sqlmcp_reader`. They are not the adopted Worker's values, which setup reads a moment later. An Operator who presses Enter deploys with no Boundary schemas, so the Agent sees every schema the role reaches. `setup_adoption_restores_worker_vars` itself expects the Worker's Row limit of 100 to go back to 500. The defaults should come from the Worker's bindings and its Hyperdrive config's origin.
+
+## gap — changing the Database account on a rerun or adoption moves Hyperdrive to the new role without its SQL or a password
+Where: deploy/cloudflare/lib/setup.ts:136
+Axis: spec and scope
+When the Hyperdrive config exists, step 3 is skipped, but the update still sends this run's role as the user, with the old role's password. Either Cloudflare refuses, and the stop message wrongly blames the host, port or project ref. Or the file records a role it did not make, and `remove` then prints `DROP ROLE` for it, possibly the project test Deployment's `sqlmcp_reader`. No test changes the role on a rerun.
+
+## gap — the passed spec was rewritten in rework, and its Proven-by now contradicts D-109
+Where: docs/slices/S-005/spec.md:159
+Axis: spec and scope
+The rework changed the human-passed spec under a model decision. Proven by still says "a second run, or a run naming an existing role, changes nothing", and T-006's title says it "refuses an existing one". The code and its test now reset the password for the same Deployment's role. Verification and the trial would check against a spec that says two things.
+
+## gap — the role's mark names a Deployment by its Worker name alone
+Where: deploy/cloudflare/lib/database-account.ts:22
+Axis: standards and naming; spec and scope
+A Worker name is unique only within one Cloudflare account. Two Deployments in different accounts with the same Worker and role name on one Database would pass each other's mark check. The second would then reset the first's password. Q-039's trial by a new engineer could do exactly that if it reuses the trial's names. The mark should carry the account id as well.
+
+## gap — Ctrl-C at a prompt exits with Node's unsettled top-level await warning, not one line
+Where: deploy/cloudflare/setup.ts:49
+Axis: standards and naming
+With `terminal: true` and no SIGINT handler, Ctrl-C closes readline and the question never settles. Node exits with code 13 and a warning naming the source line, skipping the entry point's one-line catch. The fixture's comment says its thrown abandonment is what Ctrl-C does, so the test models a path that never happens.
+
+## gap — the hidden-prompt stop advises `winpty npm run setup`, which cannot start npm in Git Bash
+Where: deploy/cloudflare/setup.ts:30
+Axis: standards and naming
+Under Git Bash, `npm` is a shell script, and winpty needs `npm.cmd`. The message also drops the form that was running (`-- signin`). An Operator following it meets a second, unexplained failure.
+
+## gap — every printed Database account SQL says "expect no rows", including a password rotation
+Where: deploy/cloudflare/lib/setup.ts:264
+Axis: standards and naming
+By the time of `npm run setup -- password`, the Database administrator has normally granted tables, so the listing shows rows. An Operator told to expect none may think something leaked, or put a Boundary on a live Deployment.
+
+## gap — any 404 on the Worker's settings reads as "no Worker", which leads to a new SERVER_SECRET
+Where: deploy/cloudflare/lib/cloudflare.ts:38
+Axis: standards and naming
+`absent` turns every 404 into "no such Worker", without checking Cloudflare's script-not-found code. A 404 for any other reason on a live Deployment makes step 6 put a fresh `SERVER_SECRET`, signing everyone out: the failure D-109 set out to remove.
+
+## nit — readline is forced into terminal mode when stdin is not a TTY
+Where: deploy/cloudflare/setup.ts:34
+Axis: standards and naming
+
+## nit — the fake still implements `wrangler secret list`, and a test stubs a failure of a call setup never makes
+Where: test/deploy/world.ts:77
+Axis: standards and naming
+
+## nit — database_account_sql_refuses_existing_role also proves the reset, which its name does not say
+Where: test/deploy/database-account.int.test.ts:65
+Axis: standards and naming
+
+## nit — a test hard-codes the mark text instead of using `roleMark`
+Where: test/deploy/setup.test.ts:312
+Axis: standards and naming
+
+## nit — "Update Wrangler with npm ci" when `npm ci` reinstalls the locked version
+Where: deploy/cloudflare/lib/setup.ts:306
+Axis: standards and naming
+
+## nit — `fresh` exists only to narrow a type
+Where: deploy/cloudflare/lib/setup.ts:126
+Axis: standards and naming
+
+## nit — the entry point restates `message()`
+Where: deploy/cloudflare/setup.ts:78
+Axis: standards and naming
+
+## nit — lines far beyond the codebase's width
+Where: deploy/cloudflare/lib/setup.ts:264
+Axis: standards and naming
+Sixteen lines exceed 165 characters, against a longest of 161 elsewhere.
+
+## nit — "logged in" echoes Sign-in's rejected alias "log in"
+Where: deploy/cloudflare/lib/setup.ts:271
+Axis: standards and naming
+
+## nit — two `ALTER ROLE` assertions cannot fail, because the template always contains it
+Where: test/deploy/setup.test.ts:311
+Axis: spec and scope
+
+## nit — the Cloudflare account is asked last, not fourth as the spec orders it
+Where: deploy/cloudflare/lib/setup.ts:88
+Axis: spec and scope
+
+## nit — the port defaults to 5432, which the spec does not give
+Where: deploy/cloudflare/lib/setup.ts:68
+Axis: spec and scope
+
+## nit — a stop between creating Hyperdrive and writing its id gets a rerun that defaults to "no"
+Where: deploy/cloudflare/lib/setup.ts:123
+Axis: spec and scope
+
+## nit — the guide's SERVER_SECRET rotation prints the secret to the terminal
+Where: deploy/cloudflare/guide.md:155
+Axis: spec and scope
+
+## nit — `wrangler delete --force` also overrides Wrangler's dependents check, which D-108 does not record
+Where: deploy/cloudflare/lib/setup.ts:243
+Axis: spec and scope
+
+Verdict: hold (0 blockers, 8 gaps, 14 nits)
