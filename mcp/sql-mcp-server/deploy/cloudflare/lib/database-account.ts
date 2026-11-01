@@ -18,13 +18,27 @@ export function scramVerifier(password: string, salt: Uint8Array): string {
   return `SCRAM-SHA-256$${ITERATIONS}:${b64(salt)}$${b64(storedKey)}:${b64(serverKey)}`;
 }
 
-/** The comment setup puts on a role it made, so a later run resets that role and no other (D-109). */
-export const roleMark = (worker: string) => `sql-mcp-server: the Database account setup made for the Deployment ${worker}`;
+/**
+ * The comment setup puts on a role it made, so a later run resets that role and no other (D-109).
+ * A Worker name is unique only within its Cloudflare account, so the mark names both (D-110).
+ */
+export const roleMark = (worker: string, accountId: string) =>
+  `sql-mcp-server: the Database account setup made for the Deployment ${worker} in Cloudflare account ${accountId}`;
 
-/** `database-account.sql`, filled in: create the role, or give a new password to the one setup made for `worker`. */
-export function accountSql(role: string, worker: string, verifier: string): string {
+/** `database-account.sql`, filled in: create the role, or give a new password to the one setup made for this Deployment. */
+export function accountSql(role: string, mark: string, verifier: string): string {
   const text = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "..", "database-account.sql"), "utf8");
-  return text.replaceAll("{{role}}", role).replaceAll("{{mark}}", roleMark(worker)).replaceAll("{{verifier}}", verifier);
+  return text.replaceAll("{{role}}", role).replaceAll("{{mark}}", mark).replaceAll("{{verifier}}", verifier);
 }
 
-export const dropRoleSql = (role: string) => `DROP OWNED BY "${role}";\nDROP ROLE "${role}";\n`;
+/** Drops the role only if it carries this Deployment's mark; any other role of that name is left alone. */
+export const dropRoleSql = (role: string, mark: string) => `DO $setup$
+BEGIN
+  IF (SELECT shobj_description(oid, 'pg_authid') FROM pg_roles WHERE rolname = '${role}') IS DISTINCT FROM '${mark}' THEN
+    RAISE EXCEPTION 'The role ${role} was not made by setup for this Deployment, so it was not dropped.';
+  END IF;
+  EXECUTE 'DROP OWNED BY "${role}"';
+  EXECUTE 'DROP ROLE "${role}"';
+END
+$setup$;
+`;

@@ -1,5 +1,5 @@
 import { operatorPath } from "../../deploy/cloudflare/lib/config.js";
-import type { Prompt, RunResult, SetupDeps } from "../../deploy/cloudflare/lib/setup.js";
+import { type Prompt, type RunResult, type SetupDeps, SetupStopped } from "../../deploy/cloudflare/lib/setup.js";
 
 /** A fake Cloudflare account and terminal for the setup command: Wrangler, the API, the Operator's answers and files. */
 export type World = ReturnType<typeof world>;
@@ -21,7 +21,7 @@ export function world(answers: Record<string, string> = {}) {
     failOn: null as null | ((args: string[]) => boolean),
     smokeFailures: 0,
     hyperdriveRefuses: false,
-    /** Pauses to abandon, as an Operator pressing Ctrl-C at the SQL prompt would. */
+    /** Pauses to abandon: the real prompt turns Ctrl-C, or closed input, into this stop (deploy/cloudflare/setup.ts). */
     abandonPauses: 0,
     /** An API path, after the account, answered with this status and no result. */
     apiFails: null as null | { path: string; status: number },
@@ -58,7 +58,7 @@ export function world(answers: Record<string, string> = {}) {
       events.push(`pause ${text.includes("ROLE") ? "sql" : "other"}`);
       if (state.abandonPauses > 0) {
         state.abandonPauses--;
-        throw new Error("abandoned at the prompt");
+        throw new SetupStopped("setup was interrupted. Rerun npm run setup to carry on from here.");
       }
     },
     say(text) {
@@ -74,7 +74,6 @@ export function world(answers: Record<string, string> = {}) {
       }
       if (cmd === "auth" && sub === "token") return ok(state.tokenOutput ?? JSON.stringify({ type: "oauth", token: OAUTH_TOKEN }));
       const name = args[args.indexOf("--name") + 1]!;
-      if (cmd === "secret" && sub === "list") return ok(JSON.stringify([...(state.workers.get(name)?.secrets ?? [])].map((n) => ({ name: n, type: "secret_text" }))));
       if (cmd === "secret" && sub === "put") {
         const w = state.workers.get(name) ?? { secrets: new Set<string>(), vars: {} };
         w.secrets.add(args[2]!);

@@ -71,9 +71,9 @@ If a role of that name already exists, the SQL changes nothing, rather than taki
 | question | default | becomes |
 |---|---|---|
 | Worker name | none | the config's `name`, the `workers.dev` hostname, and the Hyperdrive config's name |
-| Supabase session pooler host and port | none | the Hyperdrive config's origin |
+| Supabase session pooler host and port | none, and `5432` for the port, the session pooler's | the Hyperdrive config's origin |
 | database name | `postgres` | as above |
-| Cloudflare account, asked only when Wrangler's sign-in reaches more than one | none; chosen from a list | the config's `account_id`, and the account every call and API request uses |
+| Cloudflare account, asked last and only when Wrangler's Cloudflare login reaches more than one | none; chosen from a list | the config's `account_id`, and the account every call and API request uses |
 | Database account | `sqlmcp_reader` | as above. Supabase's pooler wants `<role>.<project ref>`, so the command asks for the project ref and builds the name. The role `postgres` is refused here, as is any `postgres.<ref>` (D-077) |
 | (not asked) its password | generated: 32 random bytes, base64url | the Hyperdrive config, and the verifier in the printed SQL. It is never shown |
 | schemas in the Boundary | none, meaning no Boundary (D-075) | `BOUNDARY` as `{"schemas":[…]}`. The question says to name them if `database-account.sql` listed anything (D-105). Table exclusions are added by editing the config (guide section 8) |
@@ -81,7 +81,7 @@ If a role of that name already exists, the SQL changes nothing, rather than taki
 
 It then works through these steps, stopping at the first failure with what failed and what to do:
 1. **Checks the Cloudflare sign-in** (`wrangler whoami`), and asks the Operator to run `npx wrangler login` if Wrangler is not signed in. It lists the accounts the sign-in reaches, and asks which to use if there is more than one. It also checks that the account has a `workers.dev` subdomain, and if not, says where in the dashboard to choose one.
-2. **Refuses to take over a Worker it did not make.** If a Worker of that name exists in the account and no `wrangler.<worker name>.jsonc` is on disk, it stops, unless a Hyperdrive config of the same name exists too. Setup makes those two together, so it then offers to adopt the Worker, after the Operator types its name again. Adopting first reads the Worker's current settings back from Cloudflare: its `vars`, including `BOUNDARY` with any table exclusions and the `IDP_*` values, and its Hyperdrive binding. It writes them into the rebuilt file, so the next deploy changes nothing the Operator did not answer. Otherwise setup did not create that Worker, and redeploying over it would replace another Deployment.
+2. **Refuses to take over a Worker it did not make.** If a Worker of that name exists in the account and no `wrangler.<worker name>.jsonc` is on disk, it stops: redeploying over a Worker setup did not create would replace another Deployment. A Worker setup made, whose file is lost, is adopted instead. Before the questions, when no file for that Worker name is on disk, setup asks the Operator to type the name again if it is such a Deployment. Adopting needs a Worker whose Hyperdrive binding is a config named after it, which is how setup makes them. It then rebuilds the file from the Worker's current settings and that config, asking nothing else: the `vars`, including `BOUNDARY` and the `IDP_*` values, the Hyperdrive config's id, and the Database account from its user. The next deploy therefore changes nothing (D-110).
 3. **Creates the Database account's SQL.** It generates the password, computes its SCRAM-SHA-256 verifier, prints `database-account.sql` filled in, and waits while the Operator runs it in Supabase and reads its listing.
 4. **Creates the Hyperdrive config,** named after the Worker, with caching disabled (D-079). If one of that name exists, it asks whether to reuse it, with its connection details updated to these answers, or stop.
 5. **Writes `wrangler.<worker name>.jsonc`** at the package root. `.gitignore` covers `wrangler.*.jsonc`, so an Operator's config never reaches this repository. The file holds only the Operator's own part: `name`, `account_id`, the Hyperdrive config's id and `vars`.
@@ -98,7 +98,7 @@ It then works through these steps, stopping at the first failure with what faile
 - `npm run setup -- deploy` asks for the Worker name, if more than one config is on disk. It merges `wrangler.template.jsonc` with the Operator's file into a generated config, deploys it with `wrangler deploy -c`, deletes the generated file, and runs the smoke checks. Because the shared fields come from the current template on every deploy, a `git pull` upgrade never deploys stale ones (D-106).
 - `npm run setup -- signin` asks for the Worker name, `IDP_ISSUER` (offering Entra's form with a tenant id to fill in) and `IDP_CLIENT_ID`. It asks for `IDP_CLIENT_SECRET` as hidden input. It writes the first two into the config's `vars`, sets the secret, redeploys, and runs `scripts/smoke-signin.mjs`. Rerun, it replaces them, which is how the client secret is rotated.
 - `npm run setup -- password` asks for the Worker name. It generates a new password, prints `ALTER ROLE` with its verifier, and waits while the Operator runs it. Then it updates the Hyperdrive config and runs the smoke checks.
-- `npm run setup -- remove` asks for the Worker name, then deletes that Worker, its Hyperdrive config and its config file, after the Operator types the name again to confirm. It deletes nothing it cannot name from that config file. The guide gives the SQL to drop the role, and the steps to delete the Entra app registration.
+- `npm run setup -- remove` asks for the Worker name, then deletes that Worker, its Hyperdrive config and its config file, after the Operator types the name again to confirm. It deletes nothing it cannot name from that config file. It prints SQL that drops the role only if it carries this Deployment's mark (D-110), and the guide gives the steps to delete the Entra app registration.
 
 **Secrets.** No secret appears in the arguments of any command the setup command runs, and none is written to a file, echoed or logged:
 - `SERVER_SECRET` and `IDP_CLIENT_SECRET` reach Wrangler on standard input.
@@ -156,7 +156,8 @@ No change to the Server's data. The Database account is created in the Operator'
 - **`database-account.sql`, filled in by the setup command and run against Docker PostgreSQL:**
   - it creates a role that passes the D-077 check and connects with the generated password;
   - its listing is empty;
-  - a second run, or a run naming an existing role, changes nothing.
+  - a second run for the same Deployment gives the role setup made a new password; a run for another Deployment, including one with the same Worker name in another Cloudflare account, or naming a role made otherwise, changes nothing (D-109, D-110);
+  - the removal SQL drops only the role carrying this Deployment's mark.
 
   After `GRANT SELECT ON … TO PUBLIC` on a test table, the listing names that table.
 - **The docs, by tests:**
@@ -187,7 +188,7 @@ No change to the Server's data. The Database account is created in the Operator'
 Verified by: setup_builds_config_from_answers, setup_runs_steps_in_order, setup_stops_at_first_failure_and_says_what_to_do, setup_refuses_postgres_account_at_the_question, setup_asks_which_cloudflare_account, setup_refuses_worker_it_did_not_make, setup_adopts_its_own_worker_after_confirmation, setup_smoke_retries_then_fails, setup_reuses_hyperdrive_with_new_password, setup_reports_cloudflare_errors_and_unreadable_output
 
 ### T-002 — A rerun resumes where the last run stopped
-Verified by: setup_rerun_resumes_without_duplicates, setup_rerun_keeps_server_secret, setup_rerun_resets_password_of_orphaned_role, setup_rerun_keeps_unasked_fields, setup_adoption_restores_worker_vars, setup_reads_server_secret_from_worker_settings
+Verified by: setup_rerun_resumes_without_duplicates, setup_rerun_keeps_server_secret, setup_rerun_resets_password_of_orphaned_role, setup_rerun_keeps_unasked_fields, setup_adoption_restores_worker_vars, setup_reads_server_secret_from_worker_settings, setup_rerun_with_new_role_prints_its_sql
 
 ### T-003 — The setup command keeps secrets out of arguments, files and output
 Verified by: setup_passes_secrets_on_stdin, setup_sends_database_password_only_in_api_body, setup_prints_only_the_password_verifier, setup_writes_no_secret_to_config_or_output, setup_runs_wrangler_without_shell
@@ -198,8 +199,8 @@ Verified by: setup_signin_sets_idp_and_redeploys, setup_password_updates_role_an
 ### T-005 — Every deploy uses the current shared config, and that config deploys
 Verified by: setup_deploy_merges_current_template, template_matches_project_config, setup_config_passes_wrangler_dry_run
 
-### T-006 — The Database account SQL creates a safe, empty role, refuses an existing one, and lists what PUBLIC grants
-Verified by: database_account_sql_creates_safe_role, database_account_sql_refuses_existing_role, database_account_sql_lists_public_grants, database_account_sql_lists_what_server_sees
+### T-006 — The Database account SQL creates a safe, empty role, resets or drops only the role setup made for this Deployment, and lists what the role can read
+Verified by: database_account_sql_creates_safe_role, database_account_sql_resets_only_its_own_role, database_account_drop_sql_drops_only_its_own_role, database_account_sql_lists_public_grants, database_account_sql_lists_what_server_sees
 
 ### T-007 — The README, guide and Staff guide cover what an Operator and a Staff member need
 Verified by: kit_guide_names_every_cloudflare_setting, kit_guide_explains_healthz_failures, kit_guide_gives_smoke_checks_as_curl, kit_guide_names_every_setup_call, kit_guide_covers_every_monitoring_signal, readme_states_pairings_ai_tools_and_retention, staff_guide_covers_claude_chatgpt_and_refusals

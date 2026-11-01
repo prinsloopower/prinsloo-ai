@@ -827,3 +827,18 @@ Rationale: S-005's first code review failed on three blockers (docs/slices/S-005
 - **Unexpected failures:** a Cloudflare API error becomes a stop naming the request and `npx wrangler login`. Wrangler output that does not parse is named without being echoed. The entry point prints any other error as one line.
 - **A hidden prompt refuses to run without a TTY,** because the terminal itself would echo the secret.
 Alternatives rejected: separate CREATE and ALTER scripts, chosen by setup's guess at whether the role exists, which is what let a rerun take over another Deployment's role; keeping `wrangler secret list` and stopping on its failure, which keeps two answers to one question.
+
+## D-110 — Review 2's rework: adoption asked first and restoring everything, the role mark naming the account, and the spec brought in line
+Decided by: model | Date: 2026-11-01 | Phase: review rework (S-005)
+Rationale: the product owner answered review 2's hold with "Fix all, then one last check". The fixes needed these choices:
+- **Adoption is asked before the questions,** when no config file for that Worker name is on disk. Adopting then asks nothing else: the file is rebuilt from the Worker's settings and its Hyperdrive config, and the Database account is read from that config's user. A fresh install's defaults can then never replace an adopted Deployment's Boundary or Row limit. A new Deployment answers the extra question by pressing Enter.
+- **The role's mark names the Worker and its Cloudflare account,** because a Worker name is unique only within an account. The removal SQL drops the role only if it carries that mark.
+- **Changing the Database account on a rerun** prints that role's SQL and gives Hyperdrive a new password, as for a new Deployment.
+- **Only Cloudflare's code 10007 means "no such Worker".** Any other 404 on a Worker's settings is an error, so it can never lead to a new `SERVER_SECRET`.
+- **Ctrl-C or closed input at any prompt** stops setup with one line naming the command to rerun. Readline uses terminal mode only on a TTY.
+- **Smaller points the spec now states:**
+  - the port defaults to `5432`, the session pooler's;
+  - the Cloudflare account is asked last, after the login is read;
+  - `wrangler delete --force` also deletes a Worker that other Workers bind to, which the guide's removal accepts.
+- **The spec** was edited in its setup command section, Proven by, and T-006's title and tests, so it states what D-109 and this decision built. The product owner passed the spec before these changes. They are listed for confirmation at verification, with D-108 to D-110.
+Alternatives rejected: asking every question on adoption with the Worker's values as defaults, which asks the Operator to confirm a dozen values setup already has; keeping the mark to the Worker name.

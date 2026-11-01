@@ -1,10 +1,11 @@
 import pg from "pg";
 import { beforeEach, describe, expect, it } from "vitest";
+import { accountSql, dropRoleSql, roleMark, scramVerifier } from "../../deploy/cloudflare/lib/database-account.js";
 import { setup } from "../../deploy/cloudflare/lib/setup.js";
 import { PostgresDatabase } from "../../src/engine/postgres.js";
 import { bypassesGrants } from "../../src/visibility.js";
 import { ADMIN, admin, resetSql } from "../query/pg-fixture.js";
-import { TRIAL, world } from "./world.js";
+import { ACCOUNT, TRIAL, world } from "./world.js";
 
 const ROLE = "sqlmcp_s005";
 const SCHEMA = "s005_public";
@@ -62,7 +63,7 @@ describe("S-005 the Database account SQL", () => {
     expect(r).toMatchObject({ rolsuper: false, rolcreaterole: false, rolcreatedb: false, rolcanlogin: true, rolreplication: false, rolbypassrls: false, member: false });
   });
 
-  it("database_account_sql_refuses_existing_role", async () => {
+  it("database_account_sql_resets_only_its_own_role", async () => {
     const first = await printed();
     await run(first.sql);
     // Printed again for the same Deployment, as a rerun or a rotation does, it gives the role setup made a new password.
@@ -75,11 +76,26 @@ describe("S-005 the Database account SQL", () => {
     const other = await printed("another-deployment");
     await expect(run(other.sql)).rejects.toThrow(/already exists and was not made by setup for this Deployment, so nothing was changed/);
     expect(await connects(again.password)).toBe(true);
+    // And for a Deployment of the same Worker name in another Cloudflare account (D-110).
+    const elsewhere = accountSql(ROLE, roleMark(TRIAL.worker, "another-account"), scramVerifier("elsewhere", new Uint8Array(16)));
+    await expect(run(elsewhere)).rejects.toThrow(/was not made by setup for this Deployment/);
+    expect(await connects(again.password)).toBe(true);
     // So is a role made any other way, which another Deployment may be using.
     await admin(`DROP ROLE ${ROLE}; CREATE ROLE ${ROLE} LOGIN PASSWORD 'theirs';`);
     await expect(run(first.sql)).rejects.toThrow(/already exists and was not made by setup/);
     expect(await connects("theirs")).toBe(true);
     expect(await connects(first.password)).toBe(false);
+  });
+
+  it("database_account_drop_sql_drops_only_its_own_role", async () => {
+    const { sql } = await printed();
+    await run(sql);
+    // Another Deployment's removal SQL leaves this role alone.
+    await expect(admin(dropRoleSql(ROLE, roleMark("another-deployment", ACCOUNT)))).rejects.toThrow(/was not made by setup for this Deployment, so it was not dropped/);
+    expect(await admin(`SELECT 1 FROM pg_roles WHERE rolname = '${ROLE}'`)).toHaveLength(1);
+    // Its own removes it, with anything it owns.
+    await admin(dropRoleSql(ROLE, roleMark(TRIAL.worker, ACCOUNT)));
+    expect(await admin(`SELECT 1 FROM pg_roles WHERE rolname = '${ROLE}'`)).toHaveLength(0);
   });
 
   it("database_account_sql_lists_public_grants", async () => {

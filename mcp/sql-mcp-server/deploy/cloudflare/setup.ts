@@ -7,7 +7,7 @@ import { randomBytes } from "node:crypto";
 import { existsSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { createInterface } from "node:readline";
-import { type Form, type Prompt, SetupStopped, setup } from "./lib/setup.js";
+import { type Form, type Prompt, SetupStopped, message, setup } from "./lib/setup.js";
 import { nodeRunner, wranglerRunner } from "./lib/wrangler.js";
 
 const ROOT = process.cwd();
@@ -23,15 +23,24 @@ if (!existsSync(join(ROOT, "node_modules", "wrangler", "bin", "wrangler.js"))) {
   process.exit(2);
 }
 
-/** One line from the terminal; a hidden prompt echoes nothing of what is typed. */
+const tty = Boolean(process.stdin.isTTY);
+const formArgs = form === "setup" ? "" : ` -- ${form}`;
+
+/**
+ * One line from the terminal; a hidden prompt echoes nothing of what is typed. Ctrl-C, or the input
+ * closing, stops setup with a message rather than leaving the question unanswered.
+ */
 function ask(p: Prompt): Promise<string> {
   // Without a TTY (Git Bash's mintty, for one), the terminal itself echoes input, so nothing here can hide it.
-  if (p.hidden && !process.stdin.isTTY) {
-    throw new SetupStopped("This terminal cannot hide what you type, and the next answer is a secret. Run the command in PowerShell or Windows Terminal, or as winpty npm run setup, and rerun it.");
+  if (p.hidden && !tty) {
+    throw new SetupStopped(
+      `This terminal cannot hide what you type, and the next answer is a secret. ` +
+        `Rerun in PowerShell or Windows Terminal, or in Git Bash as: winpty npm.cmd run setup${formArgs}`,
+    );
   }
   const options = p.choices ? ` [${p.choices.join(" / ")}]` : "";
   const fallback = p.default ? ` (${p.default})` : "";
-  const rl = createInterface({ input: process.stdin, output: process.stdout, terminal: true });
+  const rl = createInterface({ input: process.stdin, output: process.stdout, terminal: tty });
   if (p.hidden) {
     // readline has no option to hide input. Replacing its private echo, after the prompt is written,
     // is the usual way to do it in Node, and is deliberate here.
@@ -45,8 +54,14 @@ function ask(p: Prompt): Promise<string> {
       }
     };
   }
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
+    let answered = false;
+    rl.on("SIGINT", () => rl.close());
+    rl.on("close", () => {
+      if (!answered) reject(new SetupStopped(`setup was interrupted. Rerun npm run setup${formArgs} to carry on from here.`));
+    });
     rl.question(`${p.text}${options}${fallback}: `, (answer) => {
+      answered = true;
       rl.close();
       if (p.hidden) process.stdout.write("\n");
       resolve(answer.trim() || p.default || "");
@@ -75,6 +90,6 @@ try {
   });
 } catch (e) {
   // One line, as bench/run.ts does. A stop already says what to do; anything else is named, not traced.
-  console.error(e instanceof SetupStopped ? `\nStopped: ${e.message}` : `\nSetup could not run: ${e instanceof Error ? e.message : String(e)}`);
+  console.error(e instanceof SetupStopped ? `\nStopped: ${e.message}` : `\nSetup could not run: ${message(e)}`);
   process.exitCode = 1;
 }

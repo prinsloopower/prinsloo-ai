@@ -1,6 +1,7 @@
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { parseJsonc } from "../../deploy/cloudflare/lib/config.js";
+import { roleMark } from "../../deploy/cloudflare/lib/database-account.js";
 import { SetupStopped, setup } from "../../deploy/cloudflare/lib/setup.js";
 import { wranglerRunner } from "../../deploy/cloudflare/lib/wrangler.js";
 import { ACCOUNT, OAUTH_TOKEN, SUBDOMAIN, TRIAL, type World, operatorFile, world } from "./world.js";
@@ -192,7 +193,7 @@ describe("S-005 rerunning the setup command", () => {
     // Stopped at the SQL prompt, before the SQL was run: the rerun prints it again and carries on.
     const atPrompt = world(TRIAL);
     atPrompt.state.abandonPauses = 1;
-    await expect(setup("setup", atPrompt.deps)).rejects.toThrow(/abandoned/);
+    expect(await stopped(setup("setup", atPrompt.deps))).toMatch(/interrupted/);
     expect(atPrompt.state.hyperdrives.size).toBe(0);
     await setup("setup", atPrompt.deps);
     expect(atPrompt.paused[1]).toContain(`CREATE ROLE "${TRIAL.role}"`);
@@ -217,14 +218,17 @@ describe("S-005 rerunning the setup command", () => {
   it("setup_reads_server_secret_from_worker_settings", async () => {
     const w = world(TRIAL);
     await setup("setup", w.deps);
-    // Whatever `wrangler secret list` would say, the Worker's own settings decide, and they list SERVER_SECRET.
-    w.state.failOn = (a) => a[0] === "secret" && a[1] === "list";
+    // The Worker's own settings decide, and they list SERVER_SECRET.
     await setup("setup", w.deps);
     const puts = w.calls.filter((c) => c.args[0] === "secret" && c.args[1] === "put" && c.args[2] === "SERVER_SECRET");
     expect(puts).toHaveLength(1);
     expect(w.calls.some((c) => c.args[0] === "secret" && c.args[1] === "list")).toBe(false);
     // A failure reading those settings stops setup; it is never read as "no secret".
     w.state.apiFails = { path: `/workers/scripts/${TRIAL.worker}/settings`, status: 500 };
+    expect(await stopped(setup("setup", w.deps))).toMatch(/Cloudflare refused/);
+    expect(w.calls.filter((c) => c.args[0] === "secret" && c.args[1] === "put")).toHaveLength(1);
+    // So does a 404 that is not Cloudflare's "no such Worker": only that code means the Worker is absent.
+    w.state.apiFails = { path: `/workers/scripts/${TRIAL.worker}/settings`, status: 404 };
     expect(await stopped(setup("setup", w.deps))).toMatch(/Cloudflare refused/);
     expect(w.calls.filter((c) => c.args[0] === "secret" && c.args[1] === "put")).toHaveLength(1);
   });
@@ -308,8 +312,7 @@ describe("S-005 rerunning the setup command", () => {
     await setup("setup", w.deps);
     // The rerun prints the account SQL again with a new password's verifier. That SQL resets the
     // role only because setup marked it for this Deployment (D-109; database-account.int.test.ts).
-    expect(w.paused[1]).toContain(`ALTER ROLE "${TRIAL.role}"`);
-    expect(w.paused[1]).toContain(`IS 'sql-mcp-server: the Database account setup made for the Deployment ${TRIAL.worker}'`);
+    expect(w.paused[1]).toContain(`IS '${roleMark(TRIAL.worker, ACCOUNT)}'`);
     const first = w.paused[0]!.match(/PASSWORD '([^']+)'/)![1]!;
     const second = w.paused[1]!.match(/PASSWORD '([^']+)'/)![1]!;
     expect(second).toMatch(/^SCRAM-SHA-256\$4096:/);
@@ -352,14 +355,32 @@ describe("S-005 rerunning the setup command", () => {
     w.state.hyperdrives.set("hd-9", { id: "hd-9", name: TRIAL.worker, origin: {}, caching: { disabled: true } });
     w.state.workers.set(TRIAL.worker, { secrets: new Set(["SERVER_SECRET", "IDP_CLIENT_SECRET"]), vars, hyperdriveId: "hd-9" });
     await setup("setup", w.deps);
-    // The answered fields change (Row limit 500, Boundary schemas); the rest come back from Cloudflare.
+    // Every setting comes back from Cloudflare as it is, and none is asked: no default can replace one.
     expect(operator(w).vars).toEqual({
-      ROW_LIMIT: "500",
+      ROW_LIMIT: "100",
       BOUNDARY: '{"schemas":["sales"],"exclude":[["sales","payroll"]]}',
       IDP_ISSUER: "https://login.microsoftonline.com/t/v2.0",
       IDP_CLIENT_ID: "client-1",
     });
-    expect(w.deployed[0]!.config.vars).toMatchObject({ IDP_ISSUER: vars.IDP_ISSUER, IDP_CLIENT_ID: "client-1" });
+    expect(w.asked.map((p) => p.key)).toEqual(["worker", "adopt", "role"]);
+    expect(w.deployed[0]!.config.vars).toMatchObject({ ROW_LIMIT: "100", IDP_ISSUER: vars.IDP_ISSUER, IDP_CLIENT_ID: "client-1" });
+    expect(w.paused).toEqual([]);
+    expect(w.requests.filter((r) => r.method !== "GET")).toEqual([]);
+  });
+
+  it("setup_rerun_with_new_role_prints_its_sql", async () => {
+    const w = world(TRIAL);
+    await setup("setup", w.deps);
+    const again = world({ ...TRIAL, role: "sqlmcp_trial_two" });
+    Object.assign(again.state, w.state);
+    again.files.set(operatorFile(), w.files.get(operatorFile())!);
+    await setup("setup", again.deps);
+    // The new role's SQL is printed, and Hyperdrive moves to it with its own new password.
+    expect(again.paused[0]).toContain(`CREATE ROLE "sqlmcp_trial_two"`);
+    const patch = JSON.parse(again.requests.find((r) => r.method === "PATCH")!.body!) as { origin: { user: string; password?: string } };
+    expect(patch.origin.user).toBe(`sqlmcp_trial_two.${TRIAL.projectRef}`);
+    expect(patch.origin.password).toMatch(/^[A-Za-z0-9_-]{43}$/);
+    expect(operator(again).database_account).toBe("sqlmcp_trial_two");
   });
 });
 
@@ -452,7 +473,12 @@ describe("S-005 Sign-in, password rotation and removal", () => {
     await setup("setup", w.deps);
     const first = JSON.parse(w.requests.find((r) => r.method === "POST")!.body!).origin.password as string;
     await setup("password", w.deps);
-    expect(w.paused.at(-1)).toContain(`ALTER ROLE "${TRIAL.role}" PASSWORD 'SCRAM-SHA-256$4096:`);
+    // The same SQL, for the role setup marked; its listing now shows what was granted, not nothing.
+    const rotation = w.paused.at(-1)!;
+    expect(rotation).toContain(`IS '${roleMark(TRIAL.worker, ACCOUNT)}'`);
+    expect(rotation).toContain("the tables and columns granted to it");
+    expect(rotation).not.toContain("expect no rows");
+    expect(rotation.match(/PASSWORD '([^']+)'/)![1]).not.toBe(w.paused[0]!.match(/PASSWORD '([^']+)'/)![1]);
     const patch = w.requests.find((r) => r.method === "PATCH")!;
     expect(patch.url).toContain("/hyperdrive/configs/hd-1");
     const second = JSON.parse(patch.body!).origin.password as string;
@@ -474,6 +500,7 @@ describe("S-005 Sign-in, password rotation and removal", () => {
     expect(w.state.workers.has("sql-mcp-server")).toBe(true);
     expect(w.state.hyperdrives.has("hd-project")).toBe(true);
     expect(w.said.join("\n")).toContain(`DROP ROLE "${TRIAL.role}"`);
+    expect(w.said.join("\n")).toContain(`IS DISTINCT FROM '${roleMark(TRIAL.worker, ACCOUNT)}'`);
 
     const unconfirmed = world({ ...TRIAL, confirmRemove: "no" });
     await setup("setup", unconfirmed.deps);

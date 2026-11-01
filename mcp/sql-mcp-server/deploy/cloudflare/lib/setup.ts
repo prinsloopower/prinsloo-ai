@@ -1,7 +1,7 @@
 import { ROW_LIMIT_MAX, parseBoundary } from "../../../src/config.js";
 import { type Binding, type Cloudflare, CloudflareError, type Credentials, type HyperdriveOrigin, cloudflare } from "./cloudflare.js";
 import { type OperatorConfig, deployPath, mergeConfig, operatorPath, operatorText, operatorWorkers, parseJsonc, template } from "./config.js";
-import { accountSql, dropRoleSql, scramVerifier } from "./database-account.js";
+import { accountSql, dropRoleSql, roleMark, scramVerifier } from "./database-account.js";
 import type { RunResult } from "./wrangler.js";
 
 export type { RunResult };
@@ -32,7 +32,7 @@ export interface SetupDeps {
   sleep(ms: number): Promise<void>;
 }
 
-/** A step failed; the message says what failed and what to do. */
+/** A step failed, or the Operator stopped it; the message says what happened and what to do. */
 export class SetupStopped extends Error {}
 
 const SMOKE_FOR_MS = 120_000;
@@ -50,7 +50,9 @@ export async function setup(form: Form, deps: SetupDeps): Promise<void> {
     return await remove(deps, opened);
   } catch (e) {
     if (e instanceof CloudflareError) {
-      throw new SetupStopped(`Cloudflare refused a request: ${e.message}. If Wrangler's Cloudflare login has expired, run npx wrangler login; then rerun the same command.`);
+      throw new SetupStopped(
+        `Cloudflare refused a request: ${e.message}. If Wrangler's Cloudflare login has expired, run npx wrangler login; then rerun the same command.`,
+      );
     }
     throw e;
   }
@@ -62,6 +64,15 @@ async function setUpOrResume(deps: SetupDeps) {
     WORKER_NAME.test(v) ? undefined : "Use lowercase letters, digits and dashes, starting and ending with a letter or digit.",
   );
   const existing = readOperator(deps, worker);
+  if (!existing) {
+    const typed = await deps.ask({
+      key: "adopt",
+      text: `If ${worker} is a Deployment setup made whose config file is lost, type its name to adopt it with its current settings. For a new Deployment, press Enter`,
+      default: "",
+    });
+    if (typed === worker) return adopt(deps, worker);
+    if (typed !== "") throw new SetupStopped(`The Worker was not adopted, and nothing was changed.`);
+  }
   const host = await askValid(deps, { key: "host", text: "Supabase session pooler host (Connect → Session pooler, e.g. aws-0-us-east-2.pooler.supabase.com)" }, (v) =>
     /^[a-z0-9.-]+$/i.test(v) ? undefined : "Give the host name alone, with no scheme, port or path.",
   );
@@ -70,40 +81,41 @@ async function setUpOrResume(deps: SetupDeps) {
   const projectRef = await askValid(deps, { key: "projectRef", text: "Supabase project ref (the id in your project's URL)" }, (v) =>
     /^[a-z0-9]+$/.test(v) ? undefined : "Give the project ref alone: lowercase letters and digits.",
   );
-  const role = await askValid(deps, { key: "role", text: "Database account (a new role, dedicated to this Deployment)", default: existing?.database_account ?? "sqlmcp_reader" }, (v) => {
-    if (/^postgres(\.|$)/i.test(v)) throw new SetupStopped("Supabase's postgres role bypasses grants, so the Server refuses it (D-077). Choose a new role name, such as sqlmcp_reader, and rerun npm run setup.");
-    return ROLE_NAME.test(v) ? undefined : "Use lowercase letters, digits and underscores, starting with a letter.";
-  });
+  const role = await askValid(
+    deps,
+    { key: "role", text: "Database account (a new role, dedicated to this Deployment)", default: existing?.database_account ?? "sqlmcp_reader" },
+    (v) => {
+      if (/^postgres(\.|$)/i.test(v)) {
+        throw new SetupStopped("Supabase's postgres role bypasses grants, so the Server refuses it (D-077). Choose a new role name, such as sqlmcp_reader, and rerun npm run setup.");
+      }
+      return ROLE_NAME.test(v) ? undefined : "Use lowercase letters, digits and underscores, starting with a letter.";
+    },
+  );
   const schemasText = await deps.ask({
     key: "schemas",
     text: "Schemas in the Boundary, comma-separated (blank for none: the grants alone decide). Name your own schemas if the Database account's listing showed anything",
     default: (existing ? boundaryOf(existing).schemas : undefined)?.join(", ") ?? "",
   });
   const schemas = schemasText.split(",").map((s) => s.trim()).filter(Boolean);
-  const rowLimit = await askValid(deps, { key: "rowLimit", text: `Row limit (1–${ROW_LIMIT_MAX.toLocaleString("en")})`, default: existing?.vars.ROW_LIMIT ?? "500" }, (v) =>
-    /^\d+$/.test(v) && Number(v) >= 1 && Number(v) <= ROW_LIMIT_MAX ? undefined : `Give a whole number from 1 to ${ROW_LIMIT_MAX.toLocaleString("en")}.`,
+  const limit = ROW_LIMIT_MAX.toLocaleString("en");
+  const rowLimit = await askValid(deps, { key: "rowLimit", text: `Row limit (1–${limit})`, default: existing?.vars.ROW_LIMIT ?? "500" }, (v) =>
+    /^\d+$/.test(v) && Number(v) >= 1 && Number(v) <= ROW_LIMIT_MAX ? undefined : `Give a whole number from 1 to ${limit}.`,
   );
 
-  // 1. Wrangler's Cloudflare login, the account, and its workers.dev subdomain.
+  // 1. Wrangler's Cloudflare login, the account (asked only if the login reaches several), and its workers.dev subdomain.
   const { accountId, api } = await cloudflareLogin(deps, existing?.account_id);
   const subdomain = await requireSubdomain(api);
 
   // 2. Never take over a Worker this setup did not make.
-  let config: OperatorConfig = existing ?? { name: worker, account_id: accountId, database_account: role, vars: {} };
   const bindings = await api.workerBindings(worker);
-  const hyperdrives = await api.hyperdrives();
-  let hyperdrive = hyperdrives.find((h) => h.name === worker);
   if (bindings && !existing) {
-    if (!hyperdrive) {
-      throw new SetupStopped(`A Worker named ${worker} already exists in this account, and this setup did not make it. Deploying would replace it. Choose another Worker name and rerun npm run setup.`);
-    }
-    const typed = await deps.ask({ key: "adopt", text: `A Worker named ${worker} and its Hyperdrive config already exist, made by an earlier setup whose config file is not here. Type the Worker's name to adopt it` });
-    if (typed !== worker) throw new SetupStopped(`The Worker was not adopted, and nothing was changed.`);
-    const vars = Object.fromEntries(bindings.filter((b) => b.type === "plain_text" && b.name !== "ENGINE").map((b) => [b.name, b.text ?? ""]));
-    const id = bindings.find((b) => b.type === "hyperdrive")?.id ?? hyperdrive.id;
-    config = { name: worker, account_id: accountId, hyperdrive_id: id, database_account: role, vars };
-    hyperdrive = hyperdrives.find((h) => h.id === id) ?? hyperdrive;
+    throw new SetupStopped(
+      `A Worker named ${worker} already exists in this account, and no config file for it is here. ` +
+        `If setup made it, rerun npm run setup and type its name to adopt it. Otherwise choose another Worker name.`,
+    );
   }
+  let hyperdrive = (await api.hyperdrives()).find((h) => h.name === worker);
+  let config: OperatorConfig = existing ?? { name: worker, account_id: accountId, database_account: role, vars: {} };
   const { exclude } = boundaryOf(config);
   const vars: Record<string, string> = { ...config.vars, ROW_LIMIT: rowLimit };
   if (schemas.length > 0 || exclude.length > 0) {
@@ -113,42 +125,53 @@ async function setUpOrResume(deps: SetupDeps) {
   }
   config = { ...config, account_id: accountId, database_account: role, vars };
 
-  // 3. The Database account, unless the Hyperdrive config this Deployment uses already reaches it.
-  // The same SQL creates the role, or resets the password of the role setup made for this
-  // Deployment, so a rerun after any stop prints it again safely (D-109).
-  const origin: HyperdriveOrigin = { scheme: "postgres", host, port: Number(port), database, user: `${role}.${projectRef}` };
+  // 3. The Database account's SQL, unless this Deployment's Hyperdrive config already reaches that role.
+  // The same SQL creates the role, or resets the password of the role setup marked for this
+  // Deployment, so printing it again after any stop is safe (D-109).
+  const ours = hyperdrive !== undefined && hyperdrive.id === config.hyperdrive_id;
+  const roleChanged = existing !== undefined && existing.database_account !== role;
+  // An earlier run here wrote its file before the SQL, then stopped before recording Hyperdrive's id.
+  const interrupted = existing !== undefined && !existing.hyperdrive_id;
   let password: string | undefined;
-  if (!hyperdrive || hyperdrive.id !== config.hyperdrive_id) {
-    if (hyperdrive) {
-      const reuse = await deps.ask({ key: "reuseHyperdrive", text: `A Hyperdrive config named ${worker} already exists. Reuse it with these connection details? (yes/no)`, default: "no" });
-      if (reuse !== "yes") throw new SetupStopped(`Nothing was changed. Choose another Worker name, or delete the Hyperdrive config ${worker} in the dashboard, and rerun npm run setup.`);
+  if (!ours || roleChanged) {
+    if (hyperdrive && !ours && !interrupted) {
+      const reuse = await deps.ask({
+        key: "reuseHyperdrive",
+        text: `A Hyperdrive config named ${worker} already exists. Reuse it with these connection details? (yes/no)`,
+        default: "no",
+      });
+      if (reuse !== "yes") {
+        throw new SetupStopped(`Nothing was changed. Choose another Worker name, or delete the Hyperdrive config ${worker} in the dashboard, and rerun npm run setup.`);
+      }
     }
     const fresh = generatePassword(deps);
     password = fresh;
     // Written before the SQL is shown, so a rerun after a stop here finds this Deployment's own file.
     writeOperator(deps, config);
-    await showAccountSql(deps, role, worker, fresh);
+    await showAccountSql(deps, role, roleMark(worker, accountId), fresh, "new");
   }
 
   // 4. Hyperdrive, with caching disabled (D-079). The password goes only in the API request (D-103).
+  const origin: HyperdriveOrigin = { scheme: "postgres", host, port: Number(port), database, user: `${role}.${projectRef}` };
   try {
     hyperdrive = hyperdrive
       ? await api.updateHyperdrive(hyperdrive.id, password ? { ...origin, password } : origin)
       : // With no Hyperdrive config, step 3 always made a password.
         await api.createHyperdrive(worker, { ...origin, password: password! });
   } catch (e) {
-    throw new SetupStopped(`Cloudflare did not ${hyperdrive ? "update" : "create"} the Hyperdrive config: ${message(e)}. Check the pooler host, port, project ref and database name, and that the SQL ran, then rerun npm run setup.`);
+    throw new SetupStopped(
+      `Cloudflare did not ${hyperdrive ? "update" : "create"} the Hyperdrive config: ${message(e)}. ` +
+        `Check the pooler host, port, project ref, database name and Database account, and that the SQL ran, then rerun npm run setup.`,
+    );
   }
 
   // 5. The Operator's own file.
   config = { ...config, hyperdrive_id: hyperdrive.id };
   writeOperator(deps, config);
 
-  // 6. SERVER_SECRET, kept if the Worker already has one, so a rerun voids no Sign-in.
+  // 6–9. SERVER_SECRET, kept if the Worker already has one; then deploy, check, and say what comes next.
   const opened: OpenedDeployment = { worker, config, accountId, api, subdomain };
-  if (!hasSecret(bindings, "SERVER_SECRET")) await putSecret(deps, opened, "SERVER_SECRET", generatePassword(deps));
-
-  // 7–9. Deploy, check, and say what comes next.
+  await ensureServerSecret(deps, opened, bindings);
   await deployAndCheck(deps, opened, "scripts/smoke.mjs");
   const url = workerUrl(opened);
   deps.say(
@@ -160,6 +183,34 @@ async function setUpOrResume(deps: SetupDeps) {
       `then run: npm run setup -- signin`,
     ].join("\n"),
   );
+}
+
+/**
+ * A Deployment setup made whose config file is lost: its file is rebuilt from the Worker's current
+ * settings and its Hyperdrive config, and nothing else changes, so the next deploy keeps them all.
+ */
+async function adopt(deps: SetupDeps, worker: string) {
+  const { accountId, api } = await cloudflareLogin(deps);
+  const subdomain = await requireSubdomain(api);
+  const bindings = await api.workerBindings(worker);
+  if (!bindings) throw new SetupStopped(`No Worker named ${worker} is in this account, so there is nothing to adopt. Rerun npm run setup for a new Deployment.`);
+  const hyperdrives = await api.hyperdrives();
+  const id = bindings.find((b) => b.type === "hyperdrive")?.id;
+  const hyperdrive = hyperdrives.find((h) => h.id === id && h.name === worker);
+  if (!hyperdrive) {
+    throw new SetupStopped(`The Worker ${worker} does not use a Hyperdrive config named after it, so setup did not make it. Nothing was adopted.`);
+  }
+  const role =
+    hyperdrive.origin.user?.split(".")[0] ??
+    (await askValid(deps, { key: "role", text: "Its Database account (the role it connects as)" }, (v) => (ROLE_NAME.test(v) ? undefined : "Give the role's name.")));
+  const vars = Object.fromEntries(bindings.filter((b) => b.type === "plain_text" && b.name !== "ENGINE").map((b) => [b.name, b.text ?? ""]));
+  const config: OperatorConfig = { name: worker, account_id: accountId, hyperdrive_id: hyperdrive.id, database_account: role, vars };
+  boundaryOf(config);
+  writeOperator(deps, config);
+  const opened: OpenedDeployment = { worker, config, accountId, api, subdomain };
+  await ensureServerSecret(deps, opened, bindings);
+  await deployAndCheck(deps, opened, "scripts/smoke.mjs");
+  deps.say(`Adopted ${worker} with its current settings, into ${operatorPath(worker)}. Keep a backup of that file.`);
 }
 
 /** A Deployment setup made, named by its Operator file, with Wrangler's Cloudflare login opened for it. */
@@ -197,7 +248,8 @@ async function checkUntil(deps: SetupDeps, d: OpenedDeployment, check: CheckScri
     const r = await deps.script(check, url);
     if (r.code === 0) return;
     if (waited + SMOKE_EVERY_MS > SMOKE_FOR_MS) {
-      throw new SetupStopped(`The ${check === "scripts/smoke.mjs" ? "smoke" : "Sign-in smoke"} checks still fail after two minutes:\n${r.stdout}${r.stderr}\nGuide section 9 says what each failure means.`);
+      const which = check === "scripts/smoke.mjs" ? "smoke" : "Sign-in smoke";
+      throw new SetupStopped(`The ${which} checks still fail after two minutes:\n${r.stdout}${r.stderr}\nGuide section 9 says what each failure means.`);
     }
     await deps.sleep(SMOKE_EVERY_MS);
   }
@@ -225,7 +277,7 @@ async function signin(deps: SetupDeps, d: OpenedDeployment) {
 async function rotatePassword(deps: SetupDeps, d: OpenedDeployment) {
   if (!d.config.hyperdrive_id) throw new SetupStopped("This Deployment has no Hyperdrive config yet. Run npm run setup to finish it.");
   const password = generatePassword(deps);
-  await showAccountSql(deps, d.config.database_account, d.worker, password);
+  await showAccountSql(deps, d.config.database_account, roleMark(d.worker, d.accountId), password, "rotation");
   try {
     await d.api.updateHyperdrive(d.config.hyperdrive_id, { password });
   } catch (e) {
@@ -239,7 +291,8 @@ async function rotatePassword(deps: SetupDeps, d: OpenedDeployment) {
 async function remove(deps: SetupDeps, d: OpenedDeployment) {
   const typed = await deps.ask({ key: "confirmRemove", text: `This deletes the Worker ${d.worker} and its Hyperdrive config. Type the Worker's name to confirm` });
   if (typed !== d.worker) throw new SetupStopped("Nothing was removed.");
-  // Setup has confirmed by the typed name; without --force, Wrangler waits on a prompt no one sees.
+  // The typed name is the confirmation. --force skips Wrangler's own prompt, which no one would see,
+  // and also deletes the Worker if other Workers bind to it (D-110).
   const del = await deps.wrangler(["delete", d.worker, "--force"], { accountId: d.accountId });
   if (del.code !== 0) throw new SetupStopped(`wrangler delete failed:\n${del.stderr || del.stdout}`);
   if (d.config.hyperdrive_id) {
@@ -250,32 +303,39 @@ async function remove(deps: SetupDeps, d: OpenedDeployment) {
   deps.say(
     [
       `Removed the Worker ${d.worker}, its Hyperdrive config and its config file.`,
-      `To finish, run this as postgres in the Supabase SQL editor:`,
-      dropRoleSql(d.config.database_account),
+      `To finish, run this as postgres in the Supabase SQL editor. It drops the role only if setup made it for this Deployment:`,
+      dropRoleSql(d.config.database_account, roleMark(d.worker, d.accountId)),
       `and delete the app registration in Entra ID (guide section 8).`,
     ].join("\n"),
   );
 }
 
 /** Prints the Database account's SQL with only the password's verifier, and waits while the Operator runs it. */
-async function showAccountSql(deps: SetupDeps, role: string, worker: string, password: string) {
-  const sql = accountSql(role, worker, scramVerifier(password, deps.randomBytes(16)));
+async function showAccountSql(deps: SetupDeps, role: string, mark: string, password: string, purpose: "new" | "rotation") {
+  const sql = accountSql(role, mark, scramVerifier(password, deps.randomBytes(16)));
+  const listing =
+    purpose === "new"
+      ? "It ends by listing what the role can already read: expect no rows (guide section 2)."
+      : "It ends by listing what the role can read: the tables and columns granted to it.";
   await deps.pause(
-    `Run this SQL as postgres in the Supabase SQL editor, then press Enter here. It creates the role ${role}, or gives a new password to the one setup made for this Deployment, and lists what the role can already read: expect no rows (guide section 2).\n\n${sql}`,
+    `Run this SQL as postgres in the Supabase SQL editor, then press Enter here. ` +
+      `It creates the role ${role}, or gives a new password to the one setup made for this Deployment. ${listing}\n\n${sql}`,
   );
 }
 
 /** Wrangler's own login to Cloudflare, the account to use, and an API client with that login's token. */
 async function cloudflareLogin(deps: SetupDeps, knownAccount?: string) {
   const who = await deps.wrangler(["whoami", "--json"]);
-  if (who.code !== 0) throw new SetupStopped("Wrangler is not logged in to Cloudflare. Run npx wrangler login, then rerun the same command.");
+  if (who.code !== 0) throw new SetupStopped("Wrangler has no Cloudflare login. Run npx wrangler login, then rerun the same command.");
   const accounts = readJson<{ accounts?: { id: string; name: string }[] }>(who.stdout, "wrangler whoami").accounts ?? [];
   let accountId = knownAccount ?? accounts[0]?.id;
   if (!knownAccount && accounts.length > 1) {
     const choice = await deps.ask({ key: "account", text: "Which Cloudflare account?", choices: accounts.map((a) => a.name) });
     accountId = accounts.find((a) => a.name === choice)?.id;
   }
-  if (!accountId || !accounts.some((a) => a.id === accountId)) throw new SetupStopped("Wrangler's Cloudflare login does not reach that account. Run npx wrangler login with the right account, then rerun.");
+  if (!accountId || !accounts.some((a) => a.id === accountId)) {
+    throw new SetupStopped("Wrangler's Cloudflare login does not reach that account. Run npx wrangler login with the right account, then rerun.");
+  }
   const token = await deps.wrangler(["auth", "token", "--json"], { accountId });
   if (token.code !== 0) throw new SetupStopped("Wrangler could not give its Cloudflare login's token. Run npx wrangler login, then rerun the same command.");
   const credentials = readJson<Credentials>(token.stdout, "wrangler auth token");
@@ -290,8 +350,11 @@ async function requireSubdomain(api: Cloudflare) {
   return subdomain;
 }
 
-/** Whether a Worker's settings, as Cloudflare listed them, include a secret of that name. */
-const hasSecret = (bindings: Binding[] | undefined, name: string) => bindings?.some((b) => b.type === "secret_text" && b.name === name) ?? false;
+/** Puts a new SERVER_SECRET only if the Worker's settings, as Cloudflare listed them, have none: a rerun voids no Sign-in. */
+async function ensureServerSecret(deps: SetupDeps, d: OpenedDeployment, bindings: Binding[] | undefined) {
+  const has = bindings?.some((b) => b.type === "secret_text" && b.name === "SERVER_SECRET") ?? false;
+  if (!has) await putSecret(deps, d, "SERVER_SECRET", generatePassword(deps));
+}
 
 async function putSecret(deps: SetupDeps, d: OpenedDeployment, name: string, value: string) {
   const r = await deps.wrangler(["secret", "put", name, "--name", d.worker], { accountId: d.accountId, stdin: value });
@@ -303,7 +366,7 @@ function readJson<T>(text: string, command: string): T {
   try {
     return JSON.parse(text) as T;
   } catch {
-    throw new SetupStopped(`${command} gave output setup cannot read. Update Wrangler with npm ci, then rerun the same command.`);
+    throw new SetupStopped(`${command} gave output setup cannot read. Reinstall the project's Wrangler with npm ci, then rerun the same command.`);
   }
 }
 
@@ -346,4 +409,6 @@ const nonEmpty = (v: string) => (v ? undefined : "This cannot be blank.");
 const generatePassword = (deps: SetupDeps) => Buffer.from(deps.randomBytes(32)).toString("base64url");
 const workerUrl = (d: OpenedDeployment) => `https://${d.worker}.${d.subdomain}.workers.dev`;
 const tenantOf = (issuer?: string) => issuer?.match(/^https:\/\/login\.microsoftonline\.com\/([^/]+)\/v2\.0$/)?.[1] ?? issuer;
-const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
+
+/** An error's message, for the one line the command prints. */
+export const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
