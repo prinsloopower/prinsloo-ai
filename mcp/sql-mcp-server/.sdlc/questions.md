@@ -209,3 +209,10 @@ Raised by: slice-spec (S-005) | Blocks: the release
 - **The deployment-time metric** is measured by an engineer new to the project, working from the docs alone (PRD). S-005's trial is the product owner's, a lower bound (D-100). Who runs the real one, and when?
 - **A tagged release** with CI-built artifacts (operations.md). Until it exists, Operators deploy from the default branch (D-104).
 
+## Q-040 — A planned rotation of SERVER_SECRET signs everyone out on a kit-made Deployment
+Raised by: build (S-005) | Blocks: nothing; the guide states the cost
+security.md's planned rotation sets the old value as `SERVER_SECRET_PREVIOUS`, so Sign-ins and Conversation tokens survive it. The setup command generates `SERVER_SECRET` and never shows it, as D-106 asks of every secret it makes, and Wrangler cannot read a secret back. An Operator therefore has no old value to keep, and every rotation acts like the leaked-secret case: every Staff member signs in again, and Created objects drop out of open Conversations. The guide says so. Options:
+- a `npm run setup -- rotate` form that holds the old and new values in memory only, setting `SERVER_SECRET_PREVIOUS` and `SERVER_SECRET` in one run;
+- showing `SERVER_SECRET` once at setup, for the Operator to store;
+- accepting the sign-out.
+

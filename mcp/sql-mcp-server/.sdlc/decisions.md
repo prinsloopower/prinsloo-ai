@@ -806,3 +806,14 @@ Rationale: the product owner's answer to gate 3's hold, "Fix both, then pass".
 
 The gate is recorded as passed on these fixes. Code review and the trial are the next checks.
 Alternatives rejected: a fourth critique, which each earlier round showed would likely find something in the newest fixes; accepting both gaps.
+
+## D-108 — Choices made building S-005's setup command
+Decided by: model | Date: 2026-11-01 | Phase: build (S-005)
+Rationale: details the spec leaves open, settled while building T-001 to T-007:
+- **The Operator's file is first written at step 3,** before the Database account's SQL is shown, not at step 5. It records the role's name without a Hyperdrive config id. A rerun can then tell an orphaned role (D-107) from a new one, even after the setup process ended.
+- **A new Worker skips `wrangler secret list`.** Setup knows from step 2 that no Worker exists, so it puts `SERVER_SECRET` straight away.
+- **A rerun updates an existing Hyperdrive config without a password.** Only the host, port, database, user and caching are sent, so Hyperdrive keeps the password it holds.
+- **The tenant question** takes any id without spaces, slashes or colons, or an https issuer URL. A wrong tenant is caught by the Sign-in smoke checks at Entra ID itself.
+- **`npm run setup -- remove` runs `wrangler delete <worker> --force`.** Setup has already confirmed by having the name typed again, and without `--force` Wrangler would wait on a prompt no one sees.
+- **`PERMISSION_TIER`:** the guide says to leave it unset, because the Server reads only `read-only` this release.
+Alternatives rejected: writing the file only at step 5, which loses the orphaned role; strict GUID checking of the tenant, which refuses tenant domain names Entra accepts.
