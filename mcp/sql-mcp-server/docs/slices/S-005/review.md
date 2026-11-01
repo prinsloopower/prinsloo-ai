@@ -253,3 +253,62 @@ Where: deploy/cloudflare/lib/setup.ts:243
 Axis: spec and scope
 
 Verdict: hold (0 blockers, 8 gaps, 14 nits)
+
+The product owner answered: "Fix all, then one last check". Reworked in commit 85624a3 (D-110).
+
+## Review 3 (2026-11-01)
+
+Reviewed: commit 85624a3 only (8c649f7..85624a3), review 2's rework, on two axes in separate fresh contexts.
+Tests: `npx vitest run test/deploy` → 4 files, 41 passed; the full suite passed 278 before commit; `npm run typecheck` → clean.
+
+Review 2's findings are resolved, apart from those named below: the "expect no rows" gap, which the template's own comment still carries; the `fresh` variable; and long lines, now 7 over 165 characters, the longest 182. Both reviewers found the adoption tests' missing user. It is listed once.
+
+## gap — the adoption tests never read the Database account from the Hyperdrive user
+Where: test/deploy/setup.test.ts:355
+Axis: spec and scope; standards and naming
+Both adoption fixtures give the Hyperdrive config no `user`, so only the fallback that asks for the role runs. The test asserts that the role was asked, just under a comment saying none is. A wrong parse of `<role>.<project ref>` would name the wrong role in the rebuilt file, and later rotation and removal SQL would target it, with no test failing. The spec also never mentions the fallback.
+
+## gap — the spec's Rerunning section still says step 3 is skipped whenever the Hyperdrive config exists
+Where: docs/slices/S-005/spec.md:94
+Axis: spec and scope
+A rerun that changes the Database account now runs step 3 (D-110), so the spec says two things again.
+
+## gap — a rotation still prints "Expect no rows", and the test that says it does not checks the wrong case
+Where: deploy/cloudflare/database-account.sql:28
+Axis: standards and naming
+The printed SQL carries the template's own comment, "Expect no rows", under a prompt that now says the listing shows what was granted. The test's `not.toContain("expect no rows")` is case-sensitive, so it cannot fail.
+
+## nit — no test covers a rerun after a stop between creating Hyperdrive and writing its id
+Where: deploy/cloudflare/lib/setup.ts:259
+Axis: spec and scope
+
+## nit — the spec's question table omits the adopt question and lists the account fourth while calling it last
+Where: docs/slices/S-005/spec.md:71
+Axis: spec and scope
+
+## nit — after a role change, nothing says to drop the old role
+Where: deploy/cloudflare/lib/setup.ts:257
+Axis: spec and scope
+
+## nit — "only code 10007 means no Worker" is checked only against the fake
+Where: deploy/cloudflare/lib/cloudflare.ts:65
+Axis: spec and scope
+The T-008 trial is its first real check. A wrong code fails safe: setup stops at step 2.
+
+## nit — the adopted Database account skips the role-name check and the postgres refusal
+Where: deploy/cloudflare/lib/setup.ts:203
+Axis: standards and naming
+
+## nit — the removal SQL blames a missing role on the mark
+Where: deploy/cloudflare/lib/database-account.ts:127
+Axis: standards and naming
+
+## nit — the interruption test asserts the fake's own message
+Where: test/deploy/world.ts:61
+Axis: standards and naming
+
+## nit — a bare `boundaryOf(config)` call whose purpose is unstated
+Where: deploy/cloudflare/lib/setup.ts:208
+Axis: standards and naming
+
+Verdict: hold (0 blockers, 3 gaps, 8 nits)

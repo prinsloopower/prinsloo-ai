@@ -317,7 +317,7 @@
         "review": {
           "result": "hold",
           "by": "model",
-          "at": "2026-11-01T21:11:15+00:00"
+          "at": "2026-11-01T21:56:51+00:00"
         }
       }
     },
@@ -413,7 +413,7 @@
       "size_at_creation": "product"
     }
   ],
-  "blocked_on": "review: review 2: 0 blockers, 8 gaps, 14 nits; to the product owner",
+  "blocked_on": "review: review 3: 0 blockers, 3 gaps, 8 nits; to the product owner",
   "open_questions": [],
   "phase": "build"
 }
