@@ -83,7 +83,7 @@ export type QueryOutcome =
   | { kind: "plan_refused"; unaccounted: boolean; code?: string }
   | { kind: "error"; error: unknown; sent: boolean; ms: number };
 
-/** What the Server asks of a Database: one interface per Engine (Engine adapter). */
+/** What the Server asks of a Database: one interface per Engine. */
 export interface Database {
   ping(): Promise<void>;
   accountFlags(): Promise<AccountFlags>;

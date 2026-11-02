@@ -1,6 +1,6 @@
 # Sign-in: who can call the Server
 
-This section answers one of a security reviewer's four questions: *who can call it*. It covers what this release does. Later sections cover what the Agent can see, what it can run, and what is logged.
+This section answers one of the four questions a Security reviewer asks, listed in the [README](../../README.md#for-security-reviewers): *who can call it*. It covers what this release does. Later sections cover what the Agent can see, what it can run, and what is logged.
 
 ## In short
 

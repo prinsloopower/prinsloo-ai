@@ -16,7 +16,7 @@ export const SERVER_INFO = { name: "sql-mcp-server", version: "0.1.0" };
 
 const UNSAFE_ACCOUNT = "Deployment misconfigured: Database account bypasses grants";
 
-/** What the Tools need for one request (MCP endpoint). */
+/** What the Tools need for one request to the MCP endpoint. */
 export interface ToolContext {
   database: Database;
   boundary?: Boundary;

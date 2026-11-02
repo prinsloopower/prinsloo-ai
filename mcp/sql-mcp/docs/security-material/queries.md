@@ -1,6 +1,6 @@
 # Queries: what an Agent-written query may do, and what it leaves behind
 
-This section answers two of a security reviewer's four questions, *what the Agent can run* and *what is logged*, for the SELECTs the Agent writes itself through the `query` tool. It covers what this release does. What the Agent can see is in [visibility.md](visibility.md).
+This section answers two of the four questions a Security reviewer asks, listed in the [README](../../README.md#for-security-reviewers), *what the Agent can run* and *what is logged*, for the SELECTs the Agent writes itself through the `query` tool. It covers what this release does. What the Agent can see is in [visibility.md](visibility.md).
 
 ## In short
 
@@ -69,7 +69,7 @@ Each Refusal is one fixed sentence, ending with a reference to the Audit record:
 - a table or column that is hidden reads exactly as one that does not exist;
 - every failure while planning shares one sentence, so an ungranted column, a missing one and a type error cannot be told apart.
 
-The adversarial probe suite (`test/query/probe.int.test.ts`) runs every probe the design reviews found against two databases that differ only in whether a hidden table and column exist, and requires identical answers.
+The adversarial probe suite (`test/query/probe.int.test.ts`) runs every probe the Query check was designed against, over two databases that differ only in whether a hidden table and column exist, and requires identical answers.
 
 One thing `list_tables` already discloses: `all_columns: false` tells the Agent that a table has at least one column it cannot read, without naming it. `SELECT *` over such a table is refused for that reason.
 

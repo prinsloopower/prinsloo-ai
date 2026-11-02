@@ -14,7 +14,6 @@
     "db:up": "docker compose -f test/docker-compose.yml up -d --wait",
     "db:down": "docker compose -f test/docker-compose.yml down",
     "dev": "wrangler dev",
-    "deploy": "wrangler deploy",
     "setup": "tsx deploy/cloudflare/setup.ts",
     "smoke": "node scripts/smoke.mjs"
   },

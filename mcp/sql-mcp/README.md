@@ -27,7 +27,7 @@ Following [the guide](deploy/cloudflare/guide.md), a Deployment should be deploy
 
 ## For security reviewers
 
-[docs/security-material/](docs/security-material/) covers what the Agent can see, what it can run, who can call the Server, and what is logged.
+A Security reviewer asks four questions: what the Agent can see, what it can run, who can call the Server, and what is logged. [docs/security-material/](docs/security-material/) answers them.
 
 ## For developers
 

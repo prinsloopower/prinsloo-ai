@@ -3,7 +3,7 @@ import { ParseError, type PgParser } from "./pg-parser.js";
 import { onlySelect, QUERY_MAX_BYTES, utf8Length } from "./postgres-structure.js";
 
 /**
- * Redaction of logged SQL on PostgreSQL (Redaction rule). With Redaction
+ * Redaction of logged SQL on PostgreSQL. With Redaction
  * on, comments are removed, and a single SELECT is then logged as `normalize` writes it, each `$n`
  * shown as `?`, provided re-parsing the normalised text finds no literal left. `normalize` keeps
  * literals in some statement types, so any other SQL, and SQL that does not parse or is too long,

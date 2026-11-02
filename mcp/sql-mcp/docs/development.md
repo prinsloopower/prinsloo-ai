@@ -29,4 +29,4 @@ npm run smoke -- http://localhost:8787
 - `deploy/cloudflare/`: the Deployment kit: the guide, the Staff guide, the setup command, the Database account's SQL and the shared Wrangler settings.
 - `scripts/`: the smoke checks a Deployment is checked with.
 - `test/`: Vitest. Files named `*.int.test.ts` need the Docker Database.
-- `docs/security-material/`: what a security reviewer needs: what the Agent can see and run, who can call the Server, and what is logged.
+- `docs/security-material/`: what a Security reviewer needs: what the Agent can see and run, who can call the Server, and what is logged.
