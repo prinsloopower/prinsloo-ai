@@ -19,7 +19,7 @@ if (!FORMS.includes(form)) {
   process.exit(2);
 }
 if (!existsSync(join(ROOT, "node_modules", "wrangler", "bin", "wrangler.js"))) {
-  console.error("Run this from the sql-mcp-server folder, after npm ci.");
+  console.error("Run this from the folder that holds package.json, after npm ci.");
   process.exit(2);
 }
 

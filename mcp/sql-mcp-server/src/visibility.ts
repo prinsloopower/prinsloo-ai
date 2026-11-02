@@ -51,7 +51,7 @@ export function bypassesGrants(flags: AccountFlags): boolean {
 }
 
 /**
- * The Visible objects the catalog allows (Visibility resolver): tables with at least one
+ * The Visible objects the catalog allows: tables with at least one
  * granted column, outside system schemas, narrowed by the Boundary, in code-point order of schema
  * then table so the order never depends on the Database's collation.
  */

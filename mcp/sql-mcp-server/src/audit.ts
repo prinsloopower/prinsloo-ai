@@ -49,8 +49,8 @@ const CUT = "…[cut]";
 const bytes = (s: string) => new TextEncoder().encode(s).length;
 
 /**
- * Writes one Audit record per Tool call to standard output, which the Host log facility keeps
- *. It never holds result rows, tokens or the Allow-list itself.
+ * Writes one Audit record per Tool call to standard output, which the Host log facility keeps.
+ * It never holds result rows, tokens or the Allow-list itself.
  */
 export function writeAudit(record: AuditRecord): void {
   let requestText = typeof record.requestText === "string" ? record.requestText : null;

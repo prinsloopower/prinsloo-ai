@@ -331,3 +331,124 @@ Tests after the fixes: `npm test` → 45 files, 278 passed; `npm run typecheck` 
 The remaining nit is the long lines.
 
 Verdict: pass (0 blockers, 0 gaps, 1 nit)
+
+## Review 4 (2026-11-01): T-009, the clean copy
+
+Reviewed: commits d367be9..2fc3da6 and the clean copy's commit 7d630dd, against T-009 and D-111, on two axes in separate fresh contexts.
+Tests: `npx vitest run test/export test/deploy` → 5 files, 46 passed; in `../sql-mcp`, `npm run typecheck` → clean and `npx vitest run` → 37 files, 239 passed. A fresh export matched the committed copy exactly.
+
+Both reviewers raised four of the same problems, each listed once below: the failed export, the benchmark's dependency, and the scrub's two broken comments.
+
+## blocker — the settings reference has no Limits table
+Where: docs/settings.md:31
+Axis: spec and scope
+T-009 requires the settings reference to match the system spec's variables, limits and monitoring tables. With no Limits table, the clean copy has no record of the request-body, Request text and query-text limits, the connect and fetch timeouts, the Audit line cap, the absence of a statement timeout, or the absence of a rate limit.
+
+## gap — a failed check leaves the rejected copy written into the committed folder
+Where: release/export.ts:62
+Axis: spec and scope; standards and naming
+The export writes every file before checking. When the check fails, the refused tree stays in `../sql-mcp`, where the next `git add` stages it. Nothing checks that no file outside the list got in, either.
+
+## gap — prepare decides a folder is an earlier copy from the LICENSE's holder
+Where: release/export.ts:124
+Axis: standards and naming
+`release/` itself passes the check, so exporting into it would delete the export script.
+
+## gap — prepare deletes the target's ignored local files
+Where: release/export.ts:126
+Axis: standards and naming
+`.dev.vars`, `.wrangler/` and any Operator file written while trying the copy are lost without warning.
+
+## gap — the check skips any file whose extension is not on its list
+Where: release/export.ts:48
+Axis: standards and naming
+
+## gap — the process check cannot see process words without an ID, and some remain
+Where: .dev.vars.example:25
+Axis: spec and scope
+"later slices", "the design reviews", and test files named for review rounds remain in the copy.
+
+## gap — export_includes_only_listed_files is a denylist
+Where: test/export/export.test.ts:30
+Axis: spec and scope
+A file outside the include list would pass, unless it held a reference.
+
+## gap — settings_reference_matches_system_spec compares names alone
+Where: test/export/export.test.ts:83
+Axis: spec and scope
+A changed default, secret flag or threshold source would pass. The test should compare the columns that must stay equal, and record which may differ.
+
+## gap — no test pins the guide's clone path, and T-009 still says "public repository"
+Where: deploy/cloudflare/guide.md:25
+Axis: spec and scope
+
+## gap — the export tests swallow the export's error, under a comment that misdescribes it
+Where: test/export/export.test.ts:22
+Axis: standards and naming
+
+## gap — nothing tests prepare's refusal or what it keeps
+Where: test/export/export.test.ts:20
+Axis: standards and naming
+
+## gap — setup tells the Operator to run from the sql-mcp-server folder
+Where: deploy/cloudflare/setup.ts:22
+Axis: standards and naming
+In the clean copy, that folder is `sql-mcp`.
+
+## gap — the markdown table helper is duplicated across two test files
+Where: test/export/export.test.ts:12
+Axis: standards and naming
+
+## nit — the scrub left "--." in the SQL the Operator pastes, and "*." in a comment
+Where: deploy/cloudflare/database-account.sql:29
+Axis: spec and scope; standards and naming
+The comment is src/audit.ts:53.
+
+## nit — the benchmark's dependency ships in the clean copy
+Where: package.json:32
+Axis: spec and scope; standards and naming
+
+## nit — `npm run deploy` survives against a placeholder Hyperdrive id
+Where: release/wrangler.public.jsonc:23
+Axis: spec and scope
+
+## nit — SERVER_INFO's version and the package's are set separately
+Where: src/mcp.ts:15
+Axis: spec and scope
+
+## nit — section names of absent documents remain as citations
+Where: src/engine/database.ts:86
+Axis: standards and naming
+The others are "(MCP endpoint)", "(Redaction rule)" and "(Visibility resolver)".
+
+## nit — a hand-joined doc comment runs to 154 columns
+Where: src/engine/postgres-structure.ts:6
+Axis: standards and naming
+
+## nit — the process patterns miss four-digit IDs, some document names and other workers.dev hosts
+Where: release/export.ts:33
+Axis: standards and naming
+
+## nit — tsconfig is parsed as plain JSON
+Where: release/export.ts:78
+Axis: standards and naming
+
+## nit — the .gitattributes comment claims more than its rules cover
+Where: release/export.ts:85
+Axis: standards and naming
+
+## nit — settings.md describes Azure and a container template the copy lacks
+Where: docs/settings.md:25
+Axis: standards and naming
+
+## nit — terms capitalised as if domain terms, and four questions the copy never lists
+Where: docs/settings.md:46
+Axis: standards and naming
+
+## nit — the test's temporary parent folder is never removed
+Where: test/export/export.test.ts:27
+Axis: standards and naming
+
+Verdict: fail (1 blocker, 11 gaps, 13 nits)
+
+Reworked in the next commit (D-112).

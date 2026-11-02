@@ -852,3 +852,21 @@ Rationale: the product owner's answers before the T-008 trial: "Operator kit + c
 - **References to this process are removed at the source,** so both repositories say the same. That covers register and phase IDs (D-, Q-, R-, J-, S-, T-, ADR-) and the pipeline documents' names, in code comments, messages, tests and documents.
 - **An export script** builds the public tree from an explicit list of what to include. It rewrites the few files that must differ: the development Wrangler config loses the project test Deployment's identifiers, and the package script for the benchmark goes. It refuses to finish if any excluded file, pipeline reference or project identifier remains. It is rerun for each release, which gives Q-039's tagged release its home.
 Alternatives rejected: a branch of this repository, which keeps the pipeline one click away; copying once by hand, which drifts; leaving the IDs, which then point at documents that are not there.
+
+## D-112 — Review 4's rework of the clean copy: what the export keeps, what may differ, and what is accepted
+Decided by: model | Date: 2026-11-01 | Phase: review rework (S-005, T-009)
+Rationale: review 4 failed T-009 on one blocker. Fixing it, and its gaps, needed these choices:
+- **The export stages, then swaps.** A copy is built and checked in a temporary folder. Only one that passes replaces the target, so a refused copy never reaches the committed folder.
+- **An earlier copy is recognised by its contents:** `src/worker.ts` and the kit's guide present, and no `release/`, `.sdlc/`, `.git` or `bench/`. The LICENSE's holder no longer decides it. A re-export keeps `node_modules/`, `.dev.vars`, `.wrangler/` and any Operator file, `wrangler.<worker>.jsonc`, which are a tried copy's local state.
+- **The check reads every text file,** whatever its extension; a NUL byte marks a binary file, which is skipped. It also catches process words without an ID: slice, code review, design review, re-review.
+- **The clean copy has no `deploy` script.** It would deploy the development config; Operators deploy with `npm run setup -- deploy`.
+- **What the settings reference may word differently from the system spec,** and its test allows:
+  - the variables' purpose, example and source, written for this release's one Host;
+  - the Statement execution limit, which names Cloudflare's limits only;
+  - the monitoring sources, written for Cloudflare.
+
+  Variable names, secret flags, limit values and breaches, and monitoring thresholds must match. The write tiers' limits and the Worker bundle's build limit stay in the spec only.
+- **Accepted as they are:**
+  - `@anthropic-ai/sdk` stays in the clean copy's devDependencies, because removing it means regenerating the lockfile, which needs the network. Nothing in the copy imports it.
+  - The setup tests' `TRIAL` fixture keeps its name: a trial Deployment is an ordinary thing for an Operator to make.
+Alternatives rejected: deleting a refused copy after writing it into the target, which leaves a window where it is there; a marker file in the copy, which would itself be a trace of the export.

@@ -1,18 +1,11 @@
 import { existsSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { table } from "../markdown.js";
 
 const read = (p: string) => (existsSync(p) ? readFileSync(p, "utf8") : "");
 const guide = () => read("deploy/cloudflare/guide.md");
 /** The guide's section headed `## <n>. …`, up to the next one. */
 const section = (n: number) => guide().split(/^## /m).find((s) => s.startsWith(`${n}. `)) ?? "";
-
-/** Rows of the first markdown table after `heading` in `text`, as cells. */
-function table(text: string, heading: string): string[][] {
-  const lines = text.slice(text.indexOf(heading)).split("\n");
-  const start = lines.findIndex((l) => l.startsWith("|"));
-  const end = lines.findIndex((l, i) => i > start && !l.startsWith("|"));
-  return lines.slice(start + 2, end).map((l) => l.split("|").slice(1, -1).map((c) => c.trim()));
-}
 
 describe("the Deployment kit's docs", () => {
   it("kit_guide_names_every_cloudflare_setting", () => {

@@ -3,8 +3,8 @@ import { ParseError, type PgParser } from "./pg-parser.js";
 import { SYSTEM_SCHEMA, visibleKey as key, type VisibleObjects, type VisibleTableInfo } from "../visibility.js";
 
 /**
- * The Query check's structural layer on PostgreSQL, its first two steps: size, then a walk of the parse tree that accepts only the node types, functions,
- * operators and casts listed, so that every Refusal depends on the query's text and on what
+ * The Query check's structural layer on PostgreSQL, its first two steps: size, then a walk of
+ * the parse tree that accepts only the node types, functions, operators and casts listed, so that every Refusal depends on the query's text and on what
  * `list_tables` shows, never on what is hidden. Passing it is not passing the Query check: the
  * plan layer runs after it, in `PostgresDatabase.query`.
  */

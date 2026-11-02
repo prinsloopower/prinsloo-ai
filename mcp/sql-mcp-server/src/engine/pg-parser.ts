@@ -5,7 +5,7 @@ import PgQueryModule from "@libpg-query/parser/wasm/libpg-query.js";
 export interface PgParser {
   /** The parse tree as libpg_query's JSON; throws a ParseError when the SQL does not parse. */
   parse(sql: string): { stmts: { stmt: Record<string, unknown> }[] };
-  /** The SQL with every literal replaced by `$n` (Redaction rule). */
+  /** The SQL with every literal replaced by `$n`, which Redaction logs. */
   normalize(sql: string): string;
   /** PostgreSQL's own lexer: each token with its byte offsets, comments included. */
   scan(sql: string): { start: number; end: number; tokenName: string }[];
