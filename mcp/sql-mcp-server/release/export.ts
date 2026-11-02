@@ -33,18 +33,20 @@ export const EXCLUDE = ["test/bench/", "test/export/"];
 /** Files the export writes itself rather than copies. */
 export const WRITTEN = ["LICENSE", "wrangler.jsonc", ".gitignore", ".gitattributes"];
 /**
- * What a re-export keeps in the target: installed packages, and a tried copy's local secrets
- * (`.dev.vars`, `.dev.vars.<env>`, `.env`), Wrangler's state, and Operator files, named as the kit names them.
+ * What a re-export keeps in the target, untouched and unchecked, because the copy does not own it:
+ * installed packages, a tried copy's local secrets (`.dev.vars`, `.dev.vars.<env>`, `.env`,
+ * `.env.<env>`), Wrangler's state, and Operator files, named as the kit names them.
+ * `.dev.vars.example` is the copy's own file, so it is not kept: it is replaced and checked.
  */
-const keep = (name: string) => /^(node_modules|\.dev\.vars(\.[\w-]+)?|\.env|\.wrangler)$/.test(name) || OPERATOR_FILE.test(name);
+const keep = (name: string) => /^(node_modules|\.dev\.vars(\.(?!example$)[\w-]+)?|\.env(\.[\w-]+)?|\.wrangler)$/.test(name) || OPERATOR_FILE.test(name);
 
 /** References to the development process: register and phase IDs, its documents, and its words. */
 const PROCESS = [
   /\b(?:D|Q|R|J|S|T|ADR)-\d{3,}\b/,
   /\.sdlc\b|ai-sdlc|docs\/slices|system-spec|system spec|deployment-trials|docs\/architecture/i,
-  /\b(?:operations|security|data-model|environments|components|adr|overview|skeleton|discovery|journeys|prd|domain-model|decisions|questions|slices|reflections|state|spec|review|deploy|pipeline|CONTRACT)\.(?:md|json)\b/,
-  // A word, not part of a name: `.slice(` and the `slice-ansi` package are code, not the process.
-  /(?<![.\w/-])slices?\b(?!-)|code review|design review|re-review|review round|\bgate \d|amendment gate|\bcritique/i,
+  /\b(?:operations|security|data-model|environments|components|adr|overview|skeleton|discovery|journeys|prd|domain-model|decisions|questions|slices|reflections|state|spec|review|deploy|pipeline|contract)\.(?:md|json)\b/i,
+  // A word, in any form: only a `.slice(` call and the `slice-ansi` package are code, not the process.
+  /(?<![.\w])slices?\b(?!-ansi)|code review|design review|re-review|review round|\bgates? ?-?\d|amendment gate|\bcritique/i,
   /product owner|\bbench\/|benchmark/i,
 ];
 /** The project test Deployment's identifiers, which no Operator's copy should carry. */
@@ -85,25 +87,59 @@ export function exportTree(from: string, to: string, include: string[] = INCLUDE
   }
 }
 
+/** The file operations the swap makes, so a test can make one fail. */
+export type SwapFs = { renameSync: typeof renameSync; cpSync: typeof cpSync; rmSync: typeof rmSync };
+
 /**
- * Replaces `to`'s exported files with `staging`'s. The old ones are moved aside first, beside `to`,
- * and moved back if writing the new ones fails partway (a file locked on Windows, say), so `to`
- * is never left half-replaced.
+ * Replaces `to`'s exported files with `staging`'s. The old ones are moved aside first, into a
+ * folder beside `to`. If moving them or writing the new ones fails (a file locked on Windows, say),
+ * exactly what was moved is moved back, after removing only what the copy wrote. The error says
+ * whether that worked, and if it did not, which old files are still in the folder aside.
  */
-function swapInto(staging: string, to: string) {
+export function swapInto(staging: string, to: string, fs: SwapFs = { renameSync, cpSync, rmSync }) {
   mkdirSync(to, { recursive: true });
   const aside = mkdtempSync(`${to}.previous-`);
-  const moved = readdirSync(to).filter((name) => !keep(name));
+  const old = readdirSync(to).filter((name) => !keep(name));
+  const movedAside: string[] = [];
+  let copying = false;
   try {
-    for (const name of moved) renameSync(join(to, name), join(aside, name));
-    cpSync(staging, to, { recursive: true });
+    for (const name of old) {
+      fs.renameSync(join(to, name), join(aside, name));
+      movedAside.push(name);
+    }
+    copying = true;
+    fs.cpSync(staging, to, { recursive: true });
   } catch (e) {
-    for (const name of readdirSync(staging)) rmSync(join(to, name), { recursive: true, force: true });
-    for (const name of readdirSync(aside)) renameSync(join(aside, name), join(to, name));
+    const why = e instanceof Error ? e.message : String(e);
+    const unrestored: string[] = [];
+    // Only once every old entry is aside can a staged name in `to` be the copy's, not the old one.
+    if (copying) {
+      for (const name of readdirSync(staging)) {
+        try {
+          fs.rmSync(join(to, name), { recursive: true, force: true });
+        } catch {
+          unrestored.push(name);
+        }
+      }
+    }
+    for (const name of movedAside) {
+      try {
+        fs.renameSync(join(aside, name), join(to, name));
+      } catch {
+        unrestored.push(name);
+      }
+    }
+    if (unrestored.length > 0) {
+      throw new Error(`The clean copy could not be written (${why}), and ${to} could not be put back fully. Restore ${unrestored.join(", ")} from ${aside}, or export again.`);
+    }
     rmSync(aside, { recursive: true, force: true });
-    throw new Error(`The clean copy could not be written, so ${to} was put back as it was: ${e instanceof Error ? e.message : String(e)}`);
+    throw new Error(`The clean copy could not be written, so ${to} was put back as it was: ${why}`);
   }
-  rmSync(aside, { recursive: true, force: true });
+  try {
+    rmSync(aside, { recursive: true, force: true });
+  } catch (e) {
+    throw new Error(`The clean copy was written to ${to}, but the old files moved aside to ${aside} could not be deleted (${e instanceof Error ? e.message : String(e)}). Delete that folder.`);
+  }
 }
 
 /** Whether a tracked path is one the copy takes. */
@@ -127,7 +163,8 @@ function rewrite(to: string) {
   ts.include = ts.include.filter((i) => i !== "bench" && i !== "release");
   writeFileSync(tsPath, `${JSON.stringify(ts, null, 2)}\n`);
 
-  writeFileSync(join(to, ".gitignore"), "node_modules/\n.wrangler/\n.dev.vars\ndist/\n/wrangler.*.jsonc\n");
+  // Every local secret file a re-export keeps is ignored, so `git add .` can never commit one.
+  writeFileSync(join(to, ".gitignore"), "node_modules/\n.wrangler/\n.dev.vars*\n!.dev.vars.example\n.env*\ndist/\n/wrangler.*.jsonc\n");
   writeFileSync(
     join(to, ".gitattributes"),
     "# Text files stay LF on every platform.\n" +

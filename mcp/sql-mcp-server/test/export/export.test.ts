@@ -1,8 +1,8 @@
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { INCLUDE, WRITTEN, checkTree, exportTree, listTree, listed } from "../../release/export.js";
+import { INCLUDE, WRITTEN, checkTree, exportTree, listTree, listed, swapInto } from "../../release/export.js";
 import { SERVER_INFO } from "../../src/mcp.js";
 import { table } from "../markdown.js";
 
@@ -10,6 +10,9 @@ import { table } from "../markdown.js";
 // benchmark's, because they read the pipeline's documents.
 
 const read = (p: string) => readFileSync(p, "utf8");
+const fail = (message: string): never => {
+  throw new Error(message);
+};
 /** A spec cell without its parenthesised citations of registers and pipeline documents. */
 const uncited = (cell: string) => cell.replace(/ ?\([^()]*(?:\b[A-Z]{1,3}-\d{3}\b|\.md)[^()]*\)/g, "");
 
@@ -59,6 +62,11 @@ describe("the clean copy's export", () => {
       ["scripts/planted.sh", "echo fine\n# a later slice adds this\n"],
       ["docs/planted.notes.txt", "fine\nfound in the second code review\n"],
       ["test/planted.ts", "// fine\n// Gate 2: aggregates\n"],
+      ["test/planted-2.ts", "// fine\n// Gate-2, and Gates 1 and 2\n"],
+      ["test/planted-3.ts", "// fine\n// from the amendment gate\n"],
+      ["test/planted-4.ts", "// fine\n// the critique found it\n"],
+      ["test/planted-5.ts", "// fine\n// added per-slice\n"],
+      ["docs/planted-6.md", "fine\nsee spec.md, pipeline.json and Contract.md\n"],
     ] as const) {
       writeFileSync(join(out, file), text);
       try {
@@ -74,6 +82,17 @@ describe("the clean copy's export", () => {
     } finally {
       rmSync(join(out, "src", "planted.ts"));
     }
+    // The copy's own .dev.vars.example is checked like any other file; only local secrets are not.
+    const example = join(out, ".dev.vars.example");
+    const exampleText = read(example);
+    writeFileSync(example, `${exampleText}# see D-077\n`);
+    try {
+      expect(checkTree(out)).toEqual([expect.stringMatching(/^\.dev\.vars\.example:\d+: # see D-077$/)]);
+    } finally {
+      writeFileSync(example, exampleText);
+    }
+    // Every local secret file a re-export keeps is ignored, and the copy's example is not.
+    expect(read(join(out, ".gitignore")).split("\n")).toEqual(expect.arrayContaining([".dev.vars*", "!.dev.vars.example", ".env*"]));
     // A binary file, marked by a NUL byte, holds no prose and is not read.
     writeFileSync(join(out, "docs", "planted.bin"), Buffer.concat([Buffer.from([0, 1, 2]), Buffer.from("\nD-077\n")]));
     try {
@@ -149,6 +168,63 @@ describe("the clean copy's export", () => {
     expect(() => exportTree(process.cwd(), out, [...INCLUDE, "docs/slices/S-005/spec.md"])).toThrow(/was refused, and .* was left as it was/s);
     expect(listTree(out).map((f) => `${f}:${read(join(out, f)).length}`)).toEqual(before);
     expect(staging()).toBe(stagingBefore);
+  });
+
+  it("export_swap_puts_back_on_failure", () => {
+    // A target holding an earlier copy's a, b and c and a kept .dev.vars, and a staged copy with the
+    // same names, as a real re-export has, plus a new d.
+    const fresh = () => {
+      const dir = mkdtempSync(join(parent, "swap-"));
+      const to = join(dir, "copy");
+      const staging = join(dir, "staging");
+      for (const [f, text] of [["a.txt", "old a"], ["b/inner.txt", "old b"], ["c.txt", "old c"], [".dev.vars", "secret"]]) {
+        mkdirSync(join(to, f!, ".."), { recursive: true });
+        writeFileSync(join(to, f!), text!);
+      }
+      for (const f of ["a.txt", "b/inner.txt", "c.txt", "d.txt"]) {
+        mkdirSync(join(staging, f, ".."), { recursive: true });
+        writeFileSync(join(staging, f), "new");
+      }
+      return { dir, to, staging, before: listTree(to).map((f) => `${f}=${read(join(to, f))}`) };
+    };
+    const state = (to: string) => listTree(to).map((f) => `${f}=${read(join(to, f))}`);
+    const aside = (dir: string) => readdirSync(dir).filter((n) => n.startsWith("copy.previous-"));
+    const real = { renameSync: renameSync, cpSync: cpSync, rmSync: rmSync };
+
+    // Moving the old copy aside fails on its second entry: what moved comes back, nothing is deleted.
+    const moving = fresh();
+    let renames = 0;
+    const failSecondRename = { ...real, renameSync: ((a: string, b: string) => (++renames === 2 ? fail("EBUSY: b is locked") : renameSync(a, b))) as typeof renameSync };
+    expect(() => swapInto(moving.staging, moving.to, failSecondRename)).toThrow(/put back as it was: EBUSY/);
+    expect(state(moving.to)).toEqual(moving.before);
+    expect(read(join(moving.to, ".dev.vars"))).toBe("secret");
+    expect(aside(moving.dir)).toEqual([]);
+
+    // Writing the new copy fails after one file: that file goes, and the old copy comes back.
+    const copying = fresh();
+    const failMidCopy = { ...real, cpSync: ((_from: string, to: string) => { writeFileSync(join(to, "a.txt"), "new"); fail("EBUSY: c.txt is locked"); }) as typeof cpSync };
+    expect(() => swapInto(copying.staging, copying.to, failMidCopy)).toThrow(/put back as it was: EBUSY/);
+    expect(state(copying.to)).toEqual(copying.before);
+    expect(aside(copying.dir)).toEqual([]);
+
+    // Putting an old entry back fails too: the error says so, and where that entry still is.
+    const stuck = fresh();
+    let backs = 0;
+    const failPutBack = {
+      ...real,
+      cpSync: (() => fail("EBUSY: copy failed")) as typeof cpSync,
+      renameSync: ((a: string, b: string) => (a.includes(".previous-") && ++backs === 1 ? fail("EBUSY: a.txt is locked") : renameSync(a, b))) as typeof renameSync,
+    };
+    expect(() => swapInto(stuck.staging, stuck.to, failPutBack)).toThrow(/could not be put back fully\. Restore a\.txt from .*copy\.previous-/);
+    const [left] = aside(stuck.dir);
+    expect(readdirSync(join(stuck.dir, left!))).toEqual(["a.txt"]);
+
+    // Nothing failing: the new copy replaces the old, the kept file stays, and nothing is left aside.
+    const ok = fresh();
+    swapInto(ok.staging, ok.to);
+    expect(state(ok.to)).toEqual(["a.txt=new", "b/inner.txt=new", "c.txt=new", "d.txt=new"]);
+    expect(read(join(ok.to, ".dev.vars"))).toBe("secret");
+    expect(aside(ok.dir)).toEqual([]);
   });
 
   it("guide_clones_the_clean_copy", () => {

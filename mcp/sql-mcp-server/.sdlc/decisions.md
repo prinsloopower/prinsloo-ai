@@ -876,3 +876,9 @@ Added after review 5, on the product owner's "Fix all, then one more check":
 - **A re-export also keeps `.dev.vars.<env>` and `.env`.** It recognises Operator files by the kit's own pattern, so the two cannot drift apart.
 - **The word check also catches** "Gate 1"-style and "amendment gate" wording, "critique", and the pipeline's own file names (`spec.md`, `review.md`, `pipeline.json` and the like). It lets through code that only looks like a word: a `.slice(` call, or a package named `slice-ansi`. The bare word "gate" stays allowed, because `/mcp gate` names the Sign-in gate.
 - **Accepted:** a UTF-16 text file would be read as binary and skipped. The Server's files are UTF-8, and nothing in the copy is UTF-16.
+
+Added after review 6, on the product owner's "Fix all, then a seventh check":
+- **The swap restores exactly what it moved.** It records each old entry it moves aside, and whether copying has begun. If the move fails partway, only the moved entries go back. If the copy fails, only then are the copy's files removed before everything moved goes back. If an entry cannot be put back, the error names it and the folder that still holds it, rather than claiming the target was restored. A test forces a failure at each of those points, with staged names equal to the old ones, as a real re-export has.
+- **`.dev.vars.example` is the copy's own file,** so it is replaced and checked like any other. Only local secrets, `.dev.vars`, `.dev.vars.<env>`, `.env` and `.env.<env>`, are kept.
+- **Every kept secret file is gitignored,** in the copy and in this folder: `.dev.vars*` but `.dev.vars.example`, and `.env*`.
+- **The word check takes every form:** "slice" in any form but a `.slice(` call and the `slice-ansi` package, "Gate 2", "Gate-2" and "Gates 1 and 2", and the pipeline's file names in any case.

@@ -526,3 +526,37 @@ Axis: standards and naming
 Verdict: hold (0 blockers, 3 gaps, 12 nits)
 
 Reworked in the next commit (D-112, review 5 additions). The product owner chose "Fix all, then one more check".
+
+## Review 6 (2026-11-02): T-009, final check of review 5's rework
+
+Reviewed: commit c6bb38b (db24ccd..c6bb38b) and the clean copy's commit 04f7977, on two axes in separate fresh contexts.
+Tests: `npx vitest run test/export test/deploy` → 5 files, 48 passed; in `../sql-mcp`, typecheck clean and 37 files, 239 passed. No `.previous-*` folder was left behind.
+
+Every review-5 finding is resolved but the swap, whose rework introduced the first gap below. Both reviewers found that gap. It is listed once.
+
+## gap — the swap's rollback deletes old files it never moved aside, then says the target was put back
+Where: release/export.ts:101
+Axis: spec and scope; standards and naming
+If moving the old copy aside fails partway, as a locked file on Windows makes it, the catch deletes every staged name from the target, old files not yet moved included. Only the moved ones come back. A failure inside the catch leaves the old files in `<to>.previous-*` inside the repository, and loses the original error. No test reaches this path, so D-112's promise is unproven and false in the case it was written for.
+
+## gap — keep() also matches `.dev.vars.example`, so the check stops reading that shipped file
+Where: release/export.ts:39
+Axis: standards and naming
+`listTree` skips kept names, so a process reference planted in `.dev.vars.example` passes the check. Before the rework, only the exact name `.dev.vars` was kept.
+
+## gap — the copy's .gitignore does not cover the secret files a re-export now keeps
+Where: release/export.ts:130
+Axis: standards and naming
+`.dev.vars.<env>` and `.env` are kept as local secrets, but only `.dev.vars` is ignored, so `git add .` would commit them.
+
+## nit — of the newly caught wording, only "Gate N" is planted in the test
+Where: test/export/export.test.ts:61
+Axis: spec and scope
+
+## nit — the slice lookarounds let hyphenated process prose through, and gate misses "Gate-2"
+Where: release/export.ts:47
+Axis: standards and naming
+
+Verdict: hold (0 blockers, 3 gaps, 2 nits)
+
+Reworked in the next commit (D-112, review 6 additions). The product owner chose "Fix all, then a seventh check". One run of the clean copy's suite after the rework had the Workers runtime fail to start in two workerd tests; they passed alone, and the next full run passed, 239 of 239.
