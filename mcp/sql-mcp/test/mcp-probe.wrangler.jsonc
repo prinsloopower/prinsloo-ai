@@ -1,0 +1,8 @@
+// Test-only config for test/mcp-probe.worker.ts, run in local workerd by test/mcp.test.ts.
+// Same runtime settings as wrangler.jsonc, with no bindings.
+{
+  "name": "sql-mcp-server-probe",
+  "main": "mcp-probe.worker.ts",
+  "compatibility_date": "2026-10-01",
+  "compatibility_flags": ["nodejs_compat"]
+}

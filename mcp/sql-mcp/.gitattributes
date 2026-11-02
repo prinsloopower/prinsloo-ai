@@ -1,0 +1,5 @@
+# Source and documents stay LF on every platform.
+*.ts text eol=lf
+*.jsonc text eol=lf
+*.md text eol=lf
+*.sql text eol=lf
