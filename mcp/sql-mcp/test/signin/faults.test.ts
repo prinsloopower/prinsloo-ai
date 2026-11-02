@@ -3,13 +3,13 @@ import { IdentityProvider } from "../../src/signin/identity-provider.js";
 import { Tokens } from "../../src/signin/tokens.js";
 import { begin, callback, captureConsole, harness, ISSUER, opLines, RESOURCE, signIn, token } from "./helpers.js";
 
-// More Sign-in edge cases.
+// Sign-in faults: an Identity provider outage, and faults in the Server itself.
 
 afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe("more Sign-in edge cases", () => {
+describe("Sign-in faults", () => {
   it("token_endpoint_outage_is_temporary", async () => {
     const h = await harness();
     const s = await signIn(h);

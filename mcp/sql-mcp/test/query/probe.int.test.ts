@@ -70,7 +70,7 @@ const PROBES = [
   "SELECT c.id FROM ps.customers c WHERE c.email IS NULL",
   "SELECT ps.customers.email FROM ps.customers",
   "SELECT count(c.email) FROM ps.customers c",
-  // Gate 1: names resolved before privileges.
+  // Names resolved before privileges.
   "SELECT email FROM ps.customers t, (SELECT 1 AS email) s",
   "SELECT s.email FROM ps.customers t NATURAL JOIN (SELECT 'z'::text AS email) s",
   "SELECT 1 AS email FROM ps.customers t GROUP BY email",
@@ -79,7 +79,7 @@ const PROBES = [
   "SELECT (SELECT email) FROM ps.customers c",
   "SELECT 1 FROM ps.customers c, LATERAL (SELECT c.email) x",
   "SELECT 1 FROM ps.customers c JOIN ps.orders o USING (email)",
-  // Gate 1 and 2: catalog lookups through reg* casts and columns.
+  // Catalog lookups through reg* casts and columns.
   "SELECT 'ps.staff'::regclass",
   "SELECT '{ps.staff}'::pg_catalog._regclass",
   "SELECT '{ps.staff}'::regclass[]",
@@ -89,14 +89,14 @@ const PROBES = [
   "SELECT t.id FROM ps.items t WHERE coalesce(t.r, 'ps.staff') = t.r",
   "SELECT t.r FROM ps.items t UNION SELECT 'ps.staff'",
   "SELECT ARRAY[t.r, 'ps.staff'] FROM ps.items t",
-  // Gate 2: aggregate and window ORDER BY, function notation.
+  // Aggregate and window ORDER BY, and function notation.
   "SELECT string_agg(t.id::text, ',' ORDER BY email) AS email FROM ps.customers t, (SELECT 1 AS email) s",
   "SELECT row_number() OVER (ORDER BY email) FROM ps.customers t, (SELECT 1 AS email) s",
   "SELECT c.id FROM ps.customers c WINDOW w AS (PARTITION BY email)",
   "SELECT s.row_to_json FROM (SELECT c.id, c.region FROM ps.customers c) s",
   "SELECT row_to_json(t) FROM ps.customers t",
   "SELECT t FROM ps.customers t",
-  // Gate 3: column-alias lists, join aliases, operators outside expressions.
+  // Column-alias lists, join aliases, and operators outside expressions.
   "SELECT 1 FROM ps.customers c(a, b, x)",
   "SELECT 1 FROM ps.customers c(a, b, x, y)",
   "SELECT 1 FROM ps.customers c(id, name, region)",
@@ -106,7 +106,7 @@ const PROBES = [
   "SELECT o.id FROM ps.orders o ORDER BY o.id USING OPERATOR(ps.===)",
   "SELECT ps.counted()",
   "SELECT ps.lower(c.name) FROM ps.customers c",
-  // Amendment gate: reg* at depth.
+  // reg* types at any depth.
   "SELECT t.d FROM ps.items t",
   "SELECT t.rr FROM ps.items t",
   "SELECT t.id FROM ps.items t WHERE t.rr = '[ps.staff,ps.staff]'",
