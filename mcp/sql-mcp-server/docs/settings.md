@@ -12,7 +12,7 @@ The Server settings are `ENGINE`, `HYPERDRIVE`, `IDP_*`, `PERMISSION_TIER`, `RED
 |---|---|---|---|---|
 | ENGINE | which Engine the Database runs | `postgres` | no | the shared Wrangler settings |
 | HYPERDRIVE | Hyperdrive binding to the Database | binding to a Hyperdrive config | the binding no; the connection string inside it yes | made by `npm run setup`. Locally, `wrangler dev` uses the binding's `localConnectionString` instead |
-| DATABASE_URL | MS SQL Server connection string, for a later release | `Server=tcp:sales.database.windows.net,1433;Database=sales;User Id=sqlmcp;Password=…;Encrypt=true` | yes | not read by this release |
+| DATABASE_URL | MS SQL Server connection string, for a later release | `Server=tcp:db.example.com,1433;Database=sales;User Id=sqlmcp;Password=…;Encrypt=true` | yes | not read by this release |
 | IDP_ISSUER | the Identity provider's issuer URL; its `/.well-known/openid-configuration` is fetched | `https://login.microsoftonline.com/<tenant>/v2.0` | no | Wrangler `vars` |
 | IDP_CLIENT_ID | the Server's OpenID Connect client ID at the Identity provider | `6f1c…` | no | the Operator's app registration at the Identity provider |
 | IDP_CLIENT_SECRET | that client's secret | `…` | yes | `wrangler secret put` (`npm run setup -- signin` does this) |

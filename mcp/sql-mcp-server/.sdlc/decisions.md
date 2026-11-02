@@ -870,3 +870,9 @@ Rationale: review 4 failed T-009 on one blocker. Fixing it, and its gaps, needed
   - `@anthropic-ai/sdk` stays in the clean copy's devDependencies, because removing it means regenerating the lockfile, which needs the network. Nothing in the copy imports it.
   - The setup tests' `TRIAL` fixture keeps its name: a trial Deployment is an ordinary thing for an Operator to make.
 Alternatives rejected: deleting a refused copy after writing it into the target, which leaves a window where it is there; a marker file in the copy, which would itself be a trace of the export.
+
+Added after review 5, on the product owner's "Fix all, then one more check":
+- **The swap moves the old copy aside,** into a folder beside the target, and moves it back if writing the new one fails partway. A locked file on Windows can no longer leave the target half-replaced.
+- **A re-export also keeps `.dev.vars.<env>` and `.env`.** It recognises Operator files by the kit's own pattern, so the two cannot drift apart.
+- **The word check also catches** "Gate 1"-style and "amendment gate" wording, "critique", and the pipeline's own file names (`spec.md`, `review.md`, `pipeline.json` and the like). It lets through code that only looks like a word: a `.slice(` call, or a package named `slice-ansi`. The bare word "gate" stays allowed, because `/mcp gate` names the Sign-in gate.
+- **Accepted:** a UTF-16 text file would be read as binary and skipped. The Server's files are UTF-8, and nothing in the copy is UTF-16.

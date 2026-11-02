@@ -14,7 +14,7 @@ export type OperatorConfig = {
 export const operatorPath = (worker: string) => `wrangler.${worker}.jsonc`;
 /** The merged config handed to `wrangler deploy`, removed once it has run. */
 export const deployPath = (worker: string) => `wrangler.${worker}.deploy.jsonc`;
-const OPERATOR_FILE = /^wrangler\.([a-z0-9-]+)\.jsonc$/;
+export const OPERATOR_FILE = /^wrangler\.([a-z0-9-]+)\.jsonc$/;
 
 /** Worker names that have an Operator file among `paths`. */
 export const operatorWorkers = (paths: string[]) => paths.flatMap((p) => p.match(OPERATOR_FILE)?.[1] ?? []);

@@ -6,11 +6,11 @@
  * a refused one is deleted, and the target is left as it was.
  */
 import { execFileSync } from "node:child_process";
-import { copyFileSync, cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { copyFileSync, cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
-import { parseJsonc } from "../deploy/cloudflare/lib/config.js";
+import { OPERATOR_FILE, parseJsonc } from "../deploy/cloudflare/lib/config.js";
 
 /** Tracked paths the copy takes, as files or folder prefixes. */
 export const INCLUDE = [
@@ -32,15 +32,19 @@ export const INCLUDE = [
 export const EXCLUDE = ["test/bench/", "test/export/"];
 /** Files the export writes itself rather than copies. */
 export const WRITTEN = ["LICENSE", "wrangler.jsonc", ".gitignore", ".gitattributes"];
-/** What a re-export keeps in the target: installed packages, and a tried copy's local secrets, state and Operator files. */
-const KEEP = /^(node_modules|\.dev\.vars|\.wrangler|wrangler\.[a-z0-9-]+\.jsonc)$/;
+/**
+ * What a re-export keeps in the target: installed packages, and a tried copy's local secrets
+ * (`.dev.vars`, `.dev.vars.<env>`, `.env`), Wrangler's state, and Operator files, named as the kit names them.
+ */
+const keep = (name: string) => /^(node_modules|\.dev\.vars(\.[\w-]+)?|\.env|\.wrangler)$/.test(name) || OPERATOR_FILE.test(name);
 
 /** References to the development process: register and phase IDs, its documents, and its words. */
 const PROCESS = [
   /\b(?:D|Q|R|J|S|T|ADR)-\d{3,}\b/,
   /\.sdlc\b|ai-sdlc|docs\/slices|system-spec|system spec|deployment-trials|docs\/architecture/i,
-  /\b(?:operations|security|data-model|environments|components|adr|overview|skeleton|discovery|journeys|prd|domain-model|decisions|questions|slices|reflections|state)\.(?:md|json)\b/,
-  /(?<![.\w])slices?\b|code review|design review|re-review|review round/i,
+  /\b(?:operations|security|data-model|environments|components|adr|overview|skeleton|discovery|journeys|prd|domain-model|decisions|questions|slices|reflections|state|spec|review|deploy|pipeline|CONTRACT)\.(?:md|json)\b/,
+  // A word, not part of a name: `.slice(` and the `slice-ansi` package are code, not the process.
+  /(?<![.\w/-])slices?\b(?!-)|code review|design review|re-review|review round|\bgate \d|amendment gate|\bcritique/i,
   /product owner|\bbench\/|benchmark/i,
 ];
 /** The project test Deployment's identifiers, which no Operator's copy should carry. */
@@ -64,7 +68,8 @@ export function exportTree(from: string, to: string, include: string[] = INCLUDE
   refuseUnlessCopy(to);
   const staging = mkdtempSync(join(tmpdir(), "sql-mcp-export-"));
   try {
-    const tracked = execFileSync("git", ["ls-files"], { cwd: from, encoding: "utf8" }).split("\n").filter(Boolean);
+    // NUL-delimited, so git neither quotes nor escapes a path.
+    const tracked = execFileSync("git", ["ls-files", "-z"], { cwd: from, encoding: "utf8" }).split("\0").filter(Boolean);
     for (const f of tracked.filter((t) => listed(t, include))) {
       mkdirSync(dirname(join(staging, f)), { recursive: true });
       copyFileSync(join(from, f), join(staging, f));
@@ -74,12 +79,31 @@ export function exportTree(from: string, to: string, include: string[] = INCLUDE
     if (problems.length > 0) {
       throw new Error(`The clean copy was refused, and ${to} was left as it was. It still refers to the development process or the project:\n${problems.join("\n")}`);
     }
-    mkdirSync(to, { recursive: true });
-    for (const name of readdirSync(to)) if (!KEEP.test(name)) rmSync(join(to, name), { recursive: true, force: true });
-    cpSync(staging, to, { recursive: true });
+    swapInto(staging, to);
   } finally {
     rmSync(staging, { recursive: true, force: true });
   }
+}
+
+/**
+ * Replaces `to`'s exported files with `staging`'s. The old ones are moved aside first, beside `to`,
+ * and moved back if writing the new ones fails partway (a file locked on Windows, say), so `to`
+ * is never left half-replaced.
+ */
+function swapInto(staging: string, to: string) {
+  mkdirSync(to, { recursive: true });
+  const aside = mkdtempSync(`${to}.previous-`);
+  const moved = readdirSync(to).filter((name) => !keep(name));
+  try {
+    for (const name of moved) renameSync(join(to, name), join(aside, name));
+    cpSync(staging, to, { recursive: true });
+  } catch (e) {
+    for (const name of readdirSync(staging)) rmSync(join(to, name), { recursive: true, force: true });
+    for (const name of readdirSync(aside)) renameSync(join(aside, name), join(to, name));
+    rmSync(aside, { recursive: true, force: true });
+    throw new Error(`The clean copy could not be written, so ${to} was put back as it was: ${e instanceof Error ? e.message : String(e)}`);
+  }
+  rmSync(aside, { recursive: true, force: true });
 }
 
 /** Whether a tracked path is one the copy takes. */
@@ -106,7 +130,9 @@ function rewrite(to: string) {
   writeFileSync(join(to, ".gitignore"), "node_modules/\n.wrangler/\n.dev.vars\ndist/\n/wrangler.*.jsonc\n");
   writeFileSync(
     join(to, ".gitattributes"),
-    "# Text files stay LF on every platform.\n" + ["*.ts", "*.mjs", "*.json", "*.jsonc", "*.md", "*.sql", "*.yml", "*.example"].map((p) => `${p} text eol=lf`).join("\n") + "\n",
+    "# Text files stay LF on every platform.\n" +
+      ["*.ts", "*.mjs", "*.json", "*.jsonc", "*.md", "*.sql", "*.yml", "*.example", "LICENSE", ".gitignore", ".gitattributes"].map((p) => `${p} text eol=lf`).join("\n") +
+      "\n",
   );
 }
 
@@ -116,7 +142,7 @@ export function listTree(root: string): string[] {
   const walk = (dir: string) => {
     for (const name of readdirSync(dir)) {
       const full = join(dir, name);
-      if (dir === root && KEEP.test(name)) continue;
+      if (dir === root && keep(name)) continue;
       if (statSync(full).isDirectory()) walk(full);
       else out.push(relative(root, full).split(sep).join("/"));
     }
@@ -148,7 +174,7 @@ export function checkTree(root: string): string[] {
  */
 function refuseUnlessCopy(to: string) {
   if (!existsSync(to)) return;
-  const there = readdirSync(to).filter((n) => !KEEP.test(n));
+  const there = readdirSync(to).filter((n) => !keep(n));
   if (there.length === 0) return;
   const isCopy =
     existsSync(join(to, "src", "worker.ts")) &&

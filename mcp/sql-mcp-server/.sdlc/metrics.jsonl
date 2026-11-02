@@ -95,3 +95,4 @@
 {"iteration": 1, "phase": "review", "slice": "S-005", "gate": "pass", "duration_s": null, "rework_count": 1, "defects_found": 0, "output_bytes": 20382}
 {"iteration": 1, "phase": "deploy", "slice": "S-005", "gate": "pass", "duration_s": 341, "rework_count": 0, "defects_found": 0, "output_bytes": 3931}
 {"iteration": 1, "phase": "review", "slice": "S-005", "gate": "fail", "duration_s": null, "rework_count": 2, "defects_found": 12, "output_bytes": 25516}
+{"iteration": 1, "phase": "review", "slice": "S-005", "gate": "hold", "duration_s": null, "rework_count": 2, "defects_found": 3, "output_bytes": 28228}

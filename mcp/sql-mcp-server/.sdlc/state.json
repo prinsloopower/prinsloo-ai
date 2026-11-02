@@ -315,9 +315,9 @@
           "at": "2026-11-01T20:27:06+00:00"
         },
         "review": {
-          "result": "fail",
+          "result": "hold",
           "by": "model",
-          "at": "2026-11-02T03:48:53+00:00"
+          "at": "2026-11-02T03:55:16+00:00"
         },
         "deploy": {
           "result": "pass",
@@ -418,7 +418,7 @@
       "size_at_creation": "product"
     }
   ],
-  "blocked_on": null,
+  "blocked_on": "review: review 5 (T-009): 0 blockers, 3 gaps, 12 nits; to the product owner",
   "open_questions": [],
   "phase": null
 }

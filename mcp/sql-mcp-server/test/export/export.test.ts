@@ -57,14 +57,29 @@ describe("the clean copy's export", () => {
     for (const [file, text] of [
       ["src/planted.ts", "// fine\n// see D-077 and the system spec's operations.md\n"],
       ["scripts/planted.sh", "echo fine\n# a later slice adds this\n"],
-      ["docs/planted.txt", "fine\nfound in the second code review\n"],
+      ["docs/planted.notes.txt", "fine\nfound in the second code review\n"],
+      ["test/planted.ts", "// fine\n// Gate 2: aggregates\n"],
     ] as const) {
       writeFileSync(join(out, file), text);
       try {
-        expect(checkTree(out), file).toEqual([expect.stringMatching(new RegExp(`^${file.replace(".", "\\.")}:2: `))]);
+        expect(checkTree(out), file).toEqual([expect.stringMatching(new RegExp(`^${file.replaceAll(".", "\\.")}:2: `))]);
       } finally {
         rmSync(join(out, file));
       }
+    }
+    // Code that only looks like a process word passes: a `.slice(` call, a package named slice-ansi.
+    writeFileSync(join(out, "src", "planted.ts"), 'const a = b.slice(0, 2);\n"node_modules/slice-ansi": {}\n');
+    try {
+      expect(checkTree(out)).toEqual([]);
+    } finally {
+      rmSync(join(out, "src", "planted.ts"));
+    }
+    // A binary file, marked by a NUL byte, holds no prose and is not read.
+    writeFileSync(join(out, "docs", "planted.bin"), Buffer.concat([Buffer.from([0, 1, 2]), Buffer.from("\nD-077\n")]));
+    try {
+      expect(checkTree(out)).toEqual([]);
+    } finally {
+      rmSync(join(out, "docs", "planted.bin"));
     }
   });
 
@@ -84,15 +99,40 @@ describe("the clean copy's export", () => {
   });
 
   it("export_replaces_only_an_earlier_copy", () => {
-    // A folder that is not an earlier copy is refused and left alone.
-    const other = join(parent, "other");
-    mkdirSync(join(other, "release"), { recursive: true });
-    writeFileSync(join(other, "LICENSE"), "Copyright (c) 2026 Prinsloo AI");
-    expect(() => exportTree(process.cwd(), other)).toThrow(/is not an earlier clean copy/);
-    expect(readdirSync(other).sort()).toEqual(["LICENSE", "release"]);
+    // Each condition refuses on its own, and the refused folder is left alone. A copy needs the
+    // Server and its kit; even with both, this folder's own process, a clone's .git, or the
+    // export's release/ refuse it, so an export can never empty the source or a clone.
+    const fixture = (name: string, files: string[]) => {
+      const dir = join(parent, name);
+      for (const f of files) {
+        mkdirSync(join(dir, f, ".."), { recursive: true });
+        writeFileSync(join(dir, f), "x");
+      }
+      return dir;
+    };
+    const server = ["src/worker.ts", "deploy/cloudflare/guide.md"];
+    for (const [name, files] of [
+      ["no-server", ["LICENSE", "README.md"]],
+      ["has-sdlc", [...server, ".sdlc/state.json"]],
+      ["has-git", [...server, ".git/HEAD"]],
+      ["has-release", [...server, "release/export.ts"]],
+      ["has-bench", [...server, "bench/run.ts"]],
+    ] as const) {
+      const dir = fixture(name, [...files]);
+      const before = listTree(dir);
+      expect(() => exportTree(process.cwd(), dir), name).toThrow(/is not an earlier clean copy/);
+      expect(listTree(dir), name).toEqual(before);
+    }
 
     // A re-export keeps installed packages and a tried copy's local secrets, state and Operator file.
-    const kept = { "node_modules/x.js": "x", ".dev.vars": "SERVER_SECRET=s", ".wrangler/state": "w", "wrangler.trial.jsonc": "{}" };
+    const kept = {
+      "node_modules/x.js": "x",
+      ".dev.vars": "SERVER_SECRET=s",
+      ".dev.vars.staging": "SERVER_SECRET=t",
+      ".env": "A=1",
+      ".wrangler/state": "w",
+      "wrangler.trial.jsonc": "{}",
+    };
     for (const [f, text] of Object.entries(kept)) {
       mkdirSync(join(out, f, ".."), { recursive: true });
       writeFileSync(join(out, f), text);

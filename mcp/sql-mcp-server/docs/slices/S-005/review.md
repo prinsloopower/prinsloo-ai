@@ -452,3 +452,77 @@ Axis: standards and naming
 Verdict: fail (1 blocker, 11 gaps, 13 nits)
 
 Reworked in the next commit (D-112).
+
+## Review 5 (2026-11-01): T-009, last check of review 4's rework
+
+Reviewed: commit db24ccd (2fc3da6..db24ccd) and the clean copy's commit 4784109, on two axes in separate fresh contexts.
+Tests: `npx vitest run test/export test/deploy` → 5 files, 48 passed; in `../sql-mcp`, typecheck clean and 37 files, 239 passed. The clean copy matches the source file for file, apart from the six files the export writes.
+
+Every review-4 finding is resolved, except:
+- the benchmark's dependency, accepted in D-112;
+- the Azure example in settings.md;
+- the long doc comment, now 152 columns.
+
+Both reviewers raised the refusal test's fixture. It is listed once.
+
+## gap — the refusal test cannot tell which condition refused the folder, and never tries .git or .sdlc
+Where: test/export/export.test.ts:88
+Axis: spec and scope; standards and naming
+The fixture lacks `src/worker.ts` and also holds `release/`, so it fails both conditions. The half that stops an export into this folder, or into a clone holding `.git`, is untested.
+
+## gap — KEEP duplicates the kit's Operator-file pattern
+Where: release/export.ts:36
+Axis: standards and naming
+
+## gap — the word check misses gate, critique and amendment, and the copy still carries them
+Where: test/query/probe.int.test.ts:73
+Axis: standards and naming
+
+## nit — T-008 still says the trial clones the public repository T-009 publishes
+Where: docs/slices/S-005/spec.md:210
+Axis: spec and scope
+
+## nit — the slice pattern would refuse dependency names such as slice-ansi
+Where: release/export.ts:43
+Axis: standards and naming
+
+## nit — the NUL-byte binary rule is never exercised
+Where: release/export.ts:134
+Axis: standards and naming
+
+## nit — the swap can leave the target half-replaced if a file is locked
+Where: release/export.ts:78
+Axis: standards and naming
+
+## nit — git ls-files output is not NUL-delimited
+Where: release/export.ts:67
+Axis: standards and naming
+
+## nit — more-edge-cases.test.ts names a round, not what it tests
+Where: test/signin/faults.test.ts:12
+Axis: standards and naming
+The file has since been renamed faults.test.ts; the line cited is in it.
+
+## nit — the planted-file regex escapes only the first dot
+Where: test/export/export.test.ts:64
+Axis: standards and naming
+
+## nit — settings.md's DATABASE_URL example still names an Azure host
+Where: docs/settings.md:15
+Axis: standards and naming
+
+## nit — a doc comment line runs to 152 columns
+Where: src/engine/postgres-structure.ts:7
+Axis: standards and naming
+
+## nit — .gitattributes does not cover LICENSE, .gitignore or .gitattributes
+Where: release/export.ts:85
+Axis: standards and naming
+
+## nit — .dev.vars.<env> and .env are not kept on a re-export
+Where: release/export.ts:36
+Axis: standards and naming
+
+Verdict: hold (0 blockers, 3 gaps, 12 nits)
+
+Reworked in the next commit (D-112, review 5 additions). The product owner chose "Fix all, then one more check".
