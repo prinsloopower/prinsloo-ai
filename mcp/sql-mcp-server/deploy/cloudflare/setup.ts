@@ -1,5 +1,5 @@
 /**
- * The Deployment kit's setup command (S-005): `npm run setup [-- deploy|signin|password|remove]`.
+ * The Deployment kit's setup command: `npm run setup [-- deploy|signin|password|remove]`.
  * deploy/cloudflare/guide.md explains each form and every call it makes.
  */
 import { spawn } from "node:child_process";
@@ -89,7 +89,7 @@ try {
     sleep: (ms) => new Promise((r) => setTimeout(r, ms)),
   });
 } catch (e) {
-  // One line, as bench/run.ts does. A stop already says what to do; anything else is named, not traced.
+  // One line. A stop already says what to do; anything else is named, not traced.
   console.error(e instanceof SetupStopped ? `\nStopped: ${e.message}` : `\nSetup could not run: ${message(e)}`);
   process.exitCode = 1;
 }

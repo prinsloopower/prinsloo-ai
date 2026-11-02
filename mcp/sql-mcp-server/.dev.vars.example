@@ -1,10 +1,10 @@
 # Local settings for `npm run dev` (wrangler dev). Copy to .dev.vars, which is gitignored,
-# and fill the blanks. Every variable is described in docs/system-spec/environments.md.
+# and fill the blanks. Every variable is described in docs/settings.md.
 
 # Deployment secret every key derives from: 32 random bytes, base64url.
 #   openssl rand -base64 32 | tr '+/' '-_' | tr -d '='
 SERVER_SECRET=
-# Set only while rotating SERVER_SECRET (docs/system-spec/security.md).
+# Set only while rotating SERVER_SECRET (docs/settings.md).
 SERVER_SECRET_PREVIOUS=
 
 # Identity provider. Sign-in stays off, and every MCP call gets 401, until all three are set.
@@ -22,7 +22,7 @@ PUBLIC_URL=
 # whose localConnectionString points wrangler dev at the Docker PostgreSQL), and DATABASE_URL and
 # PORT (used by the Azure container only).
 
-# Server settings later slices read (environments.md).
+# Server settings later slices read.
 PERMISSION_TIER=read-only
 ROW_LIMIT=500
 REDACTION=on

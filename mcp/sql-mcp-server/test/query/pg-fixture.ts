@@ -5,7 +5,7 @@ import { visibleObjects } from "../../src/visibility.js";
 import { answerQuery } from "../../src/tools/query.js";
 import { nodeQueryEngine } from "./node-parser.js";
 
-// Started by `npm run db:up` (test/docker-compose.yml, ADR-010). The superuser sets up roles and
+// Started by `npm run db:up` (test/docker-compose.yml). The superuser sets up roles and
 // grants; queries then run as the Database account, the way a Deployment would.
 export const ADMIN = process.env.TEST_POSTGRES_URL ?? "postgres://postgres:postgres@localhost:55432/sqlmcp";
 

@@ -12,21 +12,21 @@ import { answerListing, LIST_TABLES, LIST_TABLES_DESCRIPTION, listing, validateL
 import { answerQuery, QUERY, queryDescription, validateQuery } from "./tools/query.js";
 import { bypassesGrants, visibleObjects } from "./visibility.js";
 
-export const SERVER_INFO = { name: "sql-mcp-server", version: "0.0.1" };
+export const SERVER_INFO = { name: "sql-mcp-server", version: "0.1.0" };
 
 const UNSAFE_ACCOUNT = "Deployment misconfigured: Database account bypasses grants";
 
-/** What the Tools need for one request (components.md, MCP endpoint). */
+/** What the Tools need for one request (MCP endpoint). */
 export interface ToolContext {
   database: Database;
   boundary?: Boundary;
   /** The Deployment's origin, as Audit records name it. */
   deployment: string;
-  /** The setting that names the Database account: HYPERDRIVE on Workers, DATABASE_URL on Azure (D-077). */
+  /** The setting that names the Database account: HYPERDRIVE on Workers, DATABASE_URL on Azure. */
   connectionSetting: string;
   classify: (error: unknown) => ReasonClass;
   now: () => number;
-  /** The Engine's half of the Query check and of Redaction; without it the query tool is not offered (D-086). */
+  /** The Engine's half of the Query check and of Redaction; without it the query tool is not offered. */
   queryEngine?: () => Promise<QueryEngine>;
   rowLimit: number;
   redaction: boolean;
@@ -44,11 +44,11 @@ interface ToolSpec {
    * the handler on the SDK's arguments.
    */
   prepare(args: Record<string, unknown>): { ok: false; sentence: string } | { ok: true; run(catalog: Catalog, id: string): Promise<ToolAnswer> };
-  /** The inputs the Audit record keeps, other than `request_text` (data-model.md). */
+  /** The inputs the Audit record keeps, other than `request_text`. */
   inputs(args: Record<string, unknown>): Record<string, unknown>;
   /**
-   * The SQL the Audit record keeps for this call, redacted when Redaction is on (R-011). Redaction
-   * happens here, not in the Audit logger, because it needs the Engine's parser (D-088).
+   * The SQL the Audit record keeps for this call, redacted when Redaction is on. Redaction
+   * happens here, not in the Audit logger, because it needs the Engine's parser.
    */
   auditSql?(args: Record<string, unknown>, answer: ToolAnswer, faulted: boolean, id: string): Promise<{ statements?: StatementRecord[]; submittedSql?: string }>;
 }
@@ -65,7 +65,7 @@ function toolSpecs(tools: ToolContext): Map<string, ToolSpec> {
           const valid = validateListTables(args);
           return valid.ok ? { ok: true, run: async (catalog) => answerListing(listing(catalog, tools.boundary, valid.schema)) } : valid;
         },
-        // A schema name is an identifier, so Redaction keeps it (security.md); the Audit logger bounds it.
+        // A schema name is an identifier, so Redaction keeps it; the Audit logger bounds it.
         inputs: (args) => ("schema" in args ? { schema: args.schema } : {}),
       },
     ],
@@ -91,12 +91,12 @@ function toolSpecs(tools: ToolContext): Map<string, ToolSpec> {
             }),
         };
       },
-      // A query's SQL is recorded as its Statement or submitted SQL instead (D-082).
+      // A query's SQL is recorded as its Statement or submitted SQL instead.
       inputs: () => ({}),
-      // The Statement it was sent as, or else the SQL as submitted, however the call was refused (D-086).
+      // The Statement it was sent as, or else the SQL as submitted, however the call was refused.
       async auditSql(args, answer, faulted, id) {
         const submitted = answer.submittedSql ?? (typeof args.sql === "string" && args.sql ? args.sql : undefined);
-        // Whatever goes wrong while redacting, the Tool call still leaves its Audit record (R-010):
+        // Whatever goes wrong while redacting, the Tool call still leaves its Audit record:
         // the SQL is then kept by its length only.
         const redact = async (sql: string) => {
           // After a fault in the Server's own work, the query engine is not loaded again within the same Tool call.
@@ -104,7 +104,7 @@ function toolSpecs(tools: ToolContext): Map<string, ToolSpec> {
           try {
             return (await queryEngine()).redact(sql, tools.redaction);
           } catch {
-            // A fault in Redaction itself: the Operator is told, the SQL is kept by its length (D-089).
+            // A fault in Redaction itself: the Operator is told, the SQL is kept by its length.
             op("server_fault", { path: "/mcp", tool: QUERY, id, step: "redaction" });
             return tools.redaction ? unparsedSql(sql) : sql;
           }
@@ -136,13 +136,13 @@ async function readCatalog(database: Database): Promise<CatalogRead> {
 }
 
 /**
- * Answers one MCP request with the SDK's web-standard transport, statelessly (ADR-003):
+ * Answers one MCP request with the SDK's web-standard transport, statelessly:
  * a fresh server and transport per request, no session ID, JSON responses rather than SSE.
- * The signed-in Staff member reaches tool handlers as `extra.authInfo.extra.staff` (R-009).
+ * The signed-in Staff member reaches tool handlers as `extra.authInfo.extra.staff`.
  * Without a Database there are no Tools, and `tools/list` answers an empty list.
  */
 export async function handleMcp(request: Request, staff?: Staff, tools?: ToolContext, workerVersion?: string): Promise<Response> {
-  // The deployed Worker's version id names the release a benchmark report measured (S-004, D-093).
+  // The deployed Worker's version id names the release that is running.
   const server = new McpServer(workerVersion ? { ...SERVER_INFO, version: SERVER_INFO.version + "+" + workerVersion } : SERVER_INFO);
   const body: unknown = await request
     .clone()
@@ -162,7 +162,7 @@ export async function handleMcp(request: Request, staff?: Staff, tools?: ToolCon
 
     // The account check needs the catalog, and an unsafe account must answer with an HTTP 503,
     // which a tool handler cannot set. So a Tool call with valid inputs reads the catalog here,
-    // once, and the handler uses that read (D-077, D-078).
+    // once, and the handler uses that read.
     let read: CatalogRead | undefined;
     let readStarted: number | undefined;
     const call = toolCallOf(body, specs);
@@ -200,7 +200,7 @@ export async function handleMcp(request: Request, staff?: Staff, tools?: ToolCon
               answer = await prepared.run(r.catalog, id);
             } catch {
               // A fault in the Server's own work, such as the parser failing to load, still ends the
-              // Tool call with an Audit record. The line names no detail, which can carry paths (D-088).
+              // Tool call with an Audit record. The line names no detail, which can carry paths.
               op("server_fault", { path: "/mcp", tool: name, id });
               faulted = true;
               answer = answerDatabaseError("other", id);

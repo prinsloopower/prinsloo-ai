@@ -17,7 +17,7 @@ async function auditOf(env: Record<string, string>, args: Record<string, unknown
   return { audit: auditLines(lines), raw: lines.filter((l) => l.includes('"type":"audit"')) };
 }
 
-describe("S-003 Audit records for Agent-written queries", () => {
+describe("Audit records for Agent-written queries", () => {
   it("query_audit_records_statement_rows_and_timing", async () => {
     const db = queryDatabase();
     db.queryOutcome = { kind: "ok", run: { columns: [{ name: "id", type: "integer" }], rows: [[1], [2]], cutShort: false, ms: 7 } };

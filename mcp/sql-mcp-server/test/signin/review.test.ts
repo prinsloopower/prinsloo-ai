@@ -22,7 +22,7 @@ import {
   type Harness,
 } from "./helpers.js";
 
-// Tests added after the S-001 code review (docs/slices/S-001/review.md).
+// Sign-in edge cases.
 
 function cimdDoc(over: Record<string, unknown> = {}) {
   return { client_id: CIMD, client_name: "Example AI tool", redirect_uris: [CLIENT_REDIRECT], token_endpoint_auth_method: "none", ...over };
@@ -38,7 +38,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe("S-001 code review fixes", () => {
+describe("Sign-in edge cases", () => {
   it("cimd_rejects_localhost_with_trailing_dot", async () => {
     const h = await harness();
     const { challenge } = await pkce();

@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { gzipSync } from "node:zlib";
 import { describe, expect, it } from "vitest";
 
-/** The Workers paid plan's limit on a gzipped Worker (operations.md, ADR-005). */
+/** The Workers paid plan's limit on a gzipped Worker. */
 const LIMIT = 10 * 1024 * 1024;
 
 function files(dir: string): string[] {
@@ -15,7 +15,7 @@ function files(dir: string): string[] {
   });
 }
 
-describe("S-003 Worker bundle", () => {
+describe("Worker bundle", () => {
   it("worker_bundle_under_10_mib_gzipped", () => {
     const out = mkdtempSync(join(tmpdir(), "sqlmcp-bundle-"));
     try {

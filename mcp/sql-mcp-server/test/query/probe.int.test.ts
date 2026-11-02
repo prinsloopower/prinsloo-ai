@@ -7,10 +7,10 @@ import { nodeQueryEngine } from "./node-parser.js";
 import { ADMIN, admin } from "./pg-fixture.js";
 
 /**
- * T-014: the adversarial probe suite. Two Databases differ only in whether the hidden table
+ * The adversarial probe suite. Two Databases differ only in whether the hidden table
  * `ps.staff` and the ungranted column `ps.customers.email` exist. Every probe must give the Agent
- * the same answer in both, and no user-defined function or operator may run (D-083 and D-085's
- * policy functions and casts are not exercised here). A probe that later breaks the Query check is
+ * the same answer in both, and no user-defined function or operator may run (policy functions and
+ * casts on hidden types are not exercised here). A probe that later breaks the Query check is
  * added here before it is fixed.
  */
 const READER = "ps_reader";
@@ -61,7 +61,7 @@ const fixture = (hidden: boolean) => `
   GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA ps TO ${READER};
 `;
 
-/** Every probe named in the S-003 spec and its Critique findings, written over the `ps` fixture. */
+/** Every probe the Query check was designed against, written over the `ps` fixture. */
 const PROBES = [
   // Hidden and missing objects, named directly.
   "SELECT x.id FROM ps.staff x",
@@ -113,7 +113,7 @@ const PROBES = [
   "SELECT ARRAY[t.cr, '(ps.staff)'] FROM ps.items t",
   "SELECT coalesce(t.cr, '(ps.staff)') FROM ps.items t",
   // Star expansion, catalogs, and queries that run. `*` over `ps.customers` is left out: whether it is
-  // accepted follows `all_columns`, which list_tables already shows and which differs between the two (D-086).
+  // accepted follows `all_columns`, which list_tables already shows and which differs between the two.
   "SELECT * FROM ps.orders",
   "SELECT t.* FROM ps.orders t",
   "SELECT t.* FROM ps.items t",
@@ -160,7 +160,7 @@ beforeAll(async () => {
   }
 }, 60_000);
 
-describe("S-003 adversarial probe suite", () => {
+describe("adversarial probe suite", () => {
   it("hidden_object_probe_suite_answers_identically", async () => {
     for (const sql of PROBES) {
       expect(await answer(WITH_HIDDEN, sql), sql).toEqual(await answer(WITHOUT, sql));

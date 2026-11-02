@@ -41,7 +41,7 @@ function idpAnswersRefresh(h: Harness, answer: (body: URLSearchParams) => Promis
   h.idp.routes.set(`${h.idp.issuer}/token`, (req, body) => (body.get("grant_type") === "refresh_token" ? answer(body) : initial(req, body)));
 }
 
-describe("S-001 T-007 /token", () => {
+describe("/token", () => {
   it("token_requires_matching_verifier", async () => {
     const h = await harness();
     const c = await codeFor(h);

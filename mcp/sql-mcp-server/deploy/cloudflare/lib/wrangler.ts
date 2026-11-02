@@ -6,7 +6,7 @@ export type RunResult = { code: number; stdout: string; stderr: string };
 
 /**
  * Runs a Node script with an argument array: no shell, no `npx`, no `npm`. npm logs no command line,
- * and on Windows no `.cmd` shim or `cmd.exe` is involved (D-103). A secret goes on standard input,
+ * and on Windows no `.cmd` shim or `cmd.exe` is involved. A secret goes on standard input,
  * never in `args`.
  */
 export function nodeRunner(root: string, spawn: Spawn) {

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { harness, ORIGIN, RESOURCE } from "./helpers.js";
 
-describe("S-001 T-002 metadata", () => {
+describe("metadata", () => {
   it("as_metadata_lists_endpoints_and_s256", async () => {
     const h = await harness();
     const res = await h.app.request(`${ORIGIN}/.well-known/oauth-authorization-server`);

@@ -188,7 +188,7 @@ export const TRIAL = {
   host: "aws-0-us-east-2.pooler.supabase.com",
   port: "5432",
   database: "postgres",
-  projectRef: "dwsikgvekndbmowzdcnx",
+  projectRef: "abcdefghijklmnopqrst",
   role: "sqlmcp_trial",
   schemas: "sales",
   rowLimit: "500",

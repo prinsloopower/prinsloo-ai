@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { authorize, callback, harness, ISSUER, pkce, RESOURCE, token } from "./helpers.js";
 
-// Found in S-001 verification: native AI tools (ChatGPT desktop, Codex) register a loopback
-// redirect URI without a port and listen on a random one (RFC 8252 section 7.3; D-072).
+// Native AI tools (ChatGPT desktop, Codex) register a loopback
+// redirect URI without a port and listen on a random one (RFC 8252 section 7.3).
 
 const CODEX = "https://client.example.com/oauth/codex/client.json";
 
-describe("S-001 verification fix: loopback redirect ports", () => {
+describe("loopback redirect ports", () => {
   it("loopback_redirect_port_may_vary", async () => {
     const h = await harness();
     h.idp.routes.set(CODEX, () =>

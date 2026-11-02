@@ -6,7 +6,7 @@ import type { RunResult } from "./wrangler.js";
 
 export type { RunResult };
 
-/** The setup command's forms (S-005). */
+/** The setup command's forms. */
 export type Form = "setup" | "deploy" | "signin" | "password" | "remove";
 
 export type Prompt = { key: string; text: string; default?: string; hidden?: boolean; choices?: string[] };
@@ -89,7 +89,7 @@ async function setUpOrResume(deps: SetupDeps) {
     { key: "role", text: "Database account (a new role, dedicated to this Deployment)", default: existing?.database_account ?? "sqlmcp_reader" },
     (v) => {
       if (/^postgres(\.|$)/i.test(v)) {
-        throw new SetupStopped("Supabase's postgres role bypasses grants, so the Server refuses it (D-077). Choose a new role name, such as sqlmcp_reader, and rerun npm run setup.");
+        throw new SetupStopped("Supabase's postgres role bypasses grants, so the Server refuses it. Choose a new role name, such as sqlmcp_reader, and rerun npm run setup.");
       }
       return ROLE_NAME.test(v) ? undefined : "Use lowercase letters, digits and underscores, starting with a letter.";
     },
@@ -130,7 +130,7 @@ async function setUpOrResume(deps: SetupDeps) {
 
   // 3. The Database account's SQL, unless this Deployment's Hyperdrive config already reaches that role.
   // The same SQL creates the role, or resets the password of the role setup marked for this
-  // Deployment, so printing it again after any stop is safe (D-109).
+  // Deployment, so printing it again after any stop is safe.
   const ours = hyperdrive !== undefined && hyperdrive.id === config.hyperdrive_id;
   const roleChanged = existing !== undefined && existing.database_account !== role;
   // An earlier run here wrote its file before the SQL, then stopped before recording Hyperdrive's id.
@@ -155,7 +155,7 @@ async function setUpOrResume(deps: SetupDeps) {
     await showAccountSql(deps, role, roleMark(worker, accountId), fresh, "new");
   }
 
-  // 4. Hyperdrive, with caching disabled (D-079). The password goes only in the API request (D-103).
+  // 4. Hyperdrive, with caching disabled. The password goes only in the API request.
   const origin: HyperdriveOrigin = { scheme: "postgres", host, port: Number(port), database, user: `${role}.${projectRef}` };
   try {
     hyperdrive = hyperdrive
@@ -234,7 +234,7 @@ async function openDeployment(deps: SetupDeps): Promise<OpenedDeployment> {
   return { worker, config, accountId, api, subdomain: await requireSubdomain(api) };
 }
 
-/** `npm run setup -- deploy`: the current template and the Operator's file, merged, deployed and checked (D-106). */
+/** `npm run setup -- deploy`: the current template and the Operator's file, merged, deployed and checked. */
 async function deployAndCheck(deps: SetupDeps, d: OpenedDeployment, check: CheckScript) {
   const path = deployPath(d.worker);
   deps.files.write(path, JSON.stringify(mergeConfig(template(), d.config), null, 2));
@@ -299,7 +299,7 @@ async function remove(deps: SetupDeps, d: OpenedDeployment) {
   const typed = await deps.ask({ key: "confirmRemove", text: `This deletes the Worker ${d.worker} and its Hyperdrive config. Type the Worker's name to confirm` });
   if (typed !== d.worker) throw new SetupStopped("Nothing was removed.");
   // The typed name is the confirmation. --force skips Wrangler's own prompt, which no one would see,
-  // and also deletes the Worker if other Workers bind to it (D-110).
+  // and also deletes the Worker if other Workers bind to it.
   const del = await deps.wrangler(["delete", d.worker, "--force"], { accountId: d.accountId });
   if (del.code !== 0) throw new SetupStopped(`wrangler delete failed:\n${del.stderr || del.stdout}`);
   if (d.config.hyperdrive_id) {

@@ -1,6 +1,6 @@
 /**
- * Every PostgreSQL construct in security.md's supported-constructs table (with D-084's
- * additions), used as the Agent would write it over the fake `sales` catalog
+ * Every PostgreSQL construct in the supported-constructs table (docs/security-material/constructs.md),
+ * used as the Agent would write it over the fake `sales` catalog
  * (test/listing/fake-database.ts): `sales.orders (id, total)` and `sales.customers (id, name, region)`.
  */
 export const SUPPORTED: Record<string, string> = {

@@ -46,14 +46,14 @@ beforeEach(async () => {
   await admin(resetSql([ROLE, "s005_owner"], [SCHEMA]));
 });
 
-describe("S-005 the Database account SQL", () => {
+describe("the Database account SQL", () => {
   it("database_account_sql_creates_safe_role", async () => {
     const { sql, password } = await printed();
     const listing = await run(sql);
     expect(listing).toEqual([]);
     expect(await connects(password)).toBe(true);
     expect(await connects(`${password}x`)).toBe(false);
-    // The role passes the Server's own account check (D-077), and holds nothing beyond LOGIN.
+    // The role passes the Server's own account check, and holds nothing beyond LOGIN.
     expect(bypassesGrants(await new PostgresDatabase(asRole(password)).accountFlags())).toBe(false);
     const [r] = await admin<Record<string, boolean>>(
       `SELECT rolsuper, rolinherit, rolcreaterole, rolcreatedb, rolcanlogin, rolreplication, rolbypassrls,
@@ -76,7 +76,7 @@ describe("S-005 the Database account SQL", () => {
     const other = await printed("another-deployment");
     await expect(run(other.sql)).rejects.toThrow(/already exists and was not made by setup for this Deployment, so nothing was changed/);
     expect(await connects(again.password)).toBe(true);
-    // And for a Deployment of the same Worker name in another Cloudflare account (D-110).
+    // And for a Deployment of the same Worker name in another Cloudflare account.
     const elsewhere = accountSql(ROLE, roleMark(TRIAL.worker, "another-account"), scramVerifier("elsewhere", new Uint8Array(16)));
     await expect(run(elsewhere)).rejects.toThrow(/was not made by setup for this Deployment/);
     expect(await connects(again.password)).toBe(true);

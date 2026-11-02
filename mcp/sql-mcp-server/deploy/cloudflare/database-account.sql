@@ -1,14 +1,14 @@
--- The Database account for one Deployment (S-005). `npm run setup` fills in the role's name, the
+-- The Database account for one Deployment. `npm run setup` fills in the role's name, the
 -- Deployment it is for, and its password's SCRAM-SHA-256 verifier, and prints this for you to run
--- as postgres in the Supabase SQL editor. The password itself never reaches Supabase (D-106).
+-- as postgres in the Supabase SQL editor. The password itself never reaches Supabase.
 --
 -- The role gets LOGIN and nothing else: no BYPASSRLS, no role membership, no grant. The Server
--- refuses an account that bypasses grants (D-077). What the Agent can see is what the Database
--- administrator grants this role afterwards (D-074).
+-- refuses an account that bypasses grants. What the Agent can see is what the Database
+-- administrator grants this role afterwards.
 --
 -- Setup marks the role with a comment naming its Deployment. Run again, for a rerun or a new
 -- password, this resets the password of that role only. It never touches a role made any other
--- way, which another Deployment may be using (D-109).
+-- way, which another Deployment may be using.
 
 DO $setup$
 BEGIN
@@ -26,7 +26,7 @@ $setup$;
 -- Every table and column the role can read outside the system schemas, as the Server's Allow-list
 -- reads it, with no Boundary. A test keeps this equal to the Server's own read (src/engine/postgres.ts).
 -- For a new role, any row here comes from a grant to PUBLIC; setup's prompt says what to do about it
--- (D-105). For a role already in use, the rows are what the Database administrator granted it.
+--. For a role already in use, the rows are what the Database administrator granted it.
 SELECT n.nspname AS schema_name, c.relname AS table_name, a.attname AS column_name
 FROM pg_class c
 JOIN pg_namespace n ON n.oid = c.relnamespace

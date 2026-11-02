@@ -4,7 +4,7 @@ import { flip, OTHER_SECRET, SECRET } from "./helpers.js";
 
 const KINDS: TokenKind[] = ["signin", "refresh", "authreq", "code", "client"];
 
-describe("S-001 T-003 tokens", () => {
+describe("tokens", () => {
   it("token_roundtrip_each_kind", async () => {
     const t = await Tokens.create(SECRET);
     for (const kind of KINDS) {

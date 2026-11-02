@@ -5,7 +5,7 @@ async function expectAll(queries: string[], expected: string, opts: Parameters<t
   for (const sql of queries) expect(await verdict(sql, opts), sql).toBe(expected);
 }
 
-/** The column-existence probes from the S-003 critiques; `t` is `sales.customers`, whose `email` is not granted. */
+/** Column-existence probes; `t` is `sales.customers`, whose `email` is not granted. */
 const PROBES = [
   "SELECT email FROM sales.customers t, (SELECT 1 AS email) s",
   "SELECT s.email FROM sales.customers t NATURAL JOIN (SELECT 'z'::text AS email) s",
@@ -20,7 +20,7 @@ const PROBES = [
   "SELECT t.email FROM sales.customers t JOIN (SELECT 1 AS id) s USING (id)",
 ];
 
-describe("S-003 Query check: names", () => {
+describe("Query check: names", () => {
   it("hidden_and_missing_tables_refused_alike", async () => {
     await expectAll(["SELECT p.id FROM hr.payroll p", "SELECT n.id FROM sales.nosuch n", "SELECT n.id FROM nosuch.nosuch n"], "hidden");
     expect(await check("SELECT p.id FROM hr.payroll p")).toEqual(await check("SELECT n.id FROM hr.nosuch n"));

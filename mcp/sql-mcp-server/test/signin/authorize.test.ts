@@ -20,7 +20,7 @@ async function expectClientError(h: Harness, r: Awaited<ReturnType<typeof author
   expect(r.location?.searchParams.get("state")).toBe("client-state-xyz");
 }
 
-describe("S-001 T-005 /authorize", () => {
+describe("/authorize", () => {
   it("authorize_unsafe_errors_show_page_not_redirect", async () => {
     const h = await harness();
     const clientId = await registeredClient(h);

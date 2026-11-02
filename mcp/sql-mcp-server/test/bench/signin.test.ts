@@ -6,6 +6,7 @@ import { base64url } from "jose";
 import { describe, expect, it } from "vitest";
 import { exitCodeFor, InvocationStopped } from "../../bench/src/harness.js";
 import { connectServer, signedInServer } from "../../bench/src/server.js";
+import { SERVER_INFO } from "../../src/mcp.js";
 import { LIST_TABLES } from "../../src/tools/list-tables.js";
 import { type Loopback, signIn } from "../../bench/src/signin.js";
 import { queryDatabase } from "../query/catalog.js";
@@ -64,7 +65,7 @@ describe("S-004 the harness's Sign-in", () => {
     expect(base64url.encode(new Uint8Array(digest))).toBe(auth.get("code_challenge"));
 
     const server = await connectServer(ORIGIN, session.accessToken, w.deps.fetch);
-    expect(server).toMatchObject({ name: "sql-mcp-server", version: "0.0.1" });
+    expect(server).toMatchObject(SERVER_INFO);
     expect(server.tools.map((t) => t.name)).toEqual(["list_tables", "query"]);
     const listed = await server.call("list_tables", { request_text: "Which tables can I query?" });
     expect(listed.isError ?? false).toBe(false);

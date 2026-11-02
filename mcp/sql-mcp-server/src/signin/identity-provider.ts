@@ -3,7 +3,7 @@ import type { IdentityProviderSettings } from "../config.js";
 import { op } from "../oplog.js";
 import { SKEW_S, within, type Fetch } from "./util.js";
 
-/** Every Identity provider call, body included, gives up after this long (security.md). */
+/** Every Identity provider call, body included, gives up after this long. */
 const CALL_MS = 5000;
 /** Discovery and keys are kept this long per isolate or process. */
 const CACHE_MS = 10 * 60 * 1000;
@@ -53,7 +53,7 @@ interface Answer {
   json: Record<string, unknown> | null;
 }
 
-/** The organisation's OpenID Connect provider, as the Sign-in broker uses it (ADR-004). */
+/** The organisation's OpenID Connect provider, as the Sign-in broker uses it. */
 export class IdentityProvider {
   private cachedDiscovery?: { at: number; value: Discovery };
   private keys?: { at: number; set: JSONWebKeySet };

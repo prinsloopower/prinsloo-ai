@@ -10,7 +10,7 @@ import { TRIAL, operatorFile, world } from "./world.js";
 
 const SHARED = ["main", "compatibility_date", "compatibility_flags", "define", "observability", "version_metadata"];
 
-describe("S-005 the shared config", () => {
+describe("the shared config", () => {
   it("setup_deploy_merges_current_template", async () => {
     const w = world(TRIAL);
     await setup("setup", w.deps);

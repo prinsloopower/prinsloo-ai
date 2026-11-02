@@ -1,4 +1,4 @@
-// Sign-in smoke test for a deployed Deployment (S-001): node scripts/smoke-signin.mjs https://<host>
+// Sign-in smoke test for a deployed Deployment: node scripts/smoke-signin.mjs https://<host>
 // Drives Sign-in as far as a script can without a person: registration, /authorize, and the
 // Identity provider's own authorize page, which checks the client ID, tenant and redirect URI.
 // Exits non-zero if any check fails.

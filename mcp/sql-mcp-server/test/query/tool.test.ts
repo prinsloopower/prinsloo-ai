@@ -12,7 +12,7 @@ async function toolsOf(env: Record<string, string> = {}, db = queryDatabase()) {
   return ((await (await callMcp(h, token)).json()) as { result: { tools: { name: string; description: string }[] } }).result.tools;
 }
 
-describe("S-003 the query tool", () => {
+describe("the query tool", () => {
   it("tools_list_has_query_and_list_tables", async () => {
     for (const tier of ["read-only", "read-write", "read-write-delete", "full"]) {
       const tools = await toolsOf({ PERMISSION_TIER: tier });

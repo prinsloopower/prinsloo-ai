@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { check, verdict } from "./catalog.js";
 
-describe("S-003 Query check: types and operators", () => {
+describe("Query check: types and operators", () => {
   it("casts_to_user_defined_types_refused", async () => {
     for (const sql of [
       "SELECT 'shipped'::sales.kind_t",

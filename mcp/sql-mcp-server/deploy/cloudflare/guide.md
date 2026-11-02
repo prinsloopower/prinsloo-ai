@@ -4,7 +4,7 @@ This guide takes you from a fresh clone to a Deployment that Staff members use f
 
 Sections 1 to 4 are the part that should take under an hour: the Deployment is deployed, connects to your Database and answers on the internet, and refuses every Tool call until Sign-in is set up. Sections 5 to 7 set up Sign-in, make data visible and connect Staff members. Section 8 is for running the Deployment afterwards, and section 9 for when something fails.
 
-The Server settings are explained in [docs/system-spec/environments.md](../../docs/system-spec/environments.md). This guide says when and how to set them.
+The Server settings are explained in [docs/settings.md](../../docs/settings.md). This guide says when and how to set them.
 
 ## 1. Before you start
 
@@ -22,7 +22,7 @@ Then get the code:
 
 ```
 git clone https://github.com/prinsloopower/prinsloo-ai.git
-cd prinsloo-ai/mcp/sql-mcp-server
+cd prinsloo-ai/mcp/sql-mcp
 npm ci
 npx wrangler login
 ```
@@ -155,7 +155,7 @@ Send Staff members [staff.md](staff.md), with the address `https://<worker>.<sub
 **Rotating secrets:**
 - `IDP_CLIENT_SECRET`: add a new client secret in Entra ID, run `npm run setup -- signin` with it, then delete the old secret in Entra ID.
 - The Database account's password: run `npm run setup -- password`. It makes a new password, prints section 2's SQL with the new verifier for the SQL editor, and gives the password to Hyperdrive. A redeploy alone does not change the password Hyperdrive holds.
-- `SERVER_SECRET`: setup never shows it, so you cannot set it as `SERVER_SECRET_PREVIOUS` to keep Sign-ins working through a rotation. Rotating it therefore signs every Staff member out, as for a leaked secret (security.md). To set a new value without it ever showing, pipe a generated one straight in, then redeploy:
+- `SERVER_SECRET`: setup never shows it, so you cannot set it as `SERVER_SECRET_PREVIOUS` to keep Sign-ins working through a rotation. Rotating it therefore signs every Staff member out, as for a leaked secret. To set a new value without it ever showing, pipe a generated one straight in, then redeploy:
 
   ```
   node -e "process.stdout.write(require('crypto').randomBytes(32).toString('base64url'))" | npx wrangler secret put SERVER_SECRET --name <worker>

@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { unstable_dev, type Unstable_DevWorker } from "wrangler";
 import { ALL_CONSTRUCTS_SQL } from "./constructs.js";
 
-describe("S-003 PostgreSQL parser in workerd", () => {
+describe("PostgreSQL parser in workerd", () => {
   let worker: Unstable_DevWorker;
 
   beforeAll(async () => {

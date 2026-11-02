@@ -3,10 +3,10 @@ import type { RuntimeVariables } from "./config.js";
 import type { QueryEngine } from "./engine/database.js";
 import { PostgresDatabase } from "./engine/postgres.js";
 
-/** What the Cloudflare runtime hands the Worker (ADR-001, ADR-002). */
+/** What the Cloudflare runtime hands the Worker. */
 export interface WorkerEnv {
   HYPERDRIVE: Hyperdrive;
-  /** The deployed version's id, which `initialize` reports after the package version (S-004). */
+  /** The deployed version's id, which `initialize` reports after the package version. */
   VERSION_METADATA?: WorkerVersionMetadata;
 }
 

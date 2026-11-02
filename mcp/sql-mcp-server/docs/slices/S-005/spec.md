@@ -207,7 +207,11 @@ Verified by: database_account_sql_creates_safe_role, database_account_sql_resets
 Verified by: kit_guide_names_every_cloudflare_setting, kit_guide_explains_healthz_failures, kit_guide_gives_smoke_checks_as_curl, kit_guide_names_every_setup_call, kit_guide_covers_every_monitoring_signal, readme_states_pairings_ai_tools_and_retention, staff_guide_covers_claude_chatgpt_and_refusals
 
 ### T-008 — The deployment trial is run and recorded
-Verified by: manual — the product owner runs the trial described under Proven by, from a fresh clone, with the trial's own names. Its entry in `docs/deployment-trials.md` records the times and every stall, and the docs are fixed for each stall. The trial Deployment is then removed, and the project test Deployment's smoke checks pass. Done when R-013's hour is met. A trial over the hour raises a Q-### naming where the time went.
+Verified by: manual — the product owner runs the trial described under Proven by, from a fresh clone, with the trial's own names. Its entry in `docs/deployment-trials.md` records the times and every stall, and the docs are fixed for each stall. The trial Deployment is then removed, and the project test Deployment's smoke checks pass. Done when R-013's hour is met. A trial over the hour raises a Q-### naming where the time went. The trial clones the public repository T-009 publishes.
+
+### T-009 — The Server and its Deployment kit are published as a clean public repository (D-111)
+Added after deploy, on the product owner's decision. An export script builds the public tree from an explicit list of what to include. It refuses to finish if any file outside that list, any reference to this development process, or any identifier of the project test Deployment remains. The exported tree installs and passes its own tests on its own. The guide's clone command names the public repository. The settings reference the guide links to matches the system spec's variables, limits and monitoring tables.
+Verified by: export_includes_only_listed_files, export_leaves_no_process_reference, export_strips_project_identifiers, settings_reference_matches_system_spec, constructs_reference_matches_system_spec, and manual — the exported tree, in a folder of its own, passes `npm ci`, `npm run typecheck` and `npm test`, and the product owner confirms where it lives, its licence holder and its version.
 
 ## Critique findings — slice-spec, 2026-10-31
 

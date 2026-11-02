@@ -10,13 +10,13 @@ export interface VisibleTable {
   all_columns: boolean;
 }
 
-/** Schemas every account can read, which would list every Hidden object (D-077). The Query check refuses them too. */
+/** Schemas every account can read, which would list every Hidden object. The Query check refuses them too. */
 export const SYSTEM_SCHEMA = /^(pg_catalog|information_schema|pg_toast.*|pg_temp.*|sys|INFORMATION_SCHEMA)$/;
 
-/** One Visible table as the Query check sees it (S-003). */
+/** One Visible table as the Query check sees it. */
 export interface VisibleTableInfo {
   columns: Map<string, { readable: boolean }>;
-  /** Every column Visible and readable, so `*` may expand over it (`all_columns`, D-082). */
+  /** Every column Visible and readable, so `*` may expand over it (`all_columns`). */
   allReadable: boolean;
 }
 
@@ -27,7 +27,7 @@ export interface VisibleObjects {
 
 export const visibleKey = (schema: string, table: string) => `${schema}\u0000${table}`;
 
-/** The Visible objects the Allow-list and the Boundary give (ADR-006), with each column's readability (D-085). */
+/** The Visible objects the Allow-list and the Boundary give, with each column's readability. */
 export function visibleObjects(catalog: Catalog, boundary?: Boundary): VisibleObjects {
   const readable = new Map<string, boolean>();
   const allReadable = new Map<string, boolean>();
@@ -45,13 +45,13 @@ export function visibleObjects(catalog: Catalog, boundary?: Boundary): VisibleOb
   return { tables };
 }
 
-/** Whether the account holds a grant that reaches every table at once (D-077). */
+/** Whether the account holds a grant that reaches every table at once. */
 export function bypassesGrants(flags: AccountFlags): boolean {
   return flags.superuser || flags.bypassRls || flags.readAllData || flags.writeAllData || flags.createRole;
 }
 
 /**
- * The Visible objects the catalog allows (Visibility resolver, ADR-006): tables with at least one
+ * The Visible objects the catalog allows (Visibility resolver): tables with at least one
  * granted column, outside system schemas, narrowed by the Boundary, in code-point order of schema
  * then table so the order never depends on the Database's collation.
  */
@@ -67,7 +67,7 @@ export function visibleTables(catalog: Catalog, boundary?: Boundary): VisibleTab
     entry.total++;
     if (row.granted) entry.columns.push({ name: row.column, type: row.type });
   }
-  // Exclusions ignore letter case and inclusions do not, so a slip always hides more, never less (D-081).
+  // Exclusions ignore letter case and inclusions do not, so a slip always hides more, never less.
   const excluded = new Set((boundary?.exclude ?? []).map(([s, t]) => visibleKey(s, t).toLowerCase()));
   const tables: VisibleTable[] = [];
   for (const [key, e] of byTable) {

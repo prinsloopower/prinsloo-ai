@@ -2,10 +2,10 @@ import pg from "pg";
 import { visibleKey } from "../visibility.js";
 import type { AccountFlags, Catalog, Database, NamedTable, QueryOutcome, ReasonClass } from "./database.js";
 
-/** Connecting gives up after this long (security.md). */
+/** Connecting gives up after this long. */
 const CONNECT_MS = 5000;
 
-/** Health-check Server statement (R-004 permits it); opens and closes one connection. */
+/** Health-check Server statement; opens and closes one connection. */
 export async function pingPostgres(connectionString: string): Promise<void> {
   const client = new pg.Client({ connectionString });
   await client.connect();
@@ -17,7 +17,7 @@ export async function pingPostgres(connectionString: string): Promise<void> {
 }
 
 /**
- * Routes to every table at once (D-077, D-081), judged for the role the connection logged in as
+ * Routes to every table at once, judged for the role the connection logged in as
  * (session_user): it can always SET ROLE NONE back to itself, and it is a member of every role it
  * can switch to, so its memberships cover current_user's. Membership counts with or without
  * inherited rights, because a member can SET ROLE to the role.
@@ -31,15 +31,15 @@ const FLAGS_SQL = `
     EXISTS (SELECT 1 FROM pg_roles r WHERE r.rolcreaterole AND pg_has_role(session_user, r.oid, 'MEMBER')) AS create_role`;
 
 /**
- * The Allow-list's source (ADR-006): every column of every user table the account can reach, and
- * whether SELECT on it is granted, with the account flags in the same statement (D-077). A schema
+ * The Allow-list's source: every column of every user table the account can reach, and
+ * whether SELECT on it is granted, with the account flags in the same statement. A schema
  * without USAGE cannot be queried, and a table owned by any role the account is a member of passes
- * every privilege check or is a SET ROLE away, so neither is read (D-076, D-081). Partitions are read
+ * every privilege check or is a SET ROLE away, so neither is read. Partitions are read
  * through their parent. Only built-in types are named: any other type's name can carry a hidden
  * schema's or table's name (every table has a row type of its own name).
  *
  * A column is readable by Agent-written queries unless its type reaches a `reg*` type or a
- * composite, following domains, array elements, ranges and multiranges at any depth (D-082, D-085).
+ * composite, following domains, array elements, ranges and multiranges at any depth.
  */
 const CATALOG_SQL = `
   WITH RECURSIVE me AS (${FLAGS_SQL}),
@@ -118,7 +118,7 @@ const flagsOf = (r: FlagsRow): AccountFlags => ({
   createRole: r.create_role,
 });
 
-/** PostgreSQL behind the Engine adapter: one connection per call, closed when it ends (ADR-008). */
+/** PostgreSQL behind the Engine adapter: one connection per call, closed when it ends. */
 export class PostgresDatabase implements Database {
   constructor(
     private readonly connectionString: string,
@@ -158,7 +158,7 @@ export class PostgresDatabase implements Database {
   }
 
   /**
-   * The plan and execution layers of the Query check (ADR-005, S-003). On one connection, inside a
+   * The plan and execution layers of the Query check. On one connection, inside a
    * read-only transaction that is always rolled back, with `search_path` pinned to `pg_catalog`: plan
    * the query, account for every relation the plan reads, then fetch at most `rowLimit + 1` rows
    * through a cursor, so the query's text is never rewritten. Every statement goes over the extended
@@ -219,7 +219,7 @@ export class PostgresDatabase implements Database {
 
 /**
  * How a failure to plan an Agent-written query ends: a lost connection is a Database error,
- * classed as D-080 classes it; anything PostgreSQL itself raised is a plan Refusal (D-086).
+ * classed by its Database error class; anything PostgreSQL itself raised is a plan Refusal.
  */
 export function planFailure(error: unknown): QueryOutcome {
   if (classifyPostgresError(error) === "connection") return { kind: "error", error, sent: false, ms: 0 };
@@ -231,7 +231,7 @@ export function planFailure(error: unknown): QueryOutcome {
  * The relations a query's plan may read, given the tables it names: those tables, their partitions
  * and inheritance descendants, the tables their row-level security policies read, and the base
  * tables of views those policies read, followed to the end of the chain. PostgreSQL reads all of
- * them under the named table's grant (D-082, D-083).
+ * them under the named table's grant.
  */
 const ACCOUNTED_SQL = `
   WITH RECURSIVE named AS (
@@ -259,14 +259,14 @@ const ACCOUNTED_SQL = `
   )
   SELECT n.nspname, c.relname FROM reach r JOIN pg_class c ON c.oid = r.oid JOIN pg_namespace n ON n.oid = c.relnamespace`;
 
-/** Result column types, named as `list_tables` names them (D-081): built-in by `format_type`, any other `user-defined`. */
+/** Result column types, named as `list_tables` names them: built-in by `format_type`, any other `user-defined`. */
 const TYPE_NAMES_SQL = `
   SELECT CASE WHEN t.typnamespace = 'pg_catalog'::regnamespace THEN format_type(t.oid, NULLIF(u.mod, -1)) ELSE 'user-defined' END
   FROM unnest($1::oid[], $2::int4[]) WITH ORDINALITY AS u(type_oid, mod, ord)
   LEFT JOIN pg_type t ON t.oid = u.type_oid
   ORDER BY u.ord`;
 
-/** D-082's value forms: booleans, 16- and 32-bit integers and floats as JSON, everything else as PostgreSQL prints it. */
+/** The value forms results use: booleans, 16- and 32-bit integers and floats as JSON, everything else as PostgreSQL prints it. */
 const VALUE_TYPES: pg.CustomTypesConfig = {
   getTypeParser: ((oid: number) => {
     if (oid === 16) return (v: string) => v === "t";
@@ -296,7 +296,7 @@ const NETWORK_CODES = new Set(["ECONNREFUSED", "ECONNRESET", "ETIMEDOUT", "ENOTF
 /** A driver or Node error's code: a SQLSTATE, or a socket code such as `EPIPE`. */
 const errorCode = (error: unknown) => (typeof error === "object" && error !== null && "code" in error ? String((error as { code: unknown }).code) : "");
 
-/** A PostgreSQL failure's Database error class (D-080). The message is never used for anything else. */
+/** A PostgreSQL failure's Database error class. The message is never used for anything else. */
 export function classifyPostgresError(error: unknown): ReasonClass {
   const code = errorCode(error);
   if (code.startsWith("08") || NETWORK_CODES.has(code)) return "connection";

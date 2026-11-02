@@ -3,14 +3,13 @@ import { ParseError, type PgParser } from "./pg-parser.js";
 import { SYSTEM_SCHEMA, visibleKey as key, type VisibleObjects, type VisibleTableInfo } from "../visibility.js";
 
 /**
- * The Query check's structural layer on PostgreSQL (ADR-005, D-082; S-003 spec, Query check
- * steps 1 and 2): size, then a walk of the parse tree that accepts only the node types, functions,
+ * The Query check's structural layer on PostgreSQL, its first two steps: size, then a walk of the parse tree that accepts only the node types, functions,
  * operators and casts listed, so that every Refusal depends on the query's text and on what
  * `list_tables` shows, never on what is hidden. Passing it is not passing the Query check: the
  * plan layer runs after it, in `PostgresDatabase.query`.
  */
 
-/** Agent-written query text is accepted up to this many bytes (operations.md). */
+/** Agent-written query text is accepted up to this many bytes. */
 export const QUERY_MAX_BYTES = 64 * 1024;
 
 class Refused extends Error {
@@ -21,7 +20,7 @@ class Refused extends Error {
 
 type Node = Record<string, unknown>;
 
-/** security.md's PostgreSQL functions, under the names the parser gives them (`trim` → `btrim`, `AT TIME ZONE` → `timezone`). */
+/** The PostgreSQL functions an Agent-written query may call, under the names the parser gives them (`trim` → `btrim`, `AT TIME ZONE` → `timezone`). */
 const FUNCTIONS = new Set(
   (
     "count sum avg min max string_agg array_agg bool_and bool_or stddev stddev_pop stddev_samp variance var_pop var_samp " +

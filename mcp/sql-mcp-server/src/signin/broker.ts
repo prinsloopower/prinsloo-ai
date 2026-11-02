@@ -6,7 +6,7 @@ import { op } from "../oplog.js";
 import type { Tokens, TokenPayload } from "./tokens.js";
 import { cookieValue, randomToken, s256, SKEW_S, type Fetch } from "./util.js";
 
-/** Who a signed-in request comes from, as the Sign-in broker hands it to the MCP endpoint (R-009). */
+/** Who a signed-in request comes from, as the Sign-in broker hands it to the MCP endpoint. */
 export interface Staff {
   sub: string;
   name: string;
@@ -19,7 +19,7 @@ const CODE_S = 60;
 const SIGNIN_MAX_S = 24 * 60 * 60;
 const REFRESH_S = 30 * 24 * 60 * 60;
 
-/** The plain-text pages a Staff member's browser can land on during Sign-in (S-001 Screens). */
+/** The plain-text pages a Staff member's browser can land on during Sign-in. */
 export const PAGES = {
   notConfigured: "Sign-in is not configured on this Deployment",
   notValid: "This AI tool's sign-in request is not valid",
@@ -47,7 +47,7 @@ export interface BrokerDeps {
   now: () => number;
 }
 
-/** The Sign-in broker (components.md): the Server as its own OAuth 2.1 authorization server (ADR-004). */
+/** The Sign-in broker: the Server as its own OAuth 2.1 authorization server. */
 export class SignInBroker {
   constructor(private readonly deps: BrokerDeps) {}
 
@@ -208,7 +208,7 @@ export class SignInBroker {
       if (e instanceof IdentityProviderRefused) return page(PAGES.refused(errorCode(e.code)), 400);
       if (e instanceof IdentityProviderUnavailable) return page(PAGES.providerDown(provider.issuer), 502);
       if (e instanceof IdTokenInvalid) return page(PAGES.notVerified, 400);
-      // Anything else is a fault in the Server, not a forged sign-in: say so, and leave a trace (D-068).
+      // Anything else is a fault in the Server, not a forged sign-in: say so, and leave a trace.
       op("signin_error", { endpoint: "callback" });
       return page(PAGES.serverError, 500);
     }
@@ -224,7 +224,7 @@ export class SignInBroker {
       code_challenge: req.code_challenge,
       id_exp: claims.exp,
       ...(answer.refreshToken ? { idp_refresh: answer.refreshToken } : {}),
-      // The provider's own refresh lifetime, when it states one, caps the Refresh token (D-070).
+      // The provider's own refresh lifetime, when it states one, caps the Refresh token.
       ...(answer.refreshExpiresIn ? { idp_refresh_exp: this.nowS + answer.refreshExpiresIn } : {}),
       exp: this.nowS + CODE_S,
     });
@@ -283,7 +283,7 @@ export class SignInBroker {
         return this.issue(tokens, { sub: refresh.sub, client_id: clientId, resource: refresh.aud }, claims.name, claims.exp, { keep: presented });
       }
       // The provider rotated its refresh token: carry the new one, but never past the
-      // presented token's own expiry, so a chain of renewals ends 30 days after Sign-in (Q-025, D-071).
+      // presented token's own expiry, so a chain of renewals ends 30 days after Sign-in.
       const providerLimit = answer.refreshExpiresIn ? this.nowS + answer.refreshExpiresIn : Infinity;
       return this.issue(
         tokens,
@@ -298,7 +298,7 @@ export class SignInBroker {
   }
 
   /**
-   * A Sign-in ending at the ID token's expiry and never later than 24 hours (D-024), plus a
+   * A Sign-in ending at the ID token's expiry and never later than 24 hours, plus a
    * Refresh token: the presented one kept, or a new one ending at `notAfter` when the grant
    * carries a provider refresh token.
    */

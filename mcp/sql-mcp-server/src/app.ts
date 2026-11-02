@@ -10,21 +10,21 @@ import { Tokens } from "./signin/tokens.js";
 import type { Fetch } from "./signin/util.js";
 import { bypassesGrants } from "./visibility.js";
 
-/** What the app needs from the runtime adapter (ADR-001). */
+/** What the app needs from the runtime adapter. */
 export interface Deps {
   /** Runs a health-check Server statement against the Database. */
   ping(): Promise<void>;
-  /** The runtime's variables and secrets (environments.md). */
+  /** The runtime's variables and secrets. */
   env?: RuntimeVariables;
   fetch?: Fetch;
   now?: () => number;
   /** The Database the Tools read; without one, no Tools are offered. */
   database?: Database;
-  /** The deployed Worker's version id, which `initialize` adds to the Server's version (S-004). */
+  /** The deployed Worker's version id, which `initialize` adds to the Server's version. */
   serverVersion?: string;
-  /** Loads the Engine's half of the Query check and of Redaction, once per isolate or process (ADR-005). */
+  /** Loads the Engine's half of the Query check and of Redaction, once per isolate or process. */
   queryEngine?: () => Promise<QueryEngine>;
-  /** The setting naming the Database account in config_invalid lines (D-077). */
+  /** The setting naming the Database account in config_invalid lines. */
   connectionSetting?: string;
   /** Answers a signed-in MCP request; the SDK handler unless a test swaps it. */
   mcpHandler?: (request: Request, staff: Staff) => Promise<Response>;
@@ -39,7 +39,7 @@ const PRM_PREFIX = "/.well-known/oauth-protected-resource";
 export function createApp(deps: Deps) {
   const app = new Hono();
   // An uncaught fault answers 500 and leaves one operational line naming the path, never the
-  // error's message or stack, which can carry tokens or Object names (security.md, D-068).
+  // error's message or stack, which can carry tokens or Object names.
   app.onError((_err, c) => {
     op("server_fault", { path: new URL(c.req.url).pathname });
     return page("The Server could not complete this request", 500);
@@ -51,14 +51,14 @@ export function createApp(deps: Deps) {
     if (!result.ok) return c.json({ status: "degraded", config: "invalid", variable: result.variable }, 503);
     try {
       if (deps.database) {
-        // The health-check Server statement is the D-077 account check itself.
+        // The health-check Server statement is the Database account check itself.
         if (bypassesGrants(await deps.database.accountFlags())) return c.json({ status: "degraded", database: "unsafe" }, 503);
       } else {
         await deps.ping();
       }
       return c.json({ status: "ok", database: "ok" });
     } catch {
-      // The driver's message can carry object or host names; report only the outcome (D-005).
+      // The driver's message can carry object or host names; report only the outcome.
       return c.json({ status: "degraded", database: "unreachable" }, 503);
     }
   });
@@ -74,7 +74,7 @@ export function createApp(deps: Deps) {
   const config = result.config;
   const fetchFn: Fetch = deps.fetch ?? ((input, init) => fetch(input, init));
   const now = deps.now ?? Date.now;
-  // Loaded on the first query, then kept for the isolate or process (ADR-005).
+  // Loaded on the first query, then kept for the isolate or process.
   let queryEngine: Promise<QueryEngine> | undefined;
   const loadQueryEngine = deps.queryEngine;
   let tokens: Promise<Tokens> | undefined;
@@ -98,8 +98,8 @@ export function createApp(deps: Deps) {
 
   broker.mount(app);
 
-  // Every MCP call is blocked until Sign-in is configured (D-017) and then until the caller has signed in;
-  // a call with no Sign-in is not a Tool call and leaves no Audit record (D-044).
+  // Every MCP call is blocked until Sign-in is configured and then until the caller has signed in;
+  // a call with no Sign-in is not a Tool call and leaves no Audit record.
   const mcp = async (c: Context) => {
     const metadata = `${broker.origin(c.req.url)}${PRM_PREFIX}${new URL(c.req.url).pathname}`;
     if (!broker.configured) return blockUnauthenticated(metadata, false);

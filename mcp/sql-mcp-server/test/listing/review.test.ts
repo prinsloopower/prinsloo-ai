@@ -3,7 +3,7 @@ import { visibleTables } from "../../src/visibility.js";
 import { callMcp, captureConsole, harness, signIn } from "../signin/helpers.js";
 import { FakeDatabase, salesDatabase } from "./fake-database.js";
 
-// Added after the S-002 code review (docs/slices/S-002/review.md, D-081).
+// Listing edge cases.
 
 const ASK = "Which tables can I query?";
 
@@ -17,7 +17,7 @@ async function listTables(database: FakeDatabase, args: Record<string, unknown>)
   return { h, call: () => callMcp(h, s.access_token, "/mcp", { jsonrpc: "2.0", id: 9, method: "tools/call", params: { name: "list_tables", arguments: args } }) };
 }
 
-describe("S-002 code review fixes", () => {
+describe("listing edge cases", () => {
   it("boundary_exclusion_ignores_letter_case", () => {
     const db = new FakeDatabase().table("sales", "payroll", [["id", "integer"]]).table("sales", "orders", [["id", "integer"]]);
     const catalog = { flags: db.flags, rows: db.rows };

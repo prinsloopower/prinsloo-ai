@@ -3,7 +3,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { PostgresDatabase } from "../../src/engine/postgres.js";
 import { bypassesGrants, visibleTables } from "../../src/visibility.js";
 
-// Started by `npm run db:up` (test/docker-compose.yml, ADR-010). Runs as the superuser to set up
+// Started by `npm run db:up` (test/docker-compose.yml). Runs as the superuser to set up
 // roles and grants, then reads the catalog as each role, the way a Deployment would.
 const ADMIN = process.env.TEST_POSTGRES_URL ?? "postgres://postgres:postgres@localhost:55432/sqlmcp";
 const as = (role: string) => {
@@ -71,7 +71,7 @@ afterAll(async () => {
   await admin("REVOKE SELECT ON it_sales.secret FROM it_reader;");
 });
 
-describe("S-002 Visibility resolver against PostgreSQL", () => {
+describe("Visibility resolver against PostgreSQL", () => {
   it("resolver_lists_granted_tables_and_columns", async () => {
     const tables = await visible();
     const orders = tables.find((t) => t.table === "orders");

@@ -31,4 +31,4 @@ Following [the guide](deploy/cloudflare/guide.md), a Deployment should be deploy
 
 ## For developers
 
-[docs/system-spec/environments.md](docs/system-spec/environments.md) gives the local setup, the tests and every variable.
+[docs/development.md](docs/development.md) gives the local setup and the tests, and [docs/settings.md](docs/settings.md) every setting.

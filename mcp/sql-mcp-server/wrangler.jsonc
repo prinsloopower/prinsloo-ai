@@ -1,18 +1,18 @@
-// Cloudflare Deployment (ADR-002). Server settings are vars; secrets are set with `wrangler secret put`.
+// Cloudflare Deployment. Server settings are vars; secrets are set with `wrangler secret put`.
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "sql-mcp-server",
   "main": "src/worker.ts",
   "compatibility_date": "2026-10-01",
   "compatibility_flags": ["nodejs_compat"],
-  // The PostgreSQL parser's Emscripten glue reads these, which Workers do not define (S-003).
+  // The PostgreSQL parser's Emscripten glue reads these, which Workers do not define.
   "define": { "__filename": "\"/libpg-query.js\"", "__dirname": "\"/\"" },
-  // Audit records go to Workers Logs, the Host log facility on Cloudflare (ADR-013, D-008).
+  // Audit records go to Workers Logs, the Host log facility on Cloudflare.
   "observability": {
     "enabled": true,
     "head_sampling_rate": 1
   },
-  // The deployed version's id, which the Server reports in `initialize` (S-004).
+  // The deployed version's id, which the Server reports in `initialize`.
   "version_metadata": { "binding": "VERSION_METADATA" },
   "hyperdrive": [
     {
@@ -25,11 +25,11 @@
   ],
   "vars": {
     "ENGINE": "postgres",
-    // The project test Deployment's Identity provider: the product owner's Entra ID tenant (S-001).
+    // The project test Deployment's Identity provider: the product owner's Entra ID tenant.
     // IDP_CLIENT_SECRET and SERVER_SECRET are Wrangler secrets, never vars.
     "IDP_ISSUER": "https://login.microsoftonline.com/9416b60e-03b2-44ee-84ff-5d25e16cf730/v2.0",
     "IDP_CLIENT_ID": "24fa586e-d5e5-48d4-84a1-eab2a18db9bb",
-    // The project test Deployment shows only its own test schema in the borrowed Supabase project (D-060, D-075).
+    // The project test Deployment shows only its own test schema in the borrowed Supabase project.
     "BOUNDARY": "{\"schemas\":[\"sqlmcp_test\"]}"
   }
 }

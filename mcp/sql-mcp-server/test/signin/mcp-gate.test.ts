@@ -26,7 +26,7 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-describe("S-001 T-008 /mcp gate", () => {
+describe("/mcp gate", () => {
   it("mcp_accepts_valid_signin_with_no_tools", async () => {
     const h = await harness({}, { realMcp: true });
     const s = await signIn(h);

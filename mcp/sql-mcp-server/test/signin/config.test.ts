@@ -5,7 +5,7 @@ import { captureConsole, harness, opLines, ORIGIN } from "./helpers.js";
 
 const IDP_VARS = ["IDP_ISSUER", "IDP_CLIENT_ID", "IDP_CLIENT_SECRET"];
 
-describe("S-001 T-001 configuration", () => {
+describe("configuration", () => {
   it("authorize_503_when_idp_unset", async () => {
     for (const missing of IDP_VARS) {
       const h = await harness({ [missing]: undefined });

@@ -13,7 +13,7 @@ const initialize = {
 };
 const toolsList = { jsonrpc: "2.0", id: 2, method: "tools/list" };
 
-describe("MCP handler (ADR-003)", () => {
+describe("MCP handler", () => {
   it("initializes statelessly, without a session ID", async () => {
     const res = await handleMcp(
       new Request(`${BASE}/mcp`, { method: "POST", headers: HEADERS, body: JSON.stringify(initialize) }),

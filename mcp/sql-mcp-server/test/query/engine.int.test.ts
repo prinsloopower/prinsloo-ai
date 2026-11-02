@@ -61,7 +61,7 @@ beforeAll(async () => {
   `);
 }, 30_000);
 
-describe("S-003 Query check: plan layer", () => {
+describe("Query check: plan layer", () => {
   it("plan_accepts_partitions_and_inheritance_children", async () => {
     expect(rowsOf(await ask(READER, "SELECT e.id FROM qe_sales.events e ORDER BY e.id"))).toEqual([[1], [2]]);
     // The child is not granted, but PostgreSQL reads it under the parent's grant.
@@ -104,7 +104,7 @@ describe("S-003 Query check: plan layer", () => {
   });
 });
 
-describe("S-003 Agent-written queries: execution", () => {
+describe("Agent-written queries: execution", () => {
   it("query_runs_read_only_with_pinned_search_path", async () => {
     // Below the Query check, which would refuse current_setting, over the same connection path.
     const outcome = await new PostgresDatabase(as(READER)).query("SELECT current_setting('transaction_read_only'), current_setting('search_path')", [], 500);
@@ -183,7 +183,7 @@ describe("S-003 Agent-written queries: execution", () => {
   });
 });
 
-describe("S-003 Agent-written queries: Database errors", () => {
+describe("Agent-written queries: Database errors", () => {
   it("query_execution_error_classed_without_driver_text", async () => {
     const answer = await ask(READER, "SELECT 1 / (c.id - c.id) FROM qe_sales.customers c");
     expect(rowsOf(answer)).toEqual({ error: `The database could not complete this.${REF}` });

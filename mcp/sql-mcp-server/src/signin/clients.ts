@@ -2,7 +2,7 @@ import { op } from "../oplog.js";
 import type { Tokens } from "./tokens.js";
 import { randomToken, readLimited, TimedOut, within, type Fetch } from "./util.js";
 
-/** Client ID Metadata Document fetch limits (security.md). */
+/** Client ID Metadata Document fetch limits. */
 const DOCUMENT_MS = 3000;
 const DOCUMENT_BYTES = 16 * 1024;
 const MAX_REDIRECT_URIS = 5;
@@ -38,7 +38,7 @@ const LOOPBACK_HOSTS = ["127.0.0.1", "[::1]", "localhost"];
 /**
  * Whether a requested redirect URI is one the client registered. Exact, except that a plain-http
  * loopback URI may carry any port: native AI tools listen on a random free port each time
- * (RFC 8252 section 7.3, D-072). A loopback address only ever reaches the Staff member's own machine.
+ * (RFC 8252 section 7.3). A loopback address only ever reaches the Staff member's own machine.
  */
 export function redirectAllowed(registered: string[], requested: string): boolean {
   if (registered.includes(requested)) return true;
@@ -60,7 +60,7 @@ export function redirectAllowed(registered: string[], requested: string): boolea
   });
 }
 
-/** A client_id that is a URL is a metadata document; it may be fetched only if it is safe to (security.md). */
+/** A client_id that is a URL is a metadata document; it may be fetched only if it is safe to. */
 function documentUrl(clientId: string): URL | null {
   let u: URL;
   try {
@@ -127,7 +127,7 @@ export async function lookupClient(clientId: string, tokens: Tokens, fetchFn: Fe
 
 export type Registration = { status: 201; body: Record<string, unknown> } | { status: 400; body: { error: string } };
 
-/** Stateless dynamic registration: the client_id is the signed registration itself (ADR-004). */
+/** Stateless dynamic registration: the client_id is the signed registration itself. */
 export async function registerClient(input: unknown, tokens: Tokens, nowSeconds: number): Promise<Registration> {
   if (!input || typeof input !== "object") return { status: 400, body: { error: "invalid_client_metadata" } };
   const meta = input as Record<string, unknown>;
@@ -135,7 +135,7 @@ export async function registerClient(input: unknown, tokens: Tokens, nowSeconds:
   if (!redirectUris) return { status: 400, body: { error: "invalid_redirect_uri" } };
   const name = meta.client_name ?? "";
   if (typeof name !== "string" || name.length > MAX_CLIENT_NAME) return { status: 400, body: { error: "invalid_client_metadata" } };
-  // jti keeps two identical registrations in the same second from sharing a client_id (D-070).
+  // jti keeps two identical registrations in the same second from sharing a client_id.
   const clientId = await tokens.issue("client", { v: 1, redirect_uris: redirectUris, client_name: name, iat: nowSeconds, jti: randomToken(16) });
   return {
     status: 201,

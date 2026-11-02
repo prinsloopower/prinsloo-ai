@@ -1,6 +1,6 @@
 import { base64url } from "jose";
 
-/** The runtime's environment: Wrangler vars and secrets, or process.env on a container (environments.md). */
+/** The runtime's environment: Wrangler vars and secrets, or process.env on a container. */
 export type RuntimeVariables = Record<string, unknown>;
 
 export interface IdentityProviderSettings {
@@ -10,7 +10,7 @@ export interface IdentityProviderSettings {
   scopes: string;
 }
 
-/** Schemas a Deployment may ever show, and tables never shown; narrows the Allow-list (D-075). */
+/** Schemas a Deployment may ever show, and tables never shown; narrows the Allow-list. */
 export interface Boundary {
   schemas?: string[];
   exclude: [string, string][];
@@ -19,14 +19,14 @@ export interface Boundary {
 export interface Config {
   secret: string;
   previousSecret?: string;
-  /** Unset until all three IDP_* variables are; Sign-in stays off until then (D-017). */
+  /** Unset until all three IDP_* variables are; Sign-in stays off until then. */
   identityProvider?: IdentityProviderSettings;
   publicUrl?: string;
-  /** Unset excludes nothing: the Database account's grants alone decide (D-075). */
+  /** Unset excludes nothing: the Database account's grants alone decide. */
   boundary?: Boundary;
-  /** The most rows an Agent-written query returns (R-015); 500 when unset. */
+  /** The most rows an Agent-written query returns; 500 when unset. */
   rowLimit: number;
-  /** Whether literals in logged SQL are replaced (R-011); on when unset (D-007). */
+  /** Whether literals in logged SQL are replaced; on when unset. */
   redaction: boolean;
 }
 
@@ -34,7 +34,7 @@ export type ConfigResult = { ok: true; config: Config } | { ok: false; variable:
 
 export const GOOGLE_ISSUER = "https://accounts.google.com";
 
-/** The largest Row limit an Operator may set (operations.md). */
+/** The largest Row limit an Operator may set. */
 export const ROW_LIMIT_MAX = 10_000;
 
 function value(env: RuntimeVariables, name: string): string | undefined {
@@ -87,7 +87,7 @@ export function readConfig(env: RuntimeVariables): ConfigResult {
           issuer,
           clientId,
           clientSecret,
-          // Google issues refresh tokens through access_type=offline, not this scope (D-069).
+          // Google issues refresh tokens through access_type=offline, not this scope.
           scopes: value(env, "IDP_SCOPES") ?? (issuer === GOOGLE_ISSUER ? "openid profile email" : "openid profile email offline_access"),
         }
       : undefined;

@@ -3,7 +3,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { PostgresDatabase } from "../../src/engine/postgres.js";
 import { bypassesGrants } from "../../src/visibility.js";
 
-// Added after the S-002 re-review (docs/slices/S-002/review.md, D-081): a login role that can reach
+// A login role that can reach
 // every table but lands on a clean role, by default setting or connection option, must be refused,
 // because SET ROLE NONE takes it back. Uses its own rz_* roles.
 const ADMIN = process.env.TEST_POSTGRES_URL ?? "postgres://postgres:postgres@localhost:55432/sqlmcp";
@@ -45,7 +45,7 @@ beforeAll(async () => {
   `);
 }, 30_000);
 
-describe("S-002 re-review fix against PostgreSQL", () => {
+describe("login roles that land on a clean role, against PostgreSQL", () => {
   it("bypass_check_judges_the_login_role", async () => {
     const landed = [
       new PostgresDatabase(as("rz_lead_default")),

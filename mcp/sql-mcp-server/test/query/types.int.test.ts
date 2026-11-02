@@ -37,7 +37,7 @@ beforeAll(async () => {
 const UNREADABLE = ["r", "ra", "d", "da", "rr", "cr", "cp", "hidden_row"];
 const READABLE = ["id", "kind", "di", "ir", "ia", "dc"];
 
-describe("S-003 Query check: user-defined and catalog types against PostgreSQL", () => {
+describe("Query check: user-defined and catalog types against PostgreSQL", () => {
   it("reg_and_composite_types_refused_at_any_depth", async () => {
     const catalog = await new PostgresDatabase(as(READER)).catalog();
     const flags = Object.fromEntries(catalog.rows.filter((r) => r.schema === "qy_types").map((r) => [r.column, r.readable]));
@@ -66,7 +66,7 @@ describe("S-003 Query check: user-defined and catalog types against PostgreSQL",
     expect(rowsOf(await ask(READER, "SELECT t.kind, count(*) FROM qy_types.t t GROUP BY t.kind ORDER BY t.kind"))).toEqual([["pending", "1"], ["shipped", "1"]]);
     const answer = await ask(READER, "SELECT t.kind, t.di, t.ir, t.ia FROM qy_types.t t WHERE t.id = 1");
     const body = answer.result.structuredContent as { columns: { name: string; type: string }[]; rows: unknown[][] };
-    // PostgreSQL describes a domain's values by its base type, so `di` reads as an integer (D-086).
+    // PostgreSQL describes a domain's values by its base type, so `di` reads as an integer.
     expect(body.columns).toEqual([
       { name: "kind", type: "user-defined" },
       { name: "di", type: "integer" },
@@ -84,7 +84,7 @@ describe("S-003 Query check: user-defined and catalog types against PostgreSQL",
 
   it("domain_constraints_not_applied_to_literals", async () => {
     // PostgreSQL resolves coalesce over a domain and a literal to the domain's base type, so the
-    // domain's CHECK, which raises on 'boom', is not applied to the Agent's literal (D-086).
+    // domain's CHECK, which raises on 'boom', is not applied to the Agent's literal.
     expect(rowsOf(await ask(READER, "SELECT coalesce(t.dc, 'x') FROM qy_types.t t WHERE t.id = 1"))).toEqual([["fine"]]);
     expect(rowsOf(await ask(READER, "SELECT coalesce(t.dc, 'boom'), ARRAY[t.dc, 'boom'] FROM qy_types.t t WHERE t.id = 1"))).toEqual([["fine", "{fine,boom}"]]);
   });

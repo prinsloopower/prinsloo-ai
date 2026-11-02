@@ -1,4 +1,4 @@
-/** Cloudflare's API, for what Wrangler cannot do without a secret on its command line (D-103). */
+/** Cloudflare's API, for what Wrangler cannot do without a secret on its command line. */
 export type Credentials = { type: "oauth" | "api_token"; token: string } | { type: "api_key"; key: string; email: string };
 
 export type HyperdriveOrigin = { scheme: "postgres"; host: string; port: number; database: string; user: string; password?: string };
@@ -19,7 +19,7 @@ export class CloudflareError extends Error {
 
 /**
  * Cloudflare's code for "no Worker of that name", as distinct from any other 404. Checked against the
- * live API first by the T-008 trial; a wrong code fails safe, stopping setup at step 2.
+ * live API only by a real deployment; a wrong code fails safe, stopping setup at step 2.
  */
 const SCRIPT_NOT_FOUND = 10007;
 

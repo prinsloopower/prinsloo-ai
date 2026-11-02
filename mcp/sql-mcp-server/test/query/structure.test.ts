@@ -6,7 +6,7 @@ async function expectAll(queries: string[], expected: string) {
   for (const sql of queries) expect(await verdict(sql), sql).toBe(expected);
 }
 
-describe("S-003 Query check: structure", () => {
+describe("Query check: structure", () => {
   it("query_check_accepts_every_supported_construct", async () => {
     for (const [name, sql] of Object.entries(SUPPORTED)) expect(await verdict(sql), name).toBe("ok");
     const r = await check("SELECT o.id, c.name FROM sales.orders o JOIN sales.customers c ON c.id = o.id");

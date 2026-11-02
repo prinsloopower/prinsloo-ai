@@ -4,7 +4,7 @@ import { loadPgParser } from "../src/engine/pg-parser.js";
 
 /**
  * Test-only Worker: loads the PostgreSQL parser from the bundled WebAssembly module and
- * answers `{ tree, normalized }` for the SQL in the request body (S-003, T-001).
+ * answers `{ tree, normalized }` for the SQL in the request body.
  * Never deployed; wrangler.jsonc points at src/worker.ts.
  */
 export default {

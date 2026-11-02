@@ -3,7 +3,7 @@ import { ParseError, type PgParser } from "./pg-parser.js";
 import { onlySelect, QUERY_MAX_BYTES, utf8Length } from "./postgres-structure.js";
 
 /**
- * Redaction of logged SQL on PostgreSQL (security.md, Redaction rule; D-082, D-087). With Redaction
+ * Redaction of logged SQL on PostgreSQL (Redaction rule). With Redaction
  * on, comments are removed, and a single SELECT is then logged as `normalize` writes it, each `$n`
  * shown as `?`, provided re-parsing the normalised text finds no literal left. `normalize` keeps
  * literals in some statement types, so any other SQL, and SQL that does not parse or is too long,
@@ -46,7 +46,7 @@ function withoutComments(sql: string, parser: PgParser): string {
 
 /**
  * Each placeholder's byte offset, or undefined when a literal value is left. Two kinds of constant
- * are not values, and may stay (D-088, D-089): a type's whole-number modifiers (`numeric(12,2)`),
+ * are not values, and may stay: a type's whole-number modifiers (`numeric(12,2)`),
  * and an ordinal of `GROUP BY` or the SELECT's own `ORDER BY` that names one of its output columns.
  */
 function placeholdersIfLiteralFree(tree: unknown): number[] | undefined {

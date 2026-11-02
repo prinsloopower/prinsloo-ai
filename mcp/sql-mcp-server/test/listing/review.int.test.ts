@@ -3,8 +3,8 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { PostgresDatabase } from "../../src/engine/postgres.js";
 import { bypassesGrants, visibleTables } from "../../src/visibility.js";
 
-// Added after the S-002 code review (docs/slices/S-002/review.md, D-081). Uses its own rv_* roles
-// and schemas so it can run beside visibility.int.test.ts.
+// Listing edge cases against PostgreSQL. Uses its own rv_* roles and schemas so it can run
+// beside visibility.int.test.ts.
 const ADMIN = process.env.TEST_POSTGRES_URL ?? "postgres://postgres:postgres@localhost:55432/sqlmcp";
 const as = (role: string, options?: string) => {
   const u = new URL(ADMIN);
@@ -64,7 +64,7 @@ beforeAll(async () => {
   `);
 }, 30_000);
 
-describe("S-002 code review fixes against PostgreSQL", () => {
+describe("listing edge cases against PostgreSQL", () => {
   it("resolver_hides_names_inside_column_types", async () => {
     const tables = visibleTables(await new PostgresDatabase(as("rv_reader")).catalog());
     const typed = tables.find((t) => t.schema === "rv_open" && t.table === "typed");

@@ -3,7 +3,7 @@ import { base64url, CompactEncrypt, compactDecrypt, CompactSign, compactVerify }
 export type TokenKind = "signin" | "refresh" | "authreq" | "code" | "client";
 export type TokenPayload = Record<string, unknown>;
 
-/** The format version this release issues and reads (data-model.md). */
+/** The format version this release issues and reads. */
 const VERSION = 1;
 const ENCRYPTED: readonly TokenKind[] = ["signin", "refresh", "authreq", "code"];
 
@@ -27,9 +27,9 @@ async function keysFor(secret: string): Promise<Keys> {
 }
 
 /**
- * Issues and opens the Server's self-contained values (data-model.md). Each
+ * Issues and opens the Server's self-contained values. Each
  * carries its kind in the protected header, so one kind never passes as
- * another (D-070). Issues under SERVER_SECRET only; also opens under
+ * another. Issues under SERVER_SECRET only; also opens under
  * SERVER_SECRET_PREVIOUS while a rotation is under way.
  */
 export class Tokens {

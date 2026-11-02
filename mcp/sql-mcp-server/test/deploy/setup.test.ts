@@ -15,7 +15,7 @@ const stopped = async (p: Promise<unknown>) => {
   return (e as SetupStopped).message;
 };
 
-describe("S-005 the setup command", () => {
+describe("the setup command", () => {
   it("setup_builds_config_from_answers", async () => {
     const w = world(TRIAL);
     await setup("setup", w.deps);
@@ -28,7 +28,7 @@ describe("S-005 the setup command", () => {
       database_account: TRIAL.role,
       vars: { ROW_LIMIT: "500", BOUNDARY: '{"schemas":["sales"]}' },
     });
-    // The Hyperdrive config, named after the Worker, with caching disabled (D-079).
+    // The Hyperdrive config, named after the Worker, with caching disabled.
     const [hd] = [...w.state.hyperdrives.values()];
     expect(hd).toMatchObject({
       name: TRIAL.worker,
@@ -49,7 +49,7 @@ describe("S-005 the setup command", () => {
     expect(config.vars).not.toHaveProperty("PERMISSION_TIER");
     expect(config.vars).not.toHaveProperty("REDACTION");
     expect(config.vars).not.toHaveProperty("IDP_ISSUER");
-    // No Boundary answer means no Boundary (D-075).
+    // No Boundary answer means no Boundary.
     const v = world({ ...TRIAL, worker: "other", schemas: "" });
     await setup("setup", v.deps);
     expect(operator(v, "other").vars).toEqual({ ROW_LIMIT: "500" });
@@ -111,7 +111,7 @@ describe("S-005 the setup command", () => {
       expect(w.calls).toEqual([]);
       expect(w.requests).toEqual([]);
     }
-    const dotted = world({ ...TRIAL, role: "postgres.dwsikgvekndbmowzdcnx" });
+    const dotted = world({ ...TRIAL, role: "postgres.abcdefghijklmnopqrst" });
     expect(await stopped(setup("setup", dotted.deps))).toMatch(/postgres/);
     expect(dotted.calls).toEqual([]);
   });
@@ -178,7 +178,7 @@ describe("S-005 the setup command", () => {
   });
 });
 
-describe("S-005 rerunning the setup command", () => {
+describe("rerunning the setup command", () => {
   it("setup_rerun_resumes_without_duplicates", async () => {
     const w = world(TRIAL);
     w.state.failOn = (a) => a[0] === "deploy";
@@ -323,7 +323,7 @@ describe("S-005 rerunning the setup command", () => {
     w.state.hyperdriveRefuses = false;
     await setup("setup", w.deps);
     // The rerun prints the account SQL again with a new password's verifier. That SQL resets the
-    // role only because setup marked it for this Deployment (D-109; database-account.int.test.ts).
+    // role only because setup marked it for this Deployment (database-account.int.test.ts).
     expect(w.paused[1]).toContain(`IS '${roleMark(TRIAL.worker, ACCOUNT)}'`);
     const first = w.paused[0]!.match(/PASSWORD '([^']+)'/)![1]!;
     const second = w.paused[1]!.match(/PASSWORD '([^']+)'/)![1]!;
@@ -364,7 +364,7 @@ describe("S-005 rerunning the setup command", () => {
       IDP_ISSUER: "https://login.microsoftonline.com/t/v2.0",
       IDP_CLIENT_ID: "client-1",
     };
-    w.state.hyperdrives.set("hd-9", { id: "hd-9", name: TRIAL.worker, origin: { user: "sqlmcp_adopted.dwsikgvekndbmowzdcnx" }, caching: { disabled: true } });
+    w.state.hyperdrives.set("hd-9", { id: "hd-9", name: TRIAL.worker, origin: { user: "sqlmcp_adopted.abcdefghijklmnopqrst" }, caching: { disabled: true } });
     w.state.workers.set(TRIAL.worker, { secrets: new Set(["SERVER_SECRET", "IDP_CLIENT_SECRET"]), vars, hyperdriveId: "hd-9" });
     await setup("setup", w.deps);
     // Every setting comes back from Cloudflare as it is, and none is asked: no default can replace one.
@@ -383,7 +383,7 @@ describe("S-005 rerunning the setup command", () => {
 
     // A Hyperdrive config connecting as postgres was not made by setup, and is not adopted.
     const asPostgres = world({ worker: TRIAL.worker, adopt: TRIAL.worker });
-    asPostgres.state.hyperdrives.set("hd-9", { id: "hd-9", name: TRIAL.worker, origin: { user: "postgres.dwsikgvekndbmowzdcnx" }, caching: {} });
+    asPostgres.state.hyperdrives.set("hd-9", { id: "hd-9", name: TRIAL.worker, origin: { user: "postgres.abcdefghijklmnopqrst" }, caching: {} });
     asPostgres.state.workers.set(TRIAL.worker, { secrets: new Set(["SERVER_SECRET"]), vars, hyperdriveId: "hd-9" });
     expect(await stopped(setup("setup", asPostgres.deps))).toMatch(/nothing was adopted/);
     expect(asPostgres.files.size).toBe(0);
@@ -405,7 +405,7 @@ describe("S-005 rerunning the setup command", () => {
   });
 });
 
-describe("S-005 the setup command's secrets", () => {
+describe("the setup command's secrets", () => {
   it("setup_passes_secrets_on_stdin", async () => {
     const w = world({ ...TRIAL, tenant: "tenant-1", clientId: "client-1", clientSecret: "client-secret-value" });
     await setup("setup", w.deps);
@@ -470,13 +470,13 @@ describe("S-005 the setup command's secrets", () => {
   });
 });
 
-describe("S-005 Sign-in, password rotation and removal", () => {
+describe("Sign-in, password rotation and removal", () => {
   it("setup_signin_sets_idp_and_redeploys", async () => {
-    const w = world({ ...TRIAL, tenant: "9416b60e-03b2-44ee-84ff-5d25e16cf730", clientId: "client-1", clientSecret: "client-secret-value" });
+    const w = world({ ...TRIAL, tenant: "11111111-2222-3333-4444-555555555555", clientId: "client-1", clientSecret: "client-secret-value" });
     await setup("setup", w.deps);
     await setup("signin", w.deps);
     expect(operator(w).vars).toMatchObject({
-      IDP_ISSUER: "https://login.microsoftonline.com/9416b60e-03b2-44ee-84ff-5d25e16cf730/v2.0",
+      IDP_ISSUER: "https://login.microsoftonline.com/11111111-2222-3333-4444-555555555555/v2.0",
       IDP_CLIENT_ID: "client-1",
     });
     expect(w.deployed).toHaveLength(2);

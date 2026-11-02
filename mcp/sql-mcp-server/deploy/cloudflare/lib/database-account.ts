@@ -7,7 +7,7 @@ const ITERATIONS = 4096;
 
 /**
  * PostgreSQL's stored form of a SCRAM-SHA-256 password, which `CREATE ROLE … PASSWORD` accepts as
- * given. Supabase receives this and never the password (D-106).
+ * given. Supabase receives this and never the password.
  */
 export function scramVerifier(password: string, salt: Uint8Array): string {
   const salted = pbkdf2Sync(password, salt, ITERATIONS, 32, "sha256");
@@ -19,8 +19,8 @@ export function scramVerifier(password: string, salt: Uint8Array): string {
 }
 
 /**
- * The comment setup puts on a role it made, so a later run resets that role and no other (D-109).
- * A Worker name is unique only within its Cloudflare account, so the mark names both (D-110).
+ * The comment setup puts on a role it made, so a later run resets that role and no other.
+ * A Worker name is unique only within its Cloudflare account, so the mark names both.
  */
 export const roleMark = (worker: string, accountId: string) =>
   `sql-mcp-server: the Database account setup made for the Deployment ${worker} in Cloudflare account ${accountId}`;

@@ -2,7 +2,7 @@ import { base64url } from "jose";
 
 export type Fetch = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 
-/** Clock difference allowed on every expiry the Sign-in broker checks (security.md). */
+/** Clock difference allowed on every expiry the Sign-in broker checks. */
 export const SKEW_S = 60;
 
 export class TimedOut extends Error {}

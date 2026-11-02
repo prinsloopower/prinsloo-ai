@@ -1,12 +1,12 @@
 import type { ReasonClass } from "./engine/database.js";
 import type { Staff } from "./signin/broker.js";
 
-/** Request text is accepted, and kept, up to this length (data-model.md). */
+/** Request text is accepted, and kept, up to this length. */
 export const REQUEST_TEXT_MAX = 4000;
-/** A string input is kept up to this length; schema names are never longer (S-002). */
+/** A string input is kept up to this length; schema names are never longer. */
 const INPUT_MAX = 128;
 
-/** A Refusal's class in the Audit record (data-model.md, D-078, D-082); fixed for both Engines. */
+/** A Refusal's class in the Audit record; fixed for both Engines. */
 export type RefusalClass = "hidden_object" | "query_check" | "tier" | "boundary" | "invalid_input" | "unsafe_account";
 
 export type Outcome =
@@ -14,7 +14,7 @@ export type Outcome =
   | { kind: "refusal"; reason_class: RefusalClass; reason: string }
   | { kind: "database_error"; reason_class: ReasonClass; reason: string };
 
-/** One Statement a Tool call sent, as its Audit record keeps it (data-model.md). */
+/** One Statement a Tool call sent, as its Audit record keeps it. */
 export interface StatementRecord {
   /** Already redacted when Redaction is on. */
   sql: string;
@@ -34,23 +34,23 @@ export interface AuditRecord {
   tool: string;
   inputs: Record<string, unknown>;
   outcome: Outcome;
-  /** Every Statement the Tool call sent; Server statements are not among them (D-026). */
+  /** Every Statement the Tool call sent; Server statements are not among them. */
   statements?: StatementRecord[];
   /** An Agent-written query's SQL when it was not sent: refused, or ended before sending. Already redacted when Redaction is on. */
   submittedSql?: string;
 }
 
-/** Logged SQL that is kept by its length only: what Redaction writes when it cannot vouch for the text (security.md). */
+/** Logged SQL that is kept by its length only: what Redaction writes when it cannot vouch for the text. */
 export const unparsedSql = (sql: string) => `<unparsed: ${sql.length} chars>`;
 
-/** An Audit record's line stays within this many bytes (operations.md). */
+/** An Audit record's line stays within this many bytes. */
 const LINE_MAX = 64 * 1024;
 const CUT = "…[cut]";
 const bytes = (s: string) => new TextEncoder().encode(s).length;
 
 /**
  * Writes one Audit record per Tool call to standard output, which the Host log facility keeps
- * (ADR-013). It never holds result rows, tokens or the Allow-list itself (R-011, security.md).
+ *. It never holds result rows, tokens or the Allow-list itself.
  */
 export function writeAudit(record: AuditRecord): void {
   let requestText = typeof record.requestText === "string" ? record.requestText : null;
@@ -106,7 +106,7 @@ export function writeAudit(record: AuditRecord): void {
   console.log(line);
 }
 
-/** Every message about a refused or failed Tool call names its Audit record (D-080). */
+/** Every message about a refused or failed Tool call names its Audit record. */
 export function withReference(sentence: string, id: string): string {
   return `${sentence} (reference ${id})`;
 }

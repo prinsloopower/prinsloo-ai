@@ -12,5 +12,5 @@
     "isolatedModules": true,
     "verbatimModuleSyntax": true
   },
-  "include": ["src", "test", "bench", "deploy"]
+  "include": ["src", "test", "bench", "deploy", "release"]
 }

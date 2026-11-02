@@ -1,4 +1,4 @@
-// The config every Cloudflare Deployment shares (S-005, D-106). `npm run setup -- deploy` merges it
+// The config every Cloudflare Deployment shares. `npm run setup -- deploy` merges it
 // with the Operator's own wrangler.<worker name>.jsonc at every deploy, so an upgrade never deploys
 // stale fields. A test keeps these fields equal to the project's own wrangler.jsonc.
 {

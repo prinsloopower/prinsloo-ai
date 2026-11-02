@@ -36,7 +36,7 @@ function opLinesOf(lines: string[]) {
   return lines.map((l) => { try { return JSON.parse(l) as Record<string, unknown>; } catch { return null; } }).filter((l): l is Record<string, unknown> => l?.type === "op");
 }
 
-describe("S-002 listing tables", () => {
+describe("listing tables", () => {
   it("boundary_setting_parsed_and_validated", () => {
     const base = { SERVER_SECRET: SECRET };
     const ok = readConfig({ ...base, BOUNDARY: '{"schemas":["sales"],"exclude":[["sales","payroll"]]}' });

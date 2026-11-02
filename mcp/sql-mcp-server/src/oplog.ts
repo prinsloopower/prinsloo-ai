@@ -1,5 +1,5 @@
 /**
- * Writes one operational line in the D-068 envelope. Fields name things —
+ * Writes one operational line in the shared envelope. Fields name things —
  * a variable, an issuer, a host — and never carry values, tokens or URL paths.
  */
 export function op(event: string, fields: Record<string, string | number> = {}): void {

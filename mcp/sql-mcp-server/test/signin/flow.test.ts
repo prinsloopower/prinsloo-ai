@@ -4,7 +4,7 @@ import { callback, CLIENT_REDIRECT, harness, ISSUER, JSON_HEADERS, ORIGIN, pkce,
 
 const ALLOW = "/mcp/a/eJyrVkrOz0nNTVGyUkosyczPUyjJzE0FAEi_BvE";
 
-describe("S-001 T-009 end to end", () => {
+describe("end to end", () => {
   it("signin_flow_end_to_end", async () => {
     const h = await harness({}, { realMcp: true });
     const initialize = {

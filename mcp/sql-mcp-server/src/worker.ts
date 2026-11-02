@@ -6,10 +6,10 @@ import { postgresQueryEngine } from "./engine/postgres-query-engine.js";
 import { type WorkerEnv, workerDeps } from "./worker-deps.js";
 
 // One app per isolate, so the Identity provider's discovery and keys stay cached
-// between requests (security.md); an isolate's env does not change while it lives.
+// between requests; an isolate's env does not change while it lives.
 let app: ReturnType<typeof createApp> | undefined;
 
-/** Cloudflare runtime adapter (ADR-001, ADR-002). */
+/** Cloudflare runtime adapter. */
 export default {
   fetch(request: Request, env: WorkerEnv, ctx: ExecutionContext): Response | Promise<Response> {
     app ??= createApp(workerDeps(env, async () => postgresQueryEngine(await loadPgParser(parserWasm as WebAssembly.Module))));

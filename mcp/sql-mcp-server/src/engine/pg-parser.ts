@@ -1,11 +1,11 @@
 // @ts-expect-error The Emscripten glue ships without types; its default export builds the module.
 import PgQueryModule from "@libpg-query/parser/wasm/libpg-query.js";
 
-/** PostgreSQL's own parser, compiled to WebAssembly (ADR-005; `@libpg-query/parser` 17.x, D-082). */
+/** PostgreSQL's own parser, compiled to WebAssembly (`@libpg-query/parser` 17.x). */
 export interface PgParser {
   /** The parse tree as libpg_query's JSON; throws a ParseError when the SQL does not parse. */
   parse(sql: string): { stmts: { stmt: Record<string, unknown> }[] };
-  /** The SQL with every literal replaced by `$n` (security.md, Redaction rule). */
+  /** The SQL with every literal replaced by `$n` (Redaction rule). */
   normalize(sql: string): string;
   /** PostgreSQL's own lexer: each token with its byte offsets, comments included. */
   scan(sql: string): { start: number; end: number; tokenName: string }[];

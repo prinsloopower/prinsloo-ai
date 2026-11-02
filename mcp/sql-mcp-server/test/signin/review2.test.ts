@@ -3,13 +3,13 @@ import { IdentityProvider } from "../../src/signin/identity-provider.js";
 import { Tokens } from "../../src/signin/tokens.js";
 import { begin, callback, captureConsole, harness, ISSUER, opLines, RESOURCE, signIn, token } from "./helpers.js";
 
-// Tests added after the second S-001 code review (docs/slices/S-001/review.md).
+// More Sign-in edge cases.
 
 afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe("S-001 second code review fixes", () => {
+describe("more Sign-in edge cases", () => {
   it("token_endpoint_outage_is_temporary", async () => {
     const h = await harness();
     const s = await signIn(h);

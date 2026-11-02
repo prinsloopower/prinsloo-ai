@@ -14,9 +14,9 @@ function table(text: string, heading: string): string[][] {
   return lines.slice(start + 2, end).map((l) => l.split("|").slice(1, -1).map((c) => c.trim()));
 }
 
-describe("S-005 the Deployment kit's docs", () => {
+describe("the Deployment kit's docs", () => {
   it("kit_guide_names_every_cloudflare_setting", () => {
-    const variables = table(read("docs/system-spec/environments.md"), "## Variables").map((r) => r[0]!);
+    const variables = table(read("docs/settings.md"), "## Variables").map((r) => r[0]!);
     // DATABASE_URL is Azure's, and PORT the container's; every other variable applies on Cloudflare.
     const azureOnly = ["DATABASE_URL", "PORT"];
     expect(variables).toEqual(expect.arrayContaining(azureOnly));
@@ -72,7 +72,7 @@ describe("S-005 the Deployment kit's docs", () => {
   });
 
   it("kit_guide_covers_every_monitoring_signal", () => {
-    const rows = table(read("docs/system-spec/operations.md"), "## Monitoring");
+    const rows = table(read("docs/settings.md"), "## Monitoring");
     expect(rows.map((r) => r[0])).toEqual(["`/healthz`", "Database errors", "Identity provider failures", "Server faults", "configuration errors", "5xx responses"]);
     // Each signal's own entry: a list item that opens with the signal's name in bold.
     const entries = section(8).split("\n").filter((l) => l.startsWith("- **"));

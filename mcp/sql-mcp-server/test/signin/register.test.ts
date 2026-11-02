@@ -30,7 +30,7 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-describe("S-001 T-004 registration", () => {
+describe("registration", () => {
   it("register_issues_signed_client_id", async () => {
     const h = await harness();
     const res = await register(h);

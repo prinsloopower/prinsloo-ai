@@ -13,7 +13,7 @@ Both passed on the deployed Worker, 6/6 and 7/7.
 Rollback: `npx wrangler rollback 3359c4f5-cbc4-4124-bfff-727ee8ac4768`, the S-004 version. This rolls back code only; the Server keeps no data, and nothing in this deploy touched the Database. A trial Deployment made with the kit is separate, and is removed by its own steps (`npm run setup -- remove`).
 
 Try it: T-008, the timed deployment trial, made by the product owner from a fresh clone, following only the README and the guide. Start the clock when you open the README.
-1. Clone the repository into a new folder and open `mcp/sql-mcp-server/README.md` on GitHub or locally. Note the time.
+1. Clone the repository into a new folder, as the guide says, and open `mcp/sql-mcp/README.md`, the clean copy (D-111). Note the time. Work only in `mcp/sql-mcp` from here on.
 2. Follow [deploy/cloudflare/guide.md](../../../deploy/cloudflare/guide.md) sections 1 to 4, using names no other Deployment uses:
    - Worker name `sql-mcp-trial`;
    - Database account `sqlmcp_trial`;

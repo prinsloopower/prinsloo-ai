@@ -5,7 +5,7 @@ import { answerDatabaseError, answerRefusal, isRequestText, REQUEST_TEXT_REFUSAL
 
 export const QUERY = "query";
 
-/** Static apart from the Row limit: names no Object, so the tool list can never reveal one (R-003). */
+/** Static apart from the Row limit: names no Object, so the tool list can never reveal one. */
 export function queryDescription(rowLimit: number): string {
   return (
     `Runs one read-only SELECT you write over the tables list_tables shows, and returns at most ${rowLimit} rows. ` +
@@ -14,10 +14,10 @@ export function queryDescription(rowLimit: number): string {
   );
 }
 
-/** One sentence for every plan-layer failure, so none tells an ungranted column from a missing one (D-082). */
+/** One sentence for every plan-layer failure, so none tells an ungranted column from a missing one. */
 const PLAN_SENTENCE = "The query was not accepted: the database could not plan it. Check its names and types against list_tables, and its constant values.";
 
-/** D-082's Refusal classes and sentences for Agent-written queries, for one Engine; none names anything from the query. */
+/** The Refusal classes and sentences for Agent-written queries, for one Engine; none names anything from the query. */
 export function queryRefusals(engine: string): Record<RefusalCase | "plan" | "plan_unaccounted", { reasonClass: RefusalClass; sentence: string }> {
   return {
     too_long: { reasonClass: "query_check", sentence: "The query was not accepted: it is longer than 64 KiB." },
@@ -42,7 +42,7 @@ export function queryRefusals(engine: string): Record<RefusalCase | "plan" | "pl
 
 export type ValidatedQuery = { ok: true; requestText: string; sql: string } | { ok: false; sentence: string };
 
-/** Checked by the tool itself, not the SDK, so a bad value is still a Tool call with an Audit record (D-078). */
+/** Checked by the tool itself, not the SDK, so a bad value is still a Tool call with an Audit record. */
 export function validateQuery(args: Record<string, unknown>): ValidatedQuery {
   const { request_text: requestText, sql } = args;
   if (!isRequestText(requestText)) return { ok: false, sentence: REQUEST_TEXT_REFUSAL };
@@ -56,11 +56,11 @@ export interface QueryContext {
   visible: VisibleObjects;
   rowLimit: number;
   classify: (error: unknown) => ReasonClass;
-  /** The Tool call's Audit record id, the reference every Refusal and error carries (D-080). */
+  /** The Tool call's Audit record id, the reference every Refusal and error carries. */
   id: string;
 }
 
-/** D-082's notice for a Cut-short result, which AI tools that show only text still carry (J-004). */
+/** The notice for a Cut-short result, which AI tools that show only text still carry. */
 export const cutShortNotice = (rowLimit: number) => `The result was cut short at the Row limit of ${rowLimit} rows; more rows match.`;
 
 /**

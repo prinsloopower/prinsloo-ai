@@ -30,7 +30,7 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-describe("S-001 T-006 /oauth/callback", () => {
+describe("/oauth/callback", () => {
   it("callback_rejects_cookie_mismatch", async () => {
     const h = await harness();
     const b = await begin(h);

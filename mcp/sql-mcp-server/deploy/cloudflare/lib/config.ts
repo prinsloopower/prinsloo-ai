@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-/** The Operator's own part of a Deployment's config: `wrangler.<worker name>.jsonc` (D-106). It holds no secret. */
+/** The Operator's own part of a Deployment's config: `wrangler.<worker name>.jsonc`. It holds no secret. */
 export type OperatorConfig = {
   name: string;
   account_id: string;

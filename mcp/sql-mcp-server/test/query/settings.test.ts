@@ -5,7 +5,7 @@ import { callMcp, captureConsole, harness, SECRET } from "../signin/helpers.js";
 
 const base = { SERVER_SECRET: SECRET };
 
-describe("S-003 Row limit and Redaction settings", () => {
+describe("Row limit and Redaction settings", () => {
   it("row_limit_setting_parsed_and_validated", () => {
     const rowLimit = (v?: string) => {
       const r = readConfig(v === undefined ? base : { ...base, ROW_LIMIT: v });

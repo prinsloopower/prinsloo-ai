@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createApp, NOT_AUTHENTICATED } from "../src/app.js";
 
-// A valid SERVER_SECRET and no Identity provider: Sign-in not yet configured (D-017).
+// A valid SERVER_SECRET and no Identity provider: Sign-in not yet configured.
 const healthy = { ping: async () => {}, env: { SERVER_SECRET: "BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc" } };
 const BASE = "https://sql.example.com";
 
