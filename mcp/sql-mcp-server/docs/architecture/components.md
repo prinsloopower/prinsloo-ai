@@ -20,8 +20,8 @@ Talks to: the Visibility resolver, the Query check, the Typed tools and the Audi
 
 ## Visibility resolver
 Traces: R-003, R-016, R-017, J-003, J-006
-This builds on D-009, D-012 in the decisions register.
-For each Tool call, it computes the Visible objects. That is the Boundary, intersected with the Allow-list decoded from the request URL (ADR-006), plus the Created objects in the verified Conversation token (ADR-007). It reads the Database catalog through Server statements, and the catalog view lasts for one Tool call only. Every list of names the Agent sees, including tool descriptions, comes from this resolver, and from nowhere else.
+This builds on D-074, D-075, D-076, D-077 in the decisions register.
+For each Tool call, it computes the Visible objects. That is the Allow-list read from the Database account's grants (ADR-006), intersected with the Boundary, less tables the account owns, plus the Created objects in the verified Conversation token (ADR-007). It reads the Database catalog through Server statements, and the catalog view lasts for one Tool call only. Every list of names the Agent sees, including tool descriptions, comes from this resolver, and from nowhere else. On every Tool call it also checks that the Database account cannot bypass grants, and answers 503 if it can (ADR-006, D-077).
 Talks to: the Engine adapter, for catalog Server statements.
 
 ## Query check
@@ -56,13 +56,13 @@ Talks to: the Host log facility only.
 ## Deployment kit
 Traces: R-001, R-013, J-001
 This builds on D-018, D-041 in the decisions register.
-Contains a Wrangler config, a CloudFormation template and a Bicep template, each with a public and a private variant, plus the docs that the one-hour deployment trial follows (ADR-009). A setting that is not set falls back to the defaults in D-007, D-012 and D-019.
+Contains a Wrangler config and a Bicep template, each for a public Deployment (D-063, D-064), plus the docs that the one-hour deployment trial follows (ADR-009). A setting that is not set falls back to the defaults in D-007, D-019 and D-075.
 Talks to: nothing at run time.
 
 ## Security material
 Traces: R-014, R-017, J-007
-This builds on D-014, D-036, D-040, D-043 in the decisions register.
-The reviewer-facing documents in the repository. Each slice adds the section for what it delivers. The material states plainly what the Server does not enforce: the client lock on the connector URL, Request text being logged as received, results reaching the AI provider, and the Host log facility's own retention.
+This builds on D-014, D-036, D-043, D-074 in the decisions register.
+The reviewer-facing documents in the repository. Each slice adds the section for what it delivers. The material states plainly what the Server does not enforce: that the Allow-list is only as narrow as the Database administrator's grants (D-074), Request text being logged as received, results reaching the AI provider, and the Host log facility's own retention.
 Talks to: nothing at run time.
 
 ## Release test harness

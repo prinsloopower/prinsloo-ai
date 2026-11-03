@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { createApp, NOT_AUTHENTICATED } from "../src/app.js";
 
-const healthy = { ping: async () => {} };
+// A valid SERVER_SECRET and no Identity provider: Sign-in not yet configured.
+const healthy = { ping: async () => {}, env: { SERVER_SECRET: "BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc" } };
 const BASE = "https://sql.example.com";
 
 describe("healthz", () => {
@@ -13,6 +14,7 @@ describe("healthz", () => {
 
   it("reports unreachable without the driver's message when the Database fails", async () => {
     const app = createApp({
+      ...healthy,
       ping: async () => {
         throw new Error('relation "payroll.salaries" does not exist');
       },
@@ -48,11 +50,5 @@ describe("protected-resource metadata", () => {
       resource: `${BASE}/mcp`,
       authorization_servers: [],
     });
-  });
-
-  it("names this origin as the authorization server once an Identity provider is set", async () => {
-    const app = createApp({ ...healthy, idpIssuer: "https://login.example.com" });
-    const res = await app.request(`${BASE}/.well-known/oauth-protected-resource/mcp`);
-    expect(await res.json()).toMatchObject({ authorization_servers: [BASE] });
   });
 });

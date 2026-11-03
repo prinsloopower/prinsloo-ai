@@ -1,26 +1,29 @@
 # Walking skeleton — sql-mcp-server
 
 ## Deployed
-Not yet deployed. The target is a Cloudflare Worker (ADR-002) reaching PostgreSQL through Hyperdrive (ADR-008), chosen by the product owner.
+Cloudflare Worker (ADR-002) `sql-mcp-server`, at https://sql-mcp-server.prinsloopower.workers.dev, version `809beefe-d126-4af3-919c-1205c7d1dc68`. Deployed on 2026-10-17 from the commit that adds this file. It reaches PostgreSQL 17 on Supabase through Hyperdrive (ADR-008) and the Supabase session pooler (D-049).
 
-The thinnest complete path is in place locally:
+What runs:
 - `GET /healthz` runs a health-check Server statement against the Database, and reports `database: ok`.
-- Every `/mcp` call is blocked with 401, the not-authenticated message, and a `WWW-Authenticate` challenge pointing at protected-resource metadata (D-017, D-044).
+- Every `/mcp` call is blocked with 401, the not-authenticated message, and a `WWW-Authenticate` challenge pointing at protected-resource metadata (D-017, D-044). Behind that block sits the MCP handler: the SDK's web-standard transport, stateless, with no Tools registered (ADR-003). No request reaches it until Sign-in exists.
 - `GET /.well-known/oauth-protected-resource/<path>` describes the resource.
 
-Verified by: npm run smoke -- https://REPLACE_WITH_DEPLOYED_HOST
+Verified by: npm run smoke -- https://sql-mcp-server.prinsloopower.workers.dev
 
 ## What this proved
-Nothing has been proved on a deployed Deployment yet. Locally, these are proved:
-- The app runs on web-standard APIs (ADR-001), and its 6 unit tests pass under Node.
-- Wrangler builds the Worker bundle (`wrangler deploy --dry-run`: 254.68 KiB, 55.26 KiB gzipped, with the Hyperdrive binding resolved).
+- The deploy path: Wrangler built the bundle (1,116.22 KiB, 218.24 KiB gzipped, 40 ms startup, with the MCP SDK included), uploaded it, and bound Hyperdrive and the `ENGINE` var.
+- The MCP SDK on the Workers runtime (ADR-003). It bundles and starts on the deployed Worker. In workerd, through the test-only probe Worker, it answers `initialize` with no session ID. In Node, it answers `tools/list` with no prior `initialize`. See `test/mcp.test.ts`.
+- The Database round trip on the deployed Deployment: Worker to Hyperdrive to Supabase pooler to PostgreSQL, and back.
+- The unauthenticated block and the protected-resource metadata, served from the real origin.
+- The app runs on web-standard APIs (ADR-001), and its unit tests pass under Node.
+- The PostgreSQL engine adapter against PostgreSQL 17 in Docker (ADR-010): `test/postgres.int.test.ts` passes, and the whole suite passes (11 of 11).
 
-The PostgreSQL integration test (`test/postgres.int.test.ts`) has not run yet, because Docker's engine was failing on this machine.
+A TLS-intercepting proxy on the client machine can corrupt the chunked 401 response, so the smoke test reports an empty error body. This happened with Norton Safe Web, before `*.workers.dev` was excluded. The Operator material should say so, since Staff members connecting from managed machines will hit the same thing.
 
 ## What it did not prove
 - **Audit records reaching Workers Logs (ADR-013).** No Tool call runs before Sign-in, so the skeleton writes no Audit record. The first slice that runs a Tool call has to show one in Workers Logs, and has to measure the real retention for Q-010.
 - **Sign-in against a real Identity provider (ADR-004).** Neither Claude nor ChatGPT has connected. Whether both can complete sign-in through the broker (Q-019) is still assumed from their published documentation.
-- **The Allow-list in the connector URL path surviving Claude's and ChatGPT's organisation connector settings (ADR-006, Q-015).** This is assumed, not tested.
+- **Reading the Allow-list from the Database account's grants, and refusing an account that bypasses grants (ADR-006).** Untested on both Engines, and on Supabase's pooler in particular.
 - **The Query check (ADR-005).** In particular, `libpg-query`'s WebAssembly running inside the Worker size limit is assumed, not measured.
-- **MS SQL Server on Workers (ADR-008, Q-001).** This is untouched. D-020 governs the outcome.
-- **The container image on AWS and Azure (ADR-002, ADR-009),** and private Deployments on any cloud (D-041).
+- **The container image on Azure with MS SQL Server (ADR-002, ADR-009, D-063).**
+- **A Database the product owns (D-049).**

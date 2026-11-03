@@ -1,0 +1,18 @@
+// The config every Cloudflare Deployment shares. `npm run setup -- deploy` merges it
+// with the Operator's own wrangler.<worker name>.jsonc at every deploy, so an upgrade never deploys
+// stale fields. A test keeps these fields equal to the project's own wrangler.jsonc.
+{
+  "main": "src/worker.ts",
+  "compatibility_date": "2026-10-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "define": { "__filename": "\"/libpg-query.js\"", "__dirname": "\"/\"" },
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1
+  },
+  "version_metadata": { "binding": "VERSION_METADATA" },
+  "hyperdrive": [{ "binding": "HYPERDRIVE" }],
+  "vars": {
+    "ENGINE": "postgres"
+  }
+}

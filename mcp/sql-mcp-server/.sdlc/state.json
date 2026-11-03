@@ -9,8 +9,8 @@
       "gate": {
         "result": "pass",
         "by": "human",
-        "at": "2026-10-10T20:13:54+00:00",
-        "quote": "Confirm all"
+        "at": "2026-10-21T11:49:52+00:00",
+        "quote": "Approve the amended discovery, journeys, domain model, PRD, architecture, system spec and slices, confirm D-077, and commit."
       },
       "hash": null
     },
@@ -20,20 +20,21 @@
       "gate": {
         "result": "pass",
         "by": "human",
-        "at": "2026-10-10T20:44:40+00:00",
-        "quote": "Public, private also supported; Read-only (Recommended)"
+        "at": "2026-10-21T11:49:53+00:00",
+        "quote": "Approve the amended discovery, journeys, domain model, PRD, architecture, system spec and slices, confirm D-077, and commit."
       },
-      "hash": "sha256:5a14429112d3dffa"
+      "hash": "sha256:49067d857359c996"
     },
     "domain": {
       "status": "approved",
       "rework": 2,
       "gate": {
         "result": "pass",
-        "by": "model",
-        "at": "2026-10-11T02:06:04+00:00"
+        "by": "human",
+        "at": "2026-10-21T11:49:54+00:00",
+        "quote": "Approve the amended discovery, journeys, domain model, PRD, architecture, system spec and slices, confirm D-077, and commit."
       },
-      "hash": "sha256:ebf9b0e28b182cf6"
+      "hash": "sha256:ac9e2cfa1d72b751"
     },
     "prd": {
       "status": "approved",
@@ -41,25 +42,384 @@
       "gate": {
         "result": "pass",
         "by": "human",
-        "at": "2026-10-11T20:00:21+00:00",
-        "quote": "Approve the PRD. For the decisions, all confirmed except D-027, calls with no sign-in should simply be blocked and not logged."
+        "at": "2026-10-21T11:49:54+00:00",
+        "quote": "Approve the amended discovery, journeys, domain model, PRD, architecture, system spec and slices, confirm D-077, and commit."
       },
-      "hash": "sha256:27ea392bcca1bacb"
+      "hash": "sha256:e5202a7e4b5ba529"
     },
     "design": {
       "status": "approved",
-      "hash": "sha256:13397971180d20a4",
+      "hash": "sha256:788fabc1df0efc02",
       "gate": {
         "result": "pass",
         "by": "human",
-        "at": "2026-10-11T20:08:59+00:00",
-        "quote": "Skip design."
+        "at": "2026-10-21T11:49:55+00:00",
+        "quote": "Approve the amended discovery, journeys, domain model, PRD, architecture, system spec and slices, confirm D-077, and commit."
+      }
+    },
+    "architecture": {
+      "status": "approved",
+      "rework": 1,
+      "gate": {
+        "result": "pass",
+        "by": "human",
+        "at": "2026-10-21T11:49:55+00:00",
+        "quote": "Approve the amended discovery, journeys, domain model, PRD, architecture, system spec and slices, confirm D-077, and commit."
+      },
+      "hash": "sha256:4e5c0d52e199bc87"
+    },
+    "system-spec": {
+      "status": "approved",
+      "rework": 1,
+      "gate": {
+        "result": "pass",
+        "by": "human",
+        "at": "2026-10-25T16:15:14+00:00",
+        "quote": "Approve all three (Recommended)"
+      },
+      "hash": "sha256:cdb1cd7543cf1537"
+    },
+    "slices": {
+      "status": "approved",
+      "rework": 1,
+      "gate": {
+        "result": "pass",
+        "by": "human",
+        "at": "2026-10-25T16:15:14+00:00",
+        "quote": "Approve all three (Recommended)"
+      },
+      "hash": "sha256:811f4c9cf2563322"
+    },
+    "retro": {
+      "status": "approved",
+      "hash": null,
+      "gate": {
+        "result": "pass",
+        "by": "model",
+        "at": "2026-10-21T01:15:08+00:00"
+      }
+    },
+    "improve": {
+      "status": "approved",
+      "hash": "sha256:85e4f5b710889c13",
+      "gate": {
+        "result": "pass",
+        "by": "human",
+        "at": "2026-10-23T12:32:35+00:00",
+        "quote": "Approve all but P7"
       }
     }
   },
-  "slices": [],
+  "slices": [
+    {
+      "id": "S-001",
+      "title": "Signing in from Claude and ChatGPT",
+      "status": "verified",
+      "traces": [
+        "J-002",
+        "R-009",
+        "R-017"
+      ],
+      "rework": {
+        "verify": 1
+      },
+      "gates": {
+        "slice-spec": {
+          "result": "pass",
+          "by": "human",
+          "at": "2026-10-20T00:37:14+00:00",
+          "quote": "Approve the amended system spec, slices and S-001 spec, close the review, and commit."
+        },
+        "build": {
+          "result": "pass",
+          "by": "script",
+          "at": "2026-10-20T00:37:30+00:00"
+        },
+        "review": {
+          "result": "pass",
+          "by": "human",
+          "at": "2026-10-20T00:37:30+00:00",
+          "quote": "Approve the amended system spec, slices and S-001 spec, close the review, and commit."
+        },
+        "deploy": {
+          "result": "pass",
+          "by": "script",
+          "at": "2026-10-20T02:34:08+00:00"
+        },
+        "verify": {
+          "result": "pass",
+          "by": "human",
+          "at": "2026-10-21T01:10:59+00:00",
+          "quote": "1. pass S-001 for Entra now, drop Google client from requirements 2. Confirm D-070"
+        }
+      }
+    },
+    {
+      "id": "S-002",
+      "title": "Seeing which tables are available",
+      "status": "verified",
+      "traces": [
+        "J-003",
+        "R-003",
+        "R-010",
+        "R-017"
+      ],
+      "rework": {
+        "slice-spec": 2,
+        "review": 2
+      },
+      "gates": {
+        "slice-spec": {
+          "result": "pass",
+          "by": "human",
+          "at": "2026-10-21T21:04:01+00:00",
+          "quote": "Apply and pass (Recommended)"
+        },
+        "build": {
+          "result": "pass",
+          "by": "script",
+          "at": "2026-10-22T02:30:03+00:00"
+        },
+        "review": {
+          "result": "pass",
+          "by": "human",
+          "at": "2026-10-22T20:54:36+00:00",
+          "quote": "Close it (Recommended)"
+        },
+        "deploy": {
+          "result": "pass",
+          "by": "script",
+          "at": "2026-10-22T20:57:44+00:00"
+        },
+        "verify": {
+          "result": "pass",
+          "by": "human",
+          "at": "2026-10-23T01:42:28+00:00",
+          "quote": "Pass S-002, confirm D-078 to D-080, and commit."
+        }
+      }
+    },
+    {
+      "id": "S-003",
+      "title": "Answering a question from the data",
+      "status": "verified",
+      "traces": [
+        "J-004",
+        "J-008",
+        "R-002",
+        "R-004",
+        "R-006",
+        "R-011",
+        "R-015"
+      ],
+      "size_at_creation": "product",
+      "rework": {
+        "slice-spec": 4,
+        "review": 2
+      },
+      "gates": {
+        "slice-spec": {
+          "result": "pass",
+          "by": "human",
+          "at": "2026-10-25T16:15:14+00:00",
+          "quote": "Approve all three (Recommended)"
+        },
+        "build": {
+          "result": "pass",
+          "by": "script",
+          "at": "2026-10-25T21:20:13+00:00"
+        },
+        "review": {
+          "result": "pass",
+          "by": "model",
+          "at": "2026-10-25T21:27:27+00:00"
+        },
+        "deploy": {
+          "result": "pass",
+          "by": "script",
+          "at": "2026-10-25T23:52:59+00:00"
+        },
+        "verify": {
+          "result": "pass",
+          "by": "human",
+          "at": "2026-10-26T00:23:24+00:00",
+          "quote": "I have completed the live checks. Everything works. / Pass now, T-012 later / Confirm all four"
+        }
+      }
+    },
+    {
+      "id": "S-004",
+      "title": "Measuring answer correctness on PostgreSQL",
+      "status": "verified",
+      "traces": [
+        "R-012"
+      ],
+      "size_at_creation": "product",
+      "rework": {
+        "slice-spec": 1
+      },
+      "gates": {
+        "slice-spec": {
+          "result": "pass",
+          "by": "human",
+          "at": "2026-10-26T02:07:57+00:00",
+          "quote": "Apply all, then pass / Approve the set / 1 run by default"
+        },
+        "build": {
+          "result": "pass",
+          "by": "script",
+          "at": "2026-10-30T21:09:14+00:00"
+        },
+        "review": {
+          "result": "pass",
+          "by": "model",
+          "at": "2026-10-31T15:39:11+00:00"
+        },
+        "deploy": {
+          "result": "pass",
+          "by": "script",
+          "at": "2026-10-31T15:44:59+00:00"
+        },
+        "verify": {
+          "result": "pass",
+          "by": "human",
+          "at": "2026-10-31T21:33:39+00:00",
+          "quote": "Count my run; Confirm both; Accept as-is"
+        }
+      }
+    },
+    {
+      "id": "S-005",
+      "title": "Deploying on Cloudflare from the docs alone",
+      "status": "deployed",
+      "traces": [
+        "J-001",
+        "R-001",
+        "R-013"
+      ],
+      "size_at_creation": "product",
+      "rework": {
+        "slice-spec": 1,
+        "review": 2
+      },
+      "gates": {
+        "slice-spec": {
+          "result": "pass",
+          "by": "human",
+          "at": "2026-11-01T19:44:18+00:00",
+          "quote": "Fix both, then pass"
+        },
+        "build": {
+          "result": "pass",
+          "by": "script",
+          "at": "2026-11-01T20:27:06+00:00"
+        },
+        "review": {
+          "result": "pass",
+          "by": "human",
+          "at": "2026-11-03T00:10:10+00:00",
+          "quote": "Simplify the swap, then pass"
+        },
+        "deploy": {
+          "result": "pass",
+          "by": "script",
+          "at": "2026-11-03T00:17:42+00:00"
+        }
+      }
+    },
+    {
+      "id": "S-006",
+      "title": "Signing in to an MS SQL Server Deployment on Azure",
+      "status": "planned",
+      "traces": [
+        "J-001",
+        "J-002",
+        "J-003",
+        "R-001",
+        "R-002",
+        "R-003",
+        "R-009"
+      ],
+      "size_at_creation": "product"
+    },
+    {
+      "id": "S-007",
+      "title": "Answering questions from MS SQL Server",
+      "status": "planned",
+      "traces": [
+        "J-004",
+        "J-008",
+        "R-002",
+        "R-004",
+        "R-006",
+        "R-011",
+        "R-015"
+      ],
+      "size_at_creation": "product"
+    },
+    {
+      "id": "S-008",
+      "title": "Measuring MS SQL Server",
+      "status": "planned",
+      "traces": [
+        "J-001",
+        "R-003",
+        "R-012",
+        "R-013"
+      ],
+      "size_at_creation": "product"
+    },
+    {
+      "id": "S-009",
+      "title": "A Security reviewer approves a read-only Deployment",
+      "status": "planned",
+      "traces": [
+        "J-007",
+        "R-014"
+      ],
+      "size_at_creation": "product"
+    },
+    {
+      "id": "S-010",
+      "title": "Changing a record",
+      "status": "planned",
+      "traces": [
+        "J-005",
+        "J-009",
+        "R-003",
+        "R-005",
+        "R-007",
+        "R-008"
+      ],
+      "size_at_creation": "product"
+    },
+    {
+      "id": "S-011",
+      "title": "Deleting a record",
+      "status": "planned",
+      "traces": [
+        "J-005",
+        "J-009",
+        "R-005",
+        "R-007",
+        "R-008"
+      ],
+      "size_at_creation": "product"
+    },
+    {
+      "id": "S-012",
+      "title": "Creating a table in a Conversation",
+      "status": "planned",
+      "traces": [
+        "J-006",
+        "R-005",
+        "R-007",
+        "R-016"
+      ],
+      "size_at_creation": "product"
+    }
+  ],
   "blocked_on": null,
   "open_questions": [],
-  "phase": "architecture",
-  "phase_started_at": "2026-10-11T20:43:31+00:00"
+  "phase": null
 }

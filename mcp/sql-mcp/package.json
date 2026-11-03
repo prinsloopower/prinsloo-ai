@@ -1,0 +1,42 @@
+{
+  "name": "sql-mcp-server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "test:one": "vitest run -t",
+    "typecheck": "tsc --noEmit",
+    "db:up": "docker compose -f test/docker-compose.yml up -d --wait",
+    "db:down": "docker compose -f test/docker-compose.yml down",
+    "dev": "wrangler dev",
+    "setup": "tsx deploy/cloudflare/setup.ts",
+    "smoke": "node scripts/smoke.mjs"
+  },
+  "dependencies": {
+    "@libpg-query/parser": "^17.8.0",
+    "@modelcontextprotocol/sdk": "^1.32.1",
+    "hono": "^4.13.13",
+    "jose": "^6.2.12",
+    "pg": "^8.23.1",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@anthropic-ai/sdk": "^1.3.0",
+    "@cloudflare/workers-types": "^5.20261011.1",
+    "@types/node": "^24.0.0",
+    "@types/pg": "^8.23.1",
+    "tsx": "^4.23.15",
+    "typescript": "^5.9.0",
+    "vitest": "^5.0.3",
+    "wrangler": "^4.149.0"
+  },
+  "allowScripts": {
+    "esbuild@0.28.2": true,
+    "workerd@1.20261006.1": true
+  }
+}

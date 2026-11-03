@@ -1,0 +1,31 @@
+// Local development config: `npm run dev` runs the Worker against the Docker Database
+// (docs/development.md). To deploy, use `npm run setup` (deploy/cloudflare/guide.md), which writes
+// a config of your own and never this file. Server settings are vars; secrets are set with
+// `wrangler secret put`, or in .dev.vars locally.
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "sql-mcp-dev",
+  "main": "src/worker.ts",
+  "compatibility_date": "2026-10-01",
+  "compatibility_flags": ["nodejs_compat"],
+  // The PostgreSQL parser's Emscripten glue reads these, which Workers do not define.
+  "define": { "__filename": "\"/libpg-query.js\"", "__dirname": "\"/\"" },
+  // Audit records go to Workers Logs, the Host log facility on Cloudflare.
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1
+  },
+  // The deployed version's id, which the Server reports in `initialize`.
+  "version_metadata": { "binding": "VERSION_METADATA" },
+  "hyperdrive": [
+    {
+      "binding": "HYPERDRIVE",
+      // A placeholder: `wrangler dev` connects through localConnectionString instead.
+      "id": "00000000000000000000000000000000",
+      "localConnectionString": "postgres://postgres:postgres@localhost:55432/sqlmcp"
+    }
+  ],
+  "vars": {
+    "ENGINE": "postgres"
+  }
+}
