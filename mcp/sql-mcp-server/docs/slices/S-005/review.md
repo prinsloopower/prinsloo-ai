@@ -560,3 +560,39 @@ Axis: standards and naming
 Verdict: hold (0 blockers, 3 gaps, 2 nits)
 
 Reworked in the next commit (D-112, review 6 additions). The product owner chose "Fix all, then a seventh check". One run of the clean copy's suite after the rework had the Workers runtime fail to start in two workerd tests; they passed alone, and the next full run passed, 239 of 239.
+
+## Review 7 (2026-11-02): T-009, check of review 6's rework
+
+Reviewed: commit 358d1ff (c6bb38b..358d1ff) and the clean copy's commit 7e0a7d9, on two axes in separate fresh contexts.
+Tests: `npx vitest run test/export test/deploy` → 5 files, 49 passed; in `../sql-mcp`, typecheck clean and 37 files, 239 passed. No `.previous-*` folder was left behind.
+
+Every review-6 finding is resolved. The spec-and-scope axis passed with one nit, which the standards-and-naming axis raised as a gap. It is listed once, as the first gap below.
+
+## gap — the swap's error lists files the copy could not remove as files to restore from the folder aside
+Where: release/export.ts:121
+Axis: spec and scope; standards and naming
+A new file the rollback cannot remove is pushed to the same list as an old file it cannot put back. The message then tells the Operator to restore it from the folder aside, where it is not. An old name can be listed twice, and each failure's cause is discarded. No test reaches this path.
+
+## gap — keep() and the copy's .gitignore define local secret files differently
+Where: release/export.ts:41
+Axis: standards and naming
+`.env.production.local` and `.dev.vars.prod.bak` are ignored by git, so treated as local, but they are not kept, so a re-export deletes them. `.env.example` is kept, so it is never checked. The test checks only that three lines exist in .gitignore.
+
+## nit — two deletions of the folder aside bypass SwapFs
+Where: release/export.ts:135
+Axis: standards and naming
+
+## nit — "a word, in any form" overstates the slice pattern, which misses sliced, slicing and subslice
+Where: release/export.ts:48
+Axis: standards and naming
+
+Verdict: hold (0 blockers, 2 gaps, 2 nits)
+
+The product owner answered: "Simplify the swap, then pass". The fixes, in the commit that records this (D-112, review 7 additions):
+- **The swap is simpler.** Moving the old copy aside is the check that it can be replaced. A move that fails puts back what moved, and leaves the target as it was. A write that fails is reported with where the previous copy is, and nothing is undone. The error names each entry it could not move back, with its cause. The rollback after a failed write is gone, with the faults reviews 5 to 7 found in it.
+- **One list defines a local file:** the copy's .gitignore. The export keeps exactly what it ignores. `export_keeps_exactly_what_it_ignores` checks this against real git in both directions, `.env.production.local` and `.env.example` included.
+- **Nits:** the folder aside is deleted through the same file operations the tests can fail. The slice pattern and its comment agree (slice, slices, sliced, slicing).
+
+Tests after the fixes: `npm test` → 46 files, 287 passed; the clean copy → 37 files, 239 passed; `npm run typecheck` → clean in both. On the product owner's answer, review is recorded as passed on these fixes, without an eighth review.
+
+Verdict: pass (0 blockers, 0 gaps, 0 nits)

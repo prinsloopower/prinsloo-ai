@@ -882,3 +882,9 @@ Added after review 6, on the product owner's "Fix all, then a seventh check":
 - **`.dev.vars.example` is the copy's own file,** so it is replaced and checked like any other. Only local secrets, `.dev.vars`, `.dev.vars.<env>`, `.env` and `.env.<env>`, are kept.
 - **Every kept secret file is gitignored,** in the copy and in this folder: `.dev.vars*` but `.dev.vars.example`, and `.env*`.
 - **The word check takes every form:** "slice" in any form but a `.slice(` call and the `slice-ansi` package, "Gate 2", "Gate-2" and "Gates 1 and 2", and the pipeline's file names in any case.
+
+Added after review 7, on the product owner's "Simplify the swap, then pass", which replaces the swap described above:
+- **Moving the old copy aside is the check that it can be replaced.** If any old entry cannot be moved (a file in use), the entries just moved go straight back, and the target is as it was. If one cannot go back either, the error names it, with its cause, and the folder that holds it. Only when every old entry is aside is the new copy written. If that write fails, nothing is undone: the error says the copy is incomplete and where the previous one is, and exporting again mends it.
+- **One list defines a local file:** the copy's .gitignore, `GITIGNORE` in the export. The export keeps exactly the names that list ignores, so nothing ignored is lost and nothing kept can be committed. A test checks this against real git, with `git status --ignored`, in both directions. `git check-ignore` is not used, because it reports a name that a negated pattern matches as matched.
+- **The slice words** are slice, slices, sliced and slicing. A compound such as "subslice" is not caught, and the comment says so.
+Alternatives rejected: undoing a failed write by moving the old copy back over it, the approach reviews 5 to 7 found new faults in each time.

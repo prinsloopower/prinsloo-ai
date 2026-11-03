@@ -291,7 +291,7 @@
     {
       "id": "S-005",
       "title": "Deploying on Cloudflare from the docs alone",
-      "status": "specified",
+      "status": "reviewed",
       "traces": [
         "J-001",
         "R-001",
@@ -315,9 +315,10 @@
           "at": "2026-11-01T20:27:06+00:00"
         },
         "review": {
-          "result": "hold",
-          "by": "model",
-          "at": "2026-11-02T12:37:49+00:00"
+          "result": "pass",
+          "by": "human",
+          "at": "2026-11-03T00:10:10+00:00",
+          "quote": "Simplify the swap, then pass"
         },
         "deploy": {
           "result": "pass",
@@ -418,7 +419,7 @@
       "size_at_creation": "product"
     }
   ],
-  "blocked_on": "review: review 6 (T-009): 0 blockers, 3 gaps, 2 nits; to the product owner",
+  "blocked_on": null,
   "open_questions": [],
   "phase": null
 }

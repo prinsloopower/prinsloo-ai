@@ -2,7 +2,9 @@ import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, 
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { INCLUDE, WRITTEN, checkTree, exportTree, listTree, listed, swapInto } from "../../release/export.js";
+import { execFileSync } from "node:child_process";
+import { OPERATOR_FILE } from "../../deploy/cloudflare/lib/config.js";
+import { INCLUDE, WRITTEN, checkTree, exportTree, keep, listTree, listed, swapInto } from "../../release/export.js";
 import { SERVER_INFO } from "../../src/mcp.js";
 import { table } from "../markdown.js";
 
@@ -66,6 +68,7 @@ describe("the clean copy's export", () => {
       ["test/planted-3.ts", "// fine\n// from the amendment gate\n"],
       ["test/planted-4.ts", "// fine\n// the critique found it\n"],
       ["test/planted-5.ts", "// fine\n// added per-slice\n"],
+      ["test/planted-7.ts", "// fine\n// while slicing the backlog\n"],
       ["docs/planted-6.md", "fine\nsee spec.md, pipeline.json and Contract.md\n"],
     ] as const) {
       writeFileSync(join(out, file), text);
@@ -185,39 +188,43 @@ describe("the clean copy's export", () => {
         mkdirSync(join(staging, f, ".."), { recursive: true });
         writeFileSync(join(staging, f), "new");
       }
-      return { dir, to, staging, before: listTree(to).map((f) => `${f}=${read(join(to, f))}`) };
+      return { dir, to, staging, before: state(to) };
     };
     const state = (to: string) => listTree(to).map((f) => `${f}=${read(join(to, f))}`);
     const aside = (dir: string) => readdirSync(dir).filter((n) => n.startsWith("copy.previous-"));
-    const real = { renameSync: renameSync, cpSync: cpSync, rmSync: rmSync };
+    const real = { renameSync, cpSync, rmSync };
 
-    // Moving the old copy aside fails on its second entry: what moved comes back, nothing is deleted.
-    const moving = fresh();
+    // An old entry cannot be moved aside (it is in use): the ones moved come straight back, and the
+    // target is as it was, the kept .dev.vars included. Nothing is left aside.
+    const inUse = fresh();
     let renames = 0;
-    const failSecondRename = { ...real, renameSync: ((a: string, b: string) => (++renames === 2 ? fail("EBUSY: b is locked") : renameSync(a, b))) as typeof renameSync };
-    expect(() => swapInto(moving.staging, moving.to, failSecondRename)).toThrow(/put back as it was: EBUSY/);
-    expect(state(moving.to)).toEqual(moving.before);
-    expect(read(join(moving.to, ".dev.vars"))).toBe("secret");
-    expect(aside(moving.dir)).toEqual([]);
+    const lockSecond = { ...real, renameSync: ((a: string, b: string) => (++renames === 2 ? fail("EBUSY: b is locked") : renameSync(a, b))) as typeof renameSync };
+    expect(() => swapInto(inUse.staging, inUse.to, lockSecond)).toThrow(/is in use, so the clean copy was not written and .* was left as it was: EBUSY/s);
+    expect(state(inUse.to)).toEqual(inUse.before);
+    expect(aside(inUse.dir)).toEqual([]);
 
-    // Writing the new copy fails after one file: that file goes, and the old copy comes back.
-    const copying = fresh();
-    const failMidCopy = { ...real, cpSync: ((_from: string, to: string) => { writeFileSync(join(to, "a.txt"), "new"); fail("EBUSY: c.txt is locked"); }) as typeof cpSync };
-    expect(() => swapInto(copying.staging, copying.to, failMidCopy)).toThrow(/put back as it was: EBUSY/);
-    expect(state(copying.to)).toEqual(copying.before);
-    expect(aside(copying.dir)).toEqual([]);
-
-    // Putting an old entry back fails too: the error says so, and where that entry still is.
+    // Moving one back fails as well: the error names it, with its cause, and where it still is.
     const stuck = fresh();
-    let backs = 0;
-    const failPutBack = {
+    let moves = 0;
+    const lockSecondAndBack = {
       ...real,
-      cpSync: (() => fail("EBUSY: copy failed")) as typeof cpSync,
-      renameSync: ((a: string, b: string) => (a.includes(".previous-") && ++backs === 1 ? fail("EBUSY: a.txt is locked") : renameSync(a, b))) as typeof renameSync,
+      renameSync: ((a: string, b: string) => {
+        moves++;
+        if (moves === 2) fail("EBUSY: b is locked");
+        if (a.includes(".previous-")) fail("EPERM: a is held");
+        return renameSync(a, b);
+      }) as typeof renameSync,
     };
-    expect(() => swapInto(stuck.staging, stuck.to, failPutBack)).toThrow(/could not be put back fully\. Restore a\.txt from .*copy\.previous-/);
-    const [left] = aside(stuck.dir);
-    expect(readdirSync(join(stuck.dir, left!))).toEqual(["a.txt"]);
+    expect(() => swapInto(stuck.staging, stuck.to, lockSecondAndBack)).toThrow(/still in .*copy\.previous-.*; move them back: a\.txt \(EPERM: a is held\)/s);
+    const [held] = aside(stuck.dir);
+    expect(readdirSync(join(stuck.dir, held!))).toEqual(["a.txt"]);
+
+    // The new copy cannot be fully written: nothing is undone, and the error says where the old one is.
+    const partial = fresh();
+    const failCopy = { ...real, cpSync: ((_f: string, to: string) => { writeFileSync(join(to, "a.txt"), "new"); fail("ENOSPC: disk full"); }) as typeof cpSync };
+    expect(() => swapInto(partial.staging, partial.to, failCopy)).toThrow(/only partly written .*ENOSPC.*The previous copy is in .*copy\.previous-/s);
+    const [previous] = aside(partial.dir);
+    expect(readdirSync(join(partial.dir, previous!)).sort()).toEqual(["a.txt", "b", "c.txt"]);
 
     // Nothing failing: the new copy replaces the old, the kept file stays, and nothing is left aside.
     const ok = fresh();
@@ -225,6 +232,29 @@ describe("the clean copy's export", () => {
     expect(state(ok.to)).toEqual(["a.txt=new", "b/inner.txt=new", "c.txt=new", "d.txt=new"]);
     expect(read(join(ok.to, ".dev.vars"))).toBe("secret");
     expect(aside(ok.dir)).toEqual([]);
+  });
+
+  it("export_keeps_exactly_what_it_ignores", () => {
+    // Real git decides what the copy's .gitignore ignores; the export must keep exactly those names.
+    const repo = mkdtempSync(join(parent, "ignore-"));
+    execFileSync("git", ["init", "-q"], { cwd: repo });
+    writeFileSync(join(repo, ".gitignore"), read(join(out, ".gitignore")));
+    const dirs = ["node_modules", ".wrangler", "dist", "src"];
+    const files = [".dev.vars", ".dev.vars.staging", ".dev.vars.prod.bak", ".dev.vars.example", ".env", ".env.production.local", ".envrc", ".env.example",
+      "wrangler.trial.jsonc", "wrangler.a.b.jsonc", "wrangler.jsonc", "package.json", "README.md", "LICENSE"];
+    // Git lists no empty folder, so each holds a file.
+    for (const d of dirs) {
+      mkdirSync(join(repo, d), { recursive: true });
+      writeFileSync(join(repo, d, "x"), "x");
+    }
+    for (const f of files) writeFileSync(join(repo, f), "x");
+    // `git status --ignored`, not `check-ignore`, which reports a path a negated pattern matches as matched.
+    const status = execFileSync("git", ["status", "--porcelain", "--ignored", "--untracked-files=normal"], { cwd: repo, encoding: "utf8" }).split("\n");
+    const ignored = (name: string) => status.some((l) => l === `!! ${name}` || l === `!! ${name}/`);
+    for (const name of [...dirs, ...files]) expect(keep(name), name).toBe(ignored(name));
+    // The kit's own Operator files are among them, and the copy's own example and config are not.
+    for (const worker of ["trial", "sql-mcp-trial"]) expect(keep(`wrangler.${worker}.jsonc`) && OPERATOR_FILE.test(`wrangler.${worker}.jsonc`)).toBe(true);
+    for (const own of [".dev.vars.example", "wrangler.jsonc", "package.json"]) expect(keep(own), own).toBe(false);
   });
 
   it("guide_clones_the_clean_copy", () => {
