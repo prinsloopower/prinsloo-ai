@@ -291,7 +291,7 @@
     {
       "id": "S-005",
       "title": "Deploying on Cloudflare from the docs alone",
-      "status": "deployed",
+      "status": "verified",
       "traces": [
         "J-001",
         "R-001",
@@ -324,6 +324,12 @@
           "result": "pass",
           "by": "script",
           "at": "2026-11-03T00:17:42+00:00"
+        },
+        "verify": {
+          "result": "pass",
+          "by": "human",
+          "at": "2026-11-07T14:46:27+00:00",
+          "quote": "I ran the deploy successfully, added the connector to Claude and asked a question and got an answer"
         }
       }
     },
