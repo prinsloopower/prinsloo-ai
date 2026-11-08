@@ -1,203 +1,140 @@
-# S-006 — The container image, the Bicep kit and MS SQL Server's catalog
+# S-006 — Listing MS SQL Server tables from the container image
 
-Delivers: with two `az deployment group create` runs and the published image `ghcr.io/prinsloopower/sql-mcp`, a Container App comes up whose `/mcp` a Staff member adds to Claude or ChatGPT, signs in to through Entra ID, and asks which tables they may query, getting `list_tables` answered from MS SQL Server's own grants. Its one tool lists; none reads rows.
-Traces: J-001, J-002, J-003, R-001, R-002, R-003, R-009
+Delivers: the product owner runs `ghcr.io/prinsloopower/sql-mcp` on their own machine against MS SQL Server 2022 in Docker, adds `http://localhost:8080/mcp` to Claude Code, signs in through Entra ID, and asks which tables they may query. The answer is exactly what the Database account is granted inside the Boundary. `docker logs` shows a JSON line per Tool call with their identity, and an account holding anything past security.md's read-only list is refused.
+Traces: J-002, J-003, R-002, R-003, R-009, R-010
+
+R-002 and J-003 are only begun here: S-007 adds answers, and S-013 adds Claude and ChatGPT.
 
 ## Screens
-None: the Server has no interface of its own (D-046). What a Staff member sees is their AI tool's rendering of Sign-in and of the `list_tables` result, unchanged from S-001 and S-002.
+None: the Server has no interface of its own (D-046). What the Staff member sees is Claude Code's rendering of Sign-in and of the `list_tables` result, unchanged from S-001 and S-002.
 
 ## Interface
-No new endpoint and no new tool. The Azure Deployment answers the same paths as the Worker: `/healthz`, `/mcp`, the two well-known metadata documents, `/authorize`, `/oauth/callback`, `/token` and `/register`.
+No new endpoint and no new tool. The container answers the Worker's paths: `/healthz`, `/mcp`, the two well-known metadata documents, `/authorize`, `/oauth/callback`, `/token` and `/register`.
 
-- **Tools on MS SQL Server:** `list_tables` only. The query tool is not registered, because the Node adapter supplies no Query engine until S-007. `tools/list` therefore shows one tool.
-- **`initialize`** reports the Server version as the package version alone, such as `0.1.0` (D-114). Unlike the Worker, it carries no deploy id.
-- **Request body:** a body over 1 MiB gets 413 before it is parsed (operations.md). The shared app enforces this, so the Worker gains it too (D-117). A `Content-Length` over the limit is refused at once. A body with no `Content-Length`, or with one that understates it, is counted as it streams, and refused as soon as it passes 1 MiB.
+- **Tools on MS SQL Server:** `list_tables` only. The Node adapter supplies no Query engine until S-007, so `tools/list` shows one tool.
+- **`initialize`** reports the package version alone (D-114). S-006 raises it to `0.2.0`, because the shared app changes and `0.1.0` is the Worker already deployed (D-127).
+- **Request body:** the 1 MiB limit is enforced in the shared app (operations.md, D-117). A true `Content-Length` over the limit is refused at once. A body with none, or with one that understates it, is refused as soon as the count passes 1 MiB. The Worker gains this in code, and S-006 does not redeploy it (D-126).
 
 ### Seams in the shared app
-Engine and runtime differences enter through `Deps` (`src/app.ts`), and through nothing else. Two fields are new:
-- `classify`: the runtime's Database error classifier, which replaces the app's direct import of `classifyPostgresError`. The Worker passes `classifyPostgresError`, so its behaviour is unchanged.
-- `adapterConfigError`: the name of a variable that the runtime adapter itself requires and found missing or invalid. When it is set, the app takes the same path as a `readConfig` failure naming that variable: 503 on every MCP and Sign-in path, `/healthz` reporting `config: invalid`, and one `config_invalid` line. When `readConfig` also fails, its variable is the one named. The Worker never sets it, and `readConfig` is unchanged, so `PUBLIC_URL` stays optional on Workers.
+Engine and runtime differences enter through `Deps` (`src/app.ts`) and nothing else. Two fields are new:
+- `classify`: the runtime's Database error classifier, which replaces the app's direct import of `classifyPostgresError`. The Worker passes `classifyPostgresError`.
+- `adapterConfigError`: the name of a variable the runtime adapter requires and found missing or invalid. When it is set, the app takes the path of a `readConfig` failure naming that variable. When `readConfig` also fails, its variable is named (environments.md). The Worker never sets it, and `readConfig` is unchanged.
+
+`AccountFlags` gains `unlisted`: true when the account holds anything outside MS SQL Server's list. `bypassesGrants` includes it, and PostgreSQL always sets it false (D-126).
 
 ## Runtime adapter (Node)
-`src/server.ts`, built to `dist/server.js`, is the container image's entry point (components.md, Runtime adapter). It:
-- reads Server settings from `process.env` once, at process start (D-070);
+`src/server.ts`, built to `dist/server.js`, is the image's entry point (components.md, Runtime adapter). It:
+- reads Server settings from `process.env` once, at process start, trimmed (D-070);
 - sets `adapterConfigError` to the first of these that fails, in this order:
   - `ENGINE`, unless it is exactly `mssql`;
-  - `DATABASE_URL`, when it is unset or does not parse as an ADO connection string naming a server and a database. It is trimmed first, like every other variable, so a secret saved from a file with a trailing newline still works;
-  - `PUBLIC_URL`, when it is unset, because a proxy sits in front (environments.md).
-  The value of `DATABASE_URL` is never logged or echoed;
-- listens on `PORT`, `8080` when unset;
-- names `DATABASE_URL` as the connection setting in `config_invalid` lines for an account that bypasses grants (D-077);
-- gives the app a guarded `fetch` for the Client ID Metadata Document and the Identity provider. It refuses the connection unless every address the host resolves to is public, checking at connect time (security.md, Fetches): no loopback, RFC 1918, link-local (169.254.0.0/16, fe80::/10), CGNAT (100.64.0.0/10), ULA (fc00::/7), multicast or unspecified address, and no IPv4-mapped form of any of them. A host written as an IP literal, such as `https://169.254.169.254/x` or `https://[::1]/x`, is checked against the same list, because no DNS lookup happens for it. A refused fetch fails the way an unreachable one does, so registration ends with `invalid_client`.
-
-Sign-in, tokens, metadata, Audit records and operational lines are the shared code S-001 and S-002 built, unchanged.
+  - `DATABASE_URL`, when it is unset or does not parse as an ADO connection string naming a server and a database, or when it sets `Encrypt` to anything but true or `TrustServerCertificate` to true. Keys and values are matched without regard to case. `Encrypt` passes when unset or set to `true`, `yes`, `mandatory` or `strict`, so the Azure portal's `Encrypt=True;TrustServerCertificate=False` passes. Its value is never logged or echoed;
+  - `PUBLIC_URL`, when it is unset;
+  - `PERMISSION_TIER`, when it is anything but `read-only` (security.md, At higher tiers);
+- listens on `PORT`, `8080` when unset. A `PORT` that is not an integer from 1 to 65535 leaves nothing to answer a 503 on, so the process writes one `config_invalid` line naming `PORT` and exits non-zero (D-127);
+- names `DATABASE_URL` in `config_invalid` lines for an account the check refuses (D-077);
+- writes Audit records and operational lines to standard output, one JSON line each, as the Worker's `console.log` does;
+- gives the app a guarded `fetch` for the Client ID Metadata Document and the Identity provider, which refuses a connection as security.md's Fetches rule gives it, checked at connect time and for IP-literal hosts. A refused fetch fails as an unreachable one does. The guard also covers the Identity provider, which security.md does not require, so a private Identity provider is refused too until private networking revisits it (D-128).
 
 ## Engine adapter (MS SQL Server)
-`MssqlDatabase` implements `Database` with `mssql` (`tedious`), one connection pool per process, built from `DATABASE_URL` in ADO form (environments.md). Connecting gives up after 5 seconds (operations.md). The adapter sets this after reading `DATABASE_URL`, so a `Connect Timeout` in the connection string does not change it. `requestTimeout` is 0, so the Server sets no statement time limit (D-003). `query()` is not reached in this slice, because no query tool is registered. It throws if it is called.
+`MssqlDatabase` implements `Database` with `mssql` (`tedious`). It keeps one connection pool per process, made from `DATABASE_URL` on first use. If that pool's first connect fails, it is discarded, and the next call makes a new one, so a Database that comes up later is reached without a restart. Connecting gives up after 5 seconds, whatever `Connect Timeout` the string holds (operations.md, environments.md). The connection is always encrypted, and the server's certificate is always checked against Node's trusted CAs, on every target. No setting turns the check off (D-129). `requestTimeout` is 0 (D-003). `query()` throws if called, because no query tool is registered.
 
 ### Allow-list
-`catalog()` runs one catalog Server statement (ADR-006). It returns one `CatalogRow` per column of every user table (`sys.tables`, `is_ms_shipped = 0`):
-- `granted` is `HAS_PERMS_BY_NAME(QUOTENAME(<schema>) + '.' + QUOTENAME(<table>), 'OBJECT', 'SELECT', <column>, 'COLUMN') = 1`. The quoting keeps a name holding `.` or `]` pointing at its own table. The check counts grants through roles, and denies at table and column level. data-model.md also names `fn_my_permissions(<table>, 'OBJECT')` per table. The column check alone decides the same rows in one statement, so it is not used (D-117, Q-041);
-- `type` is shown by name only when it is a built-in type (`sys.types.is_user_defined = 0`), with its length, precision and scale where they apply, such as `nvarchar(100)`, `decimal(10,2)` or `nvarchar(max)`. Any other type, whether alias, CLR or table, is shown as `user-defined`, because a type's name lives in a schema and can carry a Hidden object's name (D-081);
-- `readable` is true for every column. D-085 refuses only `reg*` and composite types, which MS SQL Server columns do not have;
-- tables the account owns, directly or through a role it is a member of, are left out. A table's owner is its own `principal_id`, else its schema's (D-076, D-077).
-
-System schemas (`sys`, `INFORMATION_SCHEMA`) are already excluded by the shared resolver. The Boundary, the 500-table cap, code-point ordering and the `schema` filter all apply unchanged.
+`catalog()` runs one catalog Server statement (ADR-006) holding data-model.md's MS SQL Server Allow-list and the account check. Column types are formatted as data-model.md gives them, for example `nvarchar(100)`, `decimal(10,2)`, `nvarchar(max)` and, for an alias type, `user-defined`. `readable` is true for every column (D-085). The shared resolver applies system schemas, the Boundary, the 500-table cap, code-point ordering and the `schema` filter unchanged.
 
 ### Account check
-`accountFlags()` runs in the same catalog statement and in `/healthz`. The account bypasses grants if it holds any of the following, directly or through a role at any depth:
-- **reaches every table (D-077):**
-  - `sysadmin` (`IS_SRVROLEMEMBER`);
-  - server-level `CONTROL SERVER` or `SELECT ALL USER SECURABLES` (`fn_my_permissions(NULL, 'SERVER')`);
-  - `db_owner` or `db_datareader` (`IS_ROLEMEMBER`);
-  - database-level `CONTROL` or `SELECT` (`fn_my_permissions(NULL, 'DATABASE')`);
-- **can give itself such a grant (D-081):**
-  - the server role `securityadmin`, or server-level `ALTER ANY SERVER ROLE` or `IMPERSONATE ANY LOGIN`;
-  - `IMPERSONATE` on any one login;
-  - `db_securityadmin` or `db_accessadmin`;
-  - database-level `ALTER ANY ROLE`, `ALTER ANY USER` or `ALTER ANY APPLICATION ROLE`;
-  - `IMPERSONATE` on any database user;
-  - ownership of, or `ALTER` on, any database role whose members would bypass grants by the rules above. Ownership counts directly or through a role.
+`accountFlags()` runs the check in the same statement, and in `/healthz`, as security.md's MS SQL Server Database account check defines it, including the `EngineEdition = 5` branch. Any failed condition sets `unlisted`, and the other flags are false (D-126). The routes D-116 and D-117 mapped onto the other flags are superseded (security.md).
 
-  Every permission here is read as an effective permission (`HAS_PERMS_BY_NAME` on the securable), so a permission that implies it counts too. `CONTROL` on a user or a login, for example, implies `IMPERSONATE` on it.
+**Defaults are measured first** (security.md, D-125). Before the check is wired into `catalog()`, its conditions are run as a query against a reader made the way a Database administrator would make one:
+- on SQL Server 2022 in Docker, by an integration test that prints every row `public` holds;
+- on `mcp-test`, by the product owner running the same query with `sqlcmd` as `sqlmcp_reader`. The same session also runs the ownership-catalog query below, because Azure SQL Database is evergreen and can have views SQL Server 2022 lacks.
+Both sets of rows go into the build record. A row the list does not cover stops the build for a system-spec amendment (security.md).
 
-On Azure SQL Database (`SERVERPROPERTY('EngineEdition') = 5`), server-level permissions cannot be read from a user database, so the server-level checks are left out of the statement there. The server admin login maps to `dbo`, and is caught as `db_owner` (D-116). The results map onto the existing `AccountFlags` (D-116, D-117):
-- `superuser`: the server-level checks, `db_owner` and database `CONTROL`;
-- `readAllData`: `db_datareader` and database `SELECT`;
-- `createRole`: every route under D-081;
-- `bypassRls` and `writeAllData`: always false.
+**The shipped statement is confirmed on `mcp-test`** in a second, short session, once the statement is final and after any amendment. The product owner runs, with `sqlcmd`, the `EngineEdition = 5` statement exactly as `dist/server.js` holds it, printed by `npm run print:check-sql`, which runs `node dist/server.js --print-check-sql`. It runs as `sqlmcp_reader`, which must pass, and as `sqlmcp_mapped`, a user mapped to a login made in `master`, and the server admin login, which must both be refused. `sqlmcp_mapped` and its login are then dropped in `master`.
+
+Both sessions use `sqlcmd` from the product owner's machine, never the portal's query editor, because logins are made and dropped in `master`. Each reaches the server through a client-IP firewall rule added for that session only and removed when it ends (D-127, D-128).
+
+**The ownership catalogs are checked against the instance.** A test lists every `sys` catalog view on SQL Server 2022, and the first `mcp-test` session lists every one on Azure SQL Database, with a `principal_id` or `owning_principal_id` column. Each must be either in security.md's list, or in the test's own exclusion list with the reason its column names no owner. For example, `sys.database_principals.principal_id` is the principal itself, and `sys.user_token` is the session's token. A view in neither list fails the test, and the build stops for a security.md amendment, as for defaults. The build never edits security.md's list itself.
 
 ### Database errors
-`classifyMssqlError` maps `tedious` errors to D-080's reason classes. The error number decides first, whether the error came at connect time or from a request on a pooled connection. The driver code decides only when there is no number.
-- `connection`:
-  - error numbers 18456 (login failed), 4060 (cannot open database), 40613 (database unavailable, including a serverless database resuming), 40615 (firewall), 40532 (cannot open server), 40197 (service error), 40501 (service busy), 40549 (transaction ended by the service), and 10928 and 10929 (resource limit reached);
-  - with no number, the driver codes `ESOCKET`, `ECONNCLOSED`, `ELOGIN` and `ETIMEOUT`. The last can only come from connecting, because `requestTimeout` is 0;
-- `timeout`: error number 1222 (lock timeout), the Database's own limit. The Server sets none (D-003);
-- `permission`: error numbers 229, 230 and 262;
-- `constraint`: error numbers 547, 2601, 2627 and 515;
+`classifyMssqlError` maps `tedious` errors to D-080's reason classes. The error number decides first, at connect time and on a pooled connection's request alike. The driver code decides only when there is no number.
+- `connection`: numbers 18456, 4060, 40613, 40615, 40532, 40197, 40501, 40549, 10928 and 10929. With no number, the codes `ESOCKET`, `ECONNCLOSED`, `ELOGIN` and `ETIMEOUT`;
+- `timeout`: number 1222;
+- `permission`: numbers 229, 230 and 262;
+- `constraint`: numbers 547, 2601, 2627 and 515;
 - `other`: everything else.
 
-As on PostgreSQL, the Agent's message is rebuilt from the class, and the driver's text is never passed through (D-005).
+The Agent's message is rebuilt from the class (D-005).
 
 ## Container image
-- `dist/server.js` is one file, bundled by esbuild from `src/server.ts` with every dependency inlined (`npm run build:image`). The PostgreSQL adapter is never imported from `src/server.ts`, so `pg` and the parser are not in the bundle (D-063, D-118). S-006 adds `mssql`, `@hono/node-server` and `undici` to `dependencies`, and `esbuild` to `devDependencies`. The Worker's bundle imports none of the three, so it does not change.
-- A `Dockerfile` at the package root: build on `node:24-slim`, run on `node:24-slim` as a non-root user. The runtime image holds `dist/server.js` and nothing else from the project: no `node_modules`, no PostgreSQL parser, no `pg` and no Wrangler.
-- **Published** to GHCR, public, as `ghcr.io/prinsloopower/sql-mcp` (D-115). Each push carries two tags: the commit SHA, which never moves, and the package version `X.Y.Z`. Until CI exists, the image is built and pushed by hand from the default branch, as D-104 does for the Worker, so `X.Y.Z` is overwritten by each push of the same version. Deploys and rollbacks therefore name the SHA tag (D-117).
+- `dist/server.js` is one file, bundled by esbuild from `src/server.ts` with every dependency inlined (`npm run build:image`, D-118). `src/server.ts` never imports the PostgreSQL adapter, so `pg` and the parser stay out. S-006 adds `mssql`, `@hono/node-server` and `undici` to `dependencies`, and `esbuild` to `devDependencies`. The Worker's bundle imports none of them.
+- A `Dockerfile` at the package root builds on `node:24-slim` and runs on `node:24-slim` as the image's `node` user (uid 1000), never root. The runtime image holds `dist/server.js` and no other project file.
+- **Published** to GHCR, public, as `ghcr.io/prinsloopower/sql-mcp` (D-115), tagged with the commit SHA and `0.2.0`. Until CI exists it is built and pushed by hand from the default branch (D-104). The SHA tag is the one that never moves.
 
-## Deployment kit (Azure)
-Two Bicep templates in `deploy/azure/`, each deployed with `az deployment group create` into an existing resource group (ADR-009). They are run in two stages, so the vault and the final URL exist before the Container App does (D-117).
-
-**Stage 1: `base.bicep`** creates:
-- a Log Analytics workspace, whose retention is the required parameter `logRetentionDays`, with no default (D-052). It is limited to 30 to 730 days, the range Log Analytics accepts on its pay-as-you-go tier, so a value outside it is refused before anything is made. The Security material states the 30-day floor;
-- a Container Apps environment that sends console logs to that workspace, so Audit records reach Azure Monitor (ADR-013);
-- a user-assigned managed identity, and a Key Vault with RBAC authorisation;
-- two role assignments on that vault only: **Key Vault Secrets User** for the identity, and **Key Vault Secrets Officer** for the Operator. The Operator's object id is the required parameter `operatorPrincipalId`, which the guide fills from `az ad signed-in-user show`.
-
-The vault is named `kv-<uniqueString(resource group id, app name)>`, which is unique worldwide and the same on every rerun. Stage 1's outputs are:
-- `publicUrl`: the parameter `publicUrl` when given, for an Operator with a custom domain, and otherwise `https://<app name>.<environment default domain>`, computed from the environment it has just made;
-- `environmentName`, `identityName` and `vaultName`.
-
-Stage 2 takes all four outputs as parameters, and the guide passes them from stage 1's output with `az deployment group show`. The app name is a parameter of both stages.
-
-**Between the stages,** the Operator:
-- registers the Server in Entra ID with the redirect URI `<publicUrl>/oauth/callback`, as the Cloudflare guide's section 5 does;
-- writes `DATABASE-URL`, `SERVER-SECRET` and `IDP-CLIENT-SECRET` into the vault, in the portal or with `az keyvault secret set --file`, never `--value`. If the write is refused just after stage 1, the guide says the new role assignment can take a few minutes to apply, and to retry.
-
-**Stage 2: `app.bicep`** creates the Container App:
-- the image's SHA tag as a parameter, 1 replica, scaling to at most 3 at 70% CPU (operations.md);
-- external HTTPS ingress on port 8080, with HTTP disallowed, and a TCP liveness probe on the port (D-116, Q-041);
-- `DATABASE_URL`, `SERVER_SECRET` and `IDP_CLIENT_SECRET` as Key Vault references through the identity;
-- `SERVER_SECRET_PREVIOUS` as a Key Vault reference only while the boolean parameter `rotating` is true. It defaults to false, so a deploy outside a rotation references no secret that does not exist;
-- `ENGINE=mssql`, and `PUBLIC_URL` from stage 1's `publicUrl` output;
-- `IDP_ISSUER`, `IDP_CLIENT_ID`, `IDP_SCOPES`, `PERMISSION_TIER`, `ROW_LIMIT`, `REDACTION` and `BOUNDARY` as parameters.
-
-No secret is a parameter of either template, and no secret is ever on an `az` command line.
-
-`deploy/azure/guide.md` takes an Operator through these steps, in order. Timing them is S-008's job (Q-039):
-0. what the Operator needs: Owner or User Access Administrator on the resource group, because stage 1 makes role assignments, which Contributor cannot. The guide's first command checks this with `az role assignment list`;
-1. the Database account: a contained user, `CREATE USER … WITH PASSWORD`, in the Azure SQL Database, given only the grants that make the Allow-list, never a role or permission the account check refuses. The guide says at its start that this release supports Azure SQL Database only (D-120);
-2. the firewall rule that lets Container Apps reach the Database, and what it opens (D-116);
-3. stage 1;
-4. the Entra ID registration and the vault's secrets;
-5. stage 2;
-6. the smoke checks and the Sign-in smoke checks;
-7. rollback: stage 2 again, with the previous SHA tag (operations.md);
-8. rotation, as security.md's Secrets rules give it:
-   - `SERVER_SECRET`: write the old value as `SERVER-SECRET-PREVIOUS` and the new one as `SERVER-SECRET`, then run stage 2 with `rotating=true`. After 30 days, run stage 2 with `rotating=false` and delete `SERVER-SECRET-PREVIOUS`;
-   - a leaked `SERVER_SECRET`: write the new value only, and run stage 2 with `rotating=false`, which signs every Staff member out;
-   - `IDP_CLIENT_SECRET` and the Database password: rotate at the source, update the vault, and run stage 2.
-   A vault change reaches the Container App only with a new revision, which stage 2 makes;
-9. monitoring. The kit creates no alert itself (D-118), and `/healthz` waits on Q-041. For the other signals:
-   - Database errors, Identity provider failures, Server faults and configuration errors: the Log Analytics query over the Container App's console logs, operations.md's threshold, and how to save it as an Azure Monitor alert;
-   - 5xx responses: an Azure Monitor metric alert on the Container App's `Requests` metric, filtered to status code category 5xx, firing at more than 1 in 15 minutes. A metric alert cannot express operations.md's 1% share, so this count is stricter (D-119).
+## Settings reference
+docs/settings.md, which the clean copy ships, gains the container: `ENGINE=mssql`, `DATABASE_URL` and `PUBLIC_URL` required, `PORT`, reading at process start, `read-only` as the only tier on MS SQL Server, the 503 a missing adapter setting gives, and the 503 for a `DATABASE_URL` that turns off encryption or the certificate check (D-129). It no longer says this release does not read `DATABASE_URL` or `PORT`. Key Vault and Bicep sources are S-013's. The clean-copy export keeps `Dockerfile`, `src/server.ts` and the MS SQL Server adapter.
 
 ## Data
-No new tables, and nothing new in the Server. On the project's Azure SQL Database (D-113):
-- the schema `sqlmcp_test`, holding `orders`, `customers` and `staff`, owned by `dbo`, mirroring S-002's test objects;
-- the contained user `sqlmcp_reader`, granted SELECT on `sqlmcp_test.orders` and on `sqlmcp_test.customers (id, name, region)` only, and nothing that the account check refuses;
-- the project test Deployment's Boundary is `{"schemas":["sqlmcp_test"]}` (operations.md).
+No new tables, and nothing new stored by the Server.
 
-`test/docker-compose.yml` gains MS SQL Server 2022 (`mcr.microsoft.com/mssql/server:2022-latest`) on port 51433, for the integration tests (ADR-010, environments.md).
+`test/docker-compose.yml` gains MS SQL Server 2022 (`mcr.microsoft.com/mssql/server:2022-latest`) on port 51433 (ADR-010, environments.md). `npm run db:mssql:seed` creates the user database `sqlmcp`, and the login, from `master`, then runs `test/mssql/schema.sql` in `sqlmcp`. Every test, measurement and the local run connect with `Database=sqlmcp`. The image's container reaches the Compose SQL Server as `host.docker.internal,51433`, with `--add-host=host.docker.internal:host-gateway` on Linux.
+
+**TLS in Docker** (D-129). `npm run db:mssql:certs` uses `openssl` to make a test CA and a server certificate for `localhost` and `host.docker.internal` in `test/mssql/certs/`, which git ignores. Compose mounts the certificate and key into SQL Server, and `mssql.conf` sets them with `forceencryption = 1`. The tests, the smoke run and the image container trust the CA through `NODE_EXTRA_CA_CERTS`, and the image container gets the CA file by a read-only mount. The CA's key never leaves the developer's machine, and the export refuses `test/mssql/certs/`.
+
+`schema.sql` makes:
+- the schema `sqlmcp_test`, owned by `dbo`, holding `orders`, `customers`, `staff`, a table named `a.b]c`, and a column of the alias type `sqlmcp_test.phone`;
+- the grants to `sqlmcp_reader`: SELECT on `sqlmcp_test.orders`, and on `sqlmcp_test.customers (id, name, region)` only.
+
+The account is made separately for each target, because its form differs. In Docker, the seed makes a login and a user. On `mcp-test`, the product owner runs `test/mssql/contained-user.sql` and then `schema.sql` with `sqlcmd` as `dbo`, for the defaults measurement. `contained-user.sql` takes the password as the `sqlcmd` variable `$(READER_PASSWORD)`, set from the environment, and the committed file holds no password. The same password goes into the Key Vault in S-013. S-013 deploys against the result.
 
 ## Proven by
-- On MS SQL Server 2022 in Docker, `list_tables` returns exactly the granted tables and columns: a fully granted table has `all_columns: true`, and a partly granted one lists only its granted columns. An ungranted, denied, owned or system table is absent.
-- A column of an alias type, such as `sqlmcp_test.phone`, is listed with type `user-defined`, and that type's name appears nowhere in the result.
-- A granted table named `a.b]c` is listed with its own grants, not another table's.
+- On SQL Server 2022 in Docker, `list_tables` returns exactly the granted tables and columns: a fully granted table has `all_columns: true`, and a partly granted one lists only its granted columns. An ungranted, denied or system table is absent.
+- The alias-type column is listed as `user-defined`, and `phone` appears nowhere in the result. Built-in types carry the lengths data-model.md gives, in characters.
+- The table `a.b]c` is listed with its own grants, not another table's.
 - A `GRANT` or `REVOKE` shows on the next `list_tables` call, with no restart.
-- An account holding any one of the account check's routes gets 503 "Deployment misconfigured: Database account bypasses grants" on every Tool call, plus one Audit record and a `config_invalid` line naming `DATABASE_URL`. The routes are each tested on their own: `sysadmin`, `CONTROL SERVER`, `SELECT ALL USER SECURABLES`, `db_owner`, `db_datareader`, database `CONTROL`, database `SELECT`, `securityadmin`, `ALTER ANY SERVER ROLE`, `IMPERSONATE ANY LOGIN`, `IMPERSONATE` on one login, `CONTROL` on one login, `db_securityadmin`, `db_accessadmin`, `ALTER ANY ROLE`, `ALTER ANY USER`, `ALTER ANY APPLICATION ROLE`, `IMPERSONATE` on a user, `CONTROL` on a user, ownership of a role that is a member of `db_datareader`, and `ALTER` on such a role. Each database-level route is also tested through a user-defined database role nested two deep. The server-level routes are tested held directly, and `CONTROL SERVER` and `IMPERSONATE ANY LOGIN` also through a user-defined server role. SQL Server lets no user-defined role join `sysadmin`, so `sysadmin` has no nested form. `/healthz` reports `database: unsafe`, and Sign-in and metadata still answer.
-- The statement built for `EngineEdition = 5` holds no server-level check, and the one for any other edition holds all of them. On the project's Azure SQL Database, `sqlmcp_reader` passes the check, and the server admin login is refused.
-- The Node adapter answers 503 naming `ENGINE` when it is `postgres` or unset, `DATABASE_URL` when that is unset, and `PUBLIC_URL` when it is unset. With `SERVER_SECRET` also unset, the 503 names `SERVER_SECRET`. A `DATABASE_URL` ending in a newline connects. One that names no server, such as `Database=x`, gets the 503 naming `DATABASE_URL`, and its value appears in no output. The Worker's existing tests pass unchanged.
-- `tools/list` on the Node adapter lists `list_tables` and nothing else. `initialize` reports version `0.1.0`.
-- An MCP request body of 1 MiB + 1 byte gets 413, on both runtimes, before any parsing. It does so in three forms: with a true `Content-Length`, chunked with none, and with a `Content-Length` of 100. A body of exactly 1 MiB is accepted.
-- The guarded fetch refuses a Client ID Metadata Document whose host resolves to `127.0.0.1`, `10.0.0.1`, `169.254.169.254`, `100.64.0.1`, `::1`, `fd00::1` or `::ffff:10.0.0.1`, even when another of its addresses is public. It also refuses the IP-literal hosts `https://169.254.169.254/x`, `https://10.0.0.1/x` and `https://[::1]/x`. Registration then ends with `invalid_client`.
-- An unreachable Database gives a Database error of class `connection` within the 5-second connect limit (the test allows one second for the runner), even with `Connect Timeout=60` in `DATABASE_URL`, and the Agent's message names no host. Each listed error number maps to its class both at connect time and on a pooled connection's request, and each driver code with no number maps to its class.
-- The image built from the `Dockerfile` passes `npm run smoke -- http://localhost:8080` against the Docker Database. Its project files are `dist/server.js` alone, with no `node_modules`, and the bundle holds no `@libpg-query`, `pg` or `wrangler` code.
-- `base.bicep` and `app.bicep` build with `az bicep build`. In the compiled templates:
-  - `logRetentionDays` and `operatorPrincipalId` have no default, `logRetentionDays` is limited to 30 to 730, and neither template has a secret parameter;
-  - `base.bicep` outputs `publicUrl`, `environmentName`, `identityName` and `vaultName`, and `app.bicep` takes each as a parameter;
-  - `base.bicep` makes exactly two role assignments, both scoped to its Key Vault: Key Vault Secrets User for the identity and Key Vault Secrets Officer for `operatorPrincipalId`;
-  - `base.bicep`'s `publicUrl` output is the `publicUrl` parameter when given, and `https://<app name>.<environment default domain>` otherwise;
-  - `app.bicep`'s Container App has at least 1 and at most 3 replicas and a CPU scale rule at 70%. Its ingress is external, on target port 8080, with `allowInsecure` false. Its liveness probe is TCP on port 8080;
-  - `app.bicep` references `SERVER_SECRET_PREVIOUS` only when `rotating` is true.
-- The Azure guide:
-  - names the role stage 1 needs, in its first step;
-  - says at its start that it supports Azure SQL Database only, and gives the contained-user form of the Database account;
-  - gives the rotation steps for all three secrets;
-  - gives a Log Analytics query with operations.md's threshold for the four log signals;
-  - gives the 5xx metric alert at more than 1 in 15 minutes.
-- docs/settings.md, the settings reference the clean copy ships, describes the Azure Deployment as well as the Cloudflare one. It covers:
-  - `ENGINE=mssql`;
-  - `DATABASE_URL` and `PUBLIC_URL`, both required on Azure;
-  - `PORT`;
-  - Key Vault and template parameters as sources;
-  - reading at process start;
-  - the 503 a missing adapter setting gives.
-  It no longer says this release does not read `DATABASE_URL` or `PORT`.
-- The vault name and the bundle's package list each have a test: the name is `kv-` followed by `uniqueString(resource group id, app name)`; `mssql`, `@hono/node-server` and `undici` are in `dependencies`, and `esbuild` in `devDependencies`.
-- On the project test Deployment, `npm run smoke` and the Sign-in smoke checks pass against the Container App's URL.
-- From Claude and from ChatGPT, a signed-in Staff member asking which tables they may query gets `orders` and the three `customers` columns, and nothing else. After a `REVOKE`, the next question omits `orders`. Each question's Audit record is found in Log Analytics, naming the Staff member.
+- A reader holding only what security.md's list allows passes: `CONNECT`, `SHOWPLAN`, `SELECT` on a schema, a table and columns, `public`'s defaults, and `DENY` rows.
+- An account holding any one thing outside the list gets 503 "Deployment misconfigured: Database account bypasses grants" on every Tool call, one Audit record and a `config_invalid` line naming `DATABASE_URL`. `/healthz` reports `database: unsafe`, and Sign-in and metadata still answer. Each case is tested on its own: every MS SQL Server route named in D-077, D-117 and D-120, and gate 5's gap below; a fixed database role other than `public`, including `db_denydatawriter`; ownership of a table, a schema and a database role; at server level, ownership of a user-defined server role and of a `DATABASE_MIRRORING` endpoint made for the test, which SQL Server on Linux supports; and a grant outside the list, such as `VIEW DEFINITION`. The database-level cases are also tested through a user-defined database role nested two deep, which `sys.user_token` carries.
+- The statement built for `EngineEdition = 5` reads no server-level catalog and refuses a user that is not contained and SQL-authenticated. The one for any other edition reads `sys.login_token`, `sys.server_principals`, `sys.endpoints` and `sys.server_permissions`.
+- On `mcp-test`, the `EngineEdition = 5` statement exactly as `dist/server.js` ships it passes `sqlmcp_reader` and refuses `sqlmcp_mapped` and the server admin login. The statement printed from the published SHA-tagged image has the SHA-256 recorded for that run.
+- Every `sys` catalog view with a `principal_id` or `owning_principal_id` column, on SQL Server 2022 and on `mcp-test`, is in security.md's ownership list or in the test's exclusion list, each exclusion with its reason.
+- Every row `public` holds for a fresh reader, on SQL Server 2022 and on `mcp-test`, is in the build record, and each is covered by the list.
+- Only creating `sqlmcp` and the logins runs in `master`. The schema, the grants, the measurements and every test connect to `sqlmcp`.
+- The Boundary narrows the MS SQL Server listing as it does PostgreSQL's, and every listed column is readable.
+- PostgreSQL's `accountFlags()` always returns `unlisted: false`, and S-002's tests pass unchanged.
+- The Node adapter answers 503 naming `ENGINE` when it is `postgres` or unset, `DATABASE_URL` when that is unset or names no server, such as `Database=x`, `PUBLIC_URL` when it is unset, and `PERMISSION_TIER` when it is `read-write`. With `SERVER_SECRET` also unset, the 503 names `SERVER_SECRET`. A `PORT` of `abc` exits non-zero after one `config_invalid` line naming `PORT`. A `DATABASE_URL` ending in a newline connects, and no value appears in any output. The Worker's existing tests pass unchanged.
+- The Node adapter answers `/healthz`, both metadata documents and `/register` as the Worker does. `tools/list` lists `list_tables` alone, and `initialize` reports `0.2.0`. Each Tool call writes its Audit record to standard output as one JSON line.
+- The app imports no Engine's classifier. The Worker passes `classifyPostgresError` and the Node adapter `classifyMssqlError`, and each runtime's Database errors reach the Agent with that classifier's class.
+- An MCP request body of 1 MiB + 1 byte gets 413 before any parsing, on both runtimes, with a true `Content-Length`, chunked with none, and with a `Content-Length` of 100. A body of exactly 1 MiB is accepted.
+- The guarded fetch refuses a Client ID Metadata Document whose host resolves to `127.0.0.1`, `10.0.0.1`, `169.254.169.254`, `100.64.0.1`, `::1`, `fd00::1` or `::ffff:10.0.0.1`, even when another of its addresses is public. It also refuses `https://169.254.169.254/x`, `https://10.0.0.1/x` and `https://[::1]/x`, and allows a public address. Registration then ends with `invalid_client`.
+- A Docker SQL Server whose certificate the CA did not sign gives class `connection`, and the Agent's message names no host. With the CA trusted, it connects. A `DATABASE_URL` holding `TrustServerCertificate=true` or `Encrypt=false` gets the 503 naming `DATABASE_URL`. One holding `Encrypt=True;TrustServerCertificate=False`, `Encrypt=strict` or no `Encrypt` connects.
+- An unreachable Database gives class `connection` within 5 seconds (one second's tolerance for the runner), even with `Connect Timeout=60`, and the Agent's message names no host. A Database started after that first failure is reached on the next call. Each listed number maps to its class at connect time and on a pooled request, each driver code with no number maps to its class, and the pool's `requestTimeout` is 0.
+- The image built from the `Dockerfile` passes `npm run smoke -- http://localhost:8080` against the Docker Database. It runs as uid 1000, not root. Its project files are `dist/server.js` alone, with no `node_modules`, and the bundle holds no `@libpg-query`, `pg` or `wrangler` code. `mssql`, `@hono/node-server` and `undici` are in `dependencies`, and `esbuild` in `devDependencies`.
+- docs/settings.md covers each container setting above, and the export keeps the image files. The export refuses a file holding the project's tenant, subscription or Database server name, `test/mssql/*.sql` included, and it refuses anything under `test/mssql/certs/`.
+- `ghcr.io/prinsloopower/sql-mcp` is public, and its SHA tag pulls without credentials.
+- From Claude Code, the product owner, signed in through Entra ID, asks which tables they may query, and gets `orders` and the three `customers` columns, and nothing else. After a `REVOKE`, the next question omits `orders`. `docker logs` holds one Audit record line per `list_tables` call, with the product owner's identity.
 
 ## Out of scope
+- **Deploying on Azure:** the Bicep kit, Key Vault, forced revisions and rotation, the Azure guide and its monitoring, the firewall, the Azure part of the Security material, and the live Deployment on `mcp-test` (S-013). Gate 5's blocker and nits 1 and 5 concern these, and go with them.
+- **Claude and ChatGPT,** which call from their vendors' infrastructure and cannot reach a local container (S-013).
+- **A supported local setup** for Staff members (D-064). The local run is how the image is checked.
 - **Answering questions:** the query tool, the T-SQL Query check and T-SQL Redaction (S-007, Q-035).
-- **Timing the deployment:** the timed Azure trial (S-008).
-- **A setup command for Azure,** like S-005's. The guide gives `az` commands, and S-008's trial shows whether a command is needed.
-- **A `/healthz` health check that calls a human:** the liveness probe is TCP (D-116). How operations.md's `/healthz` row is met on Azure is Q-041. Until it is answered, the guide says no alert is set up.
-- **Alert rules in the templates:** the guide gives each other signal's query and threshold, and the Operator saves the alerts (D-118).
-- **Managed identity sign-in to the Database:** the Database account uses a password held in Key Vault, so the same kit works for SQL Server outside Azure SQL (D-116).
-- **Private networking:** a VNet or private endpoint between the Container App and the Database (D-064, D-116).
-- **SQL Server outside Azure SQL Database,** on a VM or on-premises. Container Apps have no fixed outbound address, so reaching it would mean opening its port to every Azure address. It waits for private networking (D-120). The Engine adapter still runs against SQL Server 2022, which the integration tests use.
+- **Tiers above `read-only` on MS SQL Server,** which are refused at start-up (S-010 to S-012).
+- **Windows and Entra groups in the token.** SQL Server on Linux in Docker cannot make one, so the check reads them through `sys.user_token` with no test of their own (D-126).
+- **Naming the failed condition** in the `config_invalid` line. It names `DATABASE_URL`, as on PostgreSQL.
+- **Redeploying the Worker** with the 413 change (D-126).
 - **CI building the image** (Q-039, D-104).
 
 ## Needs before live verification
-- The Azure CLI on the product owner's machine, signed in to tenant `Prinsloo147.onmicrosoft.com`, subscription `f3773fcf-7f0c-445f-9184-b50b3e74a99c` (D-113), as Owner or User Access Administrator on `ai-dev`.
-- `docker login ghcr.io` with a GitHub token that can write packages, and the `sql-mcp` package set to public once it is first pushed.
-- On `prinslooai.database.windows.net`: the firewall rule from the guide, plus `sqlmcp_test` and `sqlmcp_reader` in `mcp-test`, made as `dbo`.
-- An Entra ID app registration for stage 1's `publicUrl`, as the guide's step 4.
+- Docker on the product owner's machine, and `docker login ghcr.io` with a GitHub token that can write packages. The `sql-mcp` package is set to public once it is first pushed.
+- The redirect URI `http://localhost:8080/oauth/callback` added to the project's existing Entra ID app registration (D-126).
+- An env file outside the repository holding `SERVER_SECRET`, `IDP_CLIENT_SECRET` and `DATABASE_URL` for `sqlmcp_reader`, passed with `docker run --env-file`, so no secret is on a command line.
+- `sqlcmd` on the product owner's machine, and two sessions on `mcp-test`: the measurement, as `dbo` and then `sqlmcp_reader`; and the confirmation, as the server admin in `master` and `mcp-test` and as each account. A client-IP firewall rule on `prinslooai.database.windows.net` is added for each session and removed when it ends. Each removal is checked in the portal and noted in the build record (D-127, D-128).
+- `READER_PASSWORD` set in the shell for `contained-user.sql`, never written to a file in the repository.
+- `openssl` on the product owner's machine for `npm run db:mssql:certs`.
 
 ## Tasks
 
 ### T-001 — The Node adapter requires its own settings through the app's seams, and serves the shared app
-Verified by: node_adapter_requires_engine_mssql, node_adapter_requires_database_url, node_adapter_requires_public_url, adapter_config_error_takes_config_invalid_path, read_config_failure_named_before_adapter_error, node_adapter_trims_database_url, node_adapter_refuses_unparseable_database_url, app_uses_runtime_classifier, node_adapter_serves_healthz_and_metadata, node_adapter_reports_package_version_only, node_adapter_offers_list_tables_alone
+Verified by: node_adapter_requires_engine_mssql, node_adapter_requires_database_url, node_adapter_requires_public_url, node_adapter_refuses_tier_above_read_only, adapter_config_error_takes_config_invalid_path, read_config_failure_named_before_adapter_error, node_adapter_trims_database_url, node_adapter_refuses_unparseable_database_url, node_adapter_refuses_unchecked_tls_settings, app_uses_runtime_classifier, node_adapter_serves_healthz_and_metadata, node_adapter_reports_package_version_only, node_adapter_offers_list_tables_alone, node_adapter_writes_audit_record_to_stdout, node_adapter_exits_on_invalid_port
 
 ### T-002 — An MCP request body over 1 MiB gets 413 before parsing
 Verified by: oversized_mcp_body_gets_413_before_parsing, oversized_chunked_body_gets_413_while_streaming, understated_content_length_gets_413_while_streaming, body_at_limit_is_accepted
@@ -206,31 +143,31 @@ Verified by: oversized_mcp_body_gets_413_before_parsing, oversized_chunked_body_
 Verified by: guarded_fetch_refuses_private_and_special_addresses, guarded_fetch_refuses_when_any_address_is_private, guarded_fetch_refuses_ipv4_mapped_private, guarded_fetch_refuses_ip_literal_hosts, guarded_fetch_allows_public_address, cimd_private_host_ends_in_invalid_client
 
 ### T-004 — The Allow-list is read from MS SQL Server's grants on every Tool call
-Verified by: mssql_resolver_lists_granted_tables_and_columns, mssql_resolver_hides_ungranted_and_denied, mssql_resolver_excludes_owned_and_system_tables, mssql_resolver_excludes_tables_owned_through_role, mssql_resolver_formats_builtin_column_types, mssql_resolver_shows_user_defined_types_without_their_names, mssql_resolver_marks_every_column_readable, mssql_resolver_sees_grant_and_revoke_immediately, mssql_resolver_applies_boundary, mssql_resolver_quotes_table_names
+Verified by: mssql_resolver_lists_granted_tables_and_columns, mssql_resolver_hides_ungranted_and_denied, mssql_resolver_excludes_system_tables, mssql_resolver_formats_builtin_column_types, mssql_resolver_shows_user_defined_types_without_their_names, mssql_resolver_marks_every_column_readable, mssql_resolver_sees_grant_and_revoke_immediately, mssql_resolver_applies_boundary, mssql_resolver_quotes_table_names
 
-### T-005 — An MS SQL Server account with any route past its grants is refused, and /healthz says so
-Verified by: mssql_bypass_check_catches_each_route, mssql_bypass_check_reads_effective_permissions, mssql_bypass_check_catches_role_ownership_and_alter, mssql_bypass_check_catches_database_routes_through_nested_role, mssql_bypass_check_catches_server_routes_through_server_role, mssql_bypass_check_passes_plain_reader, mssql_check_statement_omits_server_checks_on_azure_sql, mssql_unsafe_account_answers_503_naming_database_url, mssql_healthz_reports_unsafe_account
+### T-005 — public's defaults and the ownership catalogs are measured on SQL Server 2022 and on mcp-test before the check ships
+Verified by: mssql_public_defaults_are_covered_by_list, mssql_ownership_list_covers_catalog_views, mssql_tests_connect_to_sqlmcp, and manual — in the first `sqlcmd` session on `mcp-test`, the product owner runs the defaults query as `sqlmcp_reader` and the ownership-catalog query. The rows, and the Docker tests', are in the build record, each matched to the list entry or exclusion that covers it, with the firewall rule's addition and removal.
 
-### T-006 — MS SQL Server errors are classified to D-080's classes and rebuilt without names
-Verified by: mssql_errors_classified, mssql_error_number_decides_before_driver_code, mssql_azure_transient_errors_are_connection_at_connect_and_request, mssql_resource_limit_errors_are_connection, mssql_lock_timeout_is_timeout, mssql_unreachable_database_is_connection_within_connect_limit, mssql_connect_limit_overrides_connection_string, mssql_pool_sets_no_request_timeout
+### T-012 — The shipped Azure SQL Database statement passes the reader and refuses the others on mcp-test
+Verified by: check_sql_printed_matches_bundle, and manual — after the statement is final, in the second `sqlcmd` session, the product owner runs `npm run print:check-sql`'s output as `sqlmcp_reader` (passes), `sqlmcp_mapped` and the server admin (both refused), then drops `sqlmcp_mapped` and its login. The outcomes, the printed statement's SHA-256, the firewall rule's removal and the drop are in the build record. At verification, `docker run --rm ghcr.io/prinsloopower/sql-mcp:<SHA> node dist/server.js --print-check-sql` is run against the published SHA tag, and its SHA-256 must equal the recorded one. If it differs, the statement changed after the session, and the second session is run again.
 
-### T-007 — The container image runs the Server and nothing else
-Verified by: image_bundle_excludes_postgres_and_wrangler, image_holds_only_the_bundle, image_packages_declared, and the command `npm run build:image && docker build -t sql-mcp:local .`. Then `docker run`, with `PUBLIC_URL=http://localhost:8080` and a `DATABASE_URL` for a reader login on the Docker Database that passes the account check (never `sa`), followed by `npm run smoke -- http://localhost:8080`. The command and its output are recorded in the deploy record.
+### T-006 — An MS SQL Server account holding anything outside the read-only list is refused, and /healthz says so
+Verified by: mssql_check_passes_listed_reader, mssql_check_ignores_deny_rows, mssql_check_refuses_each_named_route, mssql_check_refuses_fixed_roles_but_public, mssql_check_refuses_owned_securables, mssql_check_refuses_server_level_ownership, mssql_check_refuses_unlisted_grant, mssql_check_reads_nested_roles_from_token, mssql_check_statement_on_azure_sql_reads_no_server_level, mssql_check_statement_on_azure_sql_requires_contained_user, mssql_unsafe_account_answers_503_naming_database_url, mssql_healthz_reports_unsafe_account, postgres_unlisted_flag_always_false
 
-### T-008 — The two Bicep stages make the vault and URL first, then the Container App, with secrets only in Key Vault
-Verified by: bicep_base_requires_log_retention_and_operator_without_default, bicep_base_grants_operator_and_identity_on_vault_only, bicep_base_outputs_given_or_computed_public_url, bicep_base_limits_log_retention_to_30_through_730, bicep_base_names_vault_from_unique_string, bicep_app_takes_stage_one_outputs, bicep_templates_take_no_secret_parameter, bicep_app_scales_one_to_three_at_70_percent_cpu, bicep_app_ingress_https_only_on_8080_with_tcp_probe, bicep_app_references_previous_secret_only_when_rotating, all reading the templates as `az bicep build` compiles them, which must exit 0 for both
+### T-007 — MS SQL Server errors are classified to D-080's classes and rebuilt without names
+Verified by: mssql_errors_classified, mssql_error_number_decides_before_driver_code, mssql_azure_transient_errors_are_connection_at_connect_and_request, mssql_resource_limit_errors_are_connection, mssql_lock_timeout_is_timeout, mssql_unreachable_database_is_connection_within_connect_limit, mssql_connect_limit_overrides_connection_string, mssql_pool_retries_after_failed_first_connect, mssql_pool_sets_no_request_timeout, mssql_untrusted_certificate_is_connection, mssql_connects_with_test_ca
 
-### T-009 — The Azure guide and the settings reference cover every setting and step, in order, and the clean copy carries the Azure kit
-Verified by: azure_guide_names_every_azure_setting, azure_guide_names_role_needed_for_stage_one, azure_guide_orders_stages_registration_and_secrets, azure_guide_supports_azure_sql_only_with_contained_user, settings_reference_covers_azure_deployment, azure_guide_gives_rotation_for_each_secret, azure_guide_gives_query_and_threshold_per_signal, azure_guide_gives_5xx_metric_alert, azure_guide_gives_sha_rollback_and_firewall, export_keeps_azure_kit_and_image_files, export_refuses_azure_project_identifiers
+### T-008 — The container image runs the Server and nothing else, and is published to GHCR
+Verified by: image_bundle_excludes_postgres_and_wrangler, image_holds_only_the_bundle, image_packages_declared, image_runs_as_non_root, and the command `npm run build:image && docker build -t sql-mcp:local .`, then `docker run` with `PUBLIC_URL=http://localhost:8080` and a `DATABASE_URL` of `Server=host.docker.internal,51433;Database=sqlmcp;…` for `sqlmcp_reader` (never `sa`), and the test CA mounted read-only and named by `NODE_EXTRA_CA_CERTS`, then `npm run smoke -- http://localhost:8080`. The pushed image's SHA tag is then pulled with no `docker login`. Commands and output go in the deploy record.
 
-### T-010 — The project's MS SQL Server test Deployment runs on Azure
-Verified by: manual — in `mcp-test`, `sqlmcp_reader` exists as a contained user that passes the account check, the server admin login is refused by it, and `sqlmcp_test` holds the three tables owned by `dbo`, with the grants under Data. The image `ghcr.io/prinsloopower/sql-mcp` is public, with the deployed SHA tag. Both stages deploy into `ai-dev`. `npm run smoke` and `node scripts/smoke-signin.mjs` pass against the Container App's URL. environments.md's project test Deployment row is given that URL in the deploy record.
+### T-009 — The settings reference and the clean copy carry the container
+Verified by: settings_reference_covers_container_settings, settings_reference_states_database_tls_rule, export_keeps_image_files, export_refuses_project_identifiers, export_refuses_test_certificates
 
-### T-011 — A Security reviewer can read what an Azure Deployment adds
-Verified by: manual — `docs/security-material/azure.md` is read against this spec. It states: the Key Vault, managed identity and Operator role arrangement; the container fetch guard; the firewall rule and what it opens; MS SQL Server's account check, route by route; the 1 MiB body limit; and log retention set by the Operator. Each point names its rule or decision.
+### T-010 — The Security material states MS SQL Server's account check
+Verified by: manual — `docs/security-material/visibility.md` is read against this spec. It states the closed list, how it differs from PostgreSQL's (D-124), the contained-user rule on Azure SQL Database, and the container fetch guard. Each point names its rule or decision.
 
-### T-012 — Live: Sign-in and listing from Claude and ChatGPT follow the grants on MS SQL Server
-Verified by: manual — the product owner adds the Container App's `/mcp` to Claude and ChatGPT, signs in with Entra ID, and asks which tables they can query. Each answer lists `orders` and the three `customers` columns, and nothing else. After `REVOKE SELECT ON sqlmcp_test.orders FROM sqlmcp_reader`, the next question omits `orders`. Each question's Audit record is found in Log Analytics. Outcomes and dates are recorded in the verification record.
+### T-011 — Live: listing from Claude Code follows the grants on MS SQL Server 2022 in Docker
+Verified by: manual — the product owner runs the published image by its SHA tag with the env file, the test CA mounted read-only and named by `NODE_EXTRA_CA_CERTS`, adds `http://localhost:8080/mcp` to Claude Code, signs in with Entra ID, and asks which tables they can query. The answer lists `orders` and the three `customers` columns, and nothing else. After `REVOKE SELECT ON sqlmcp_test.orders FROM sqlmcp_reader`, the next question omits `orders`. `docker logs` holds one Audit record line per call, with their identity. Outcomes and dates go in the verification record.
 
 ## Critique findings
 
@@ -341,3 +278,67 @@ Gate 5, 2026-11-07, critique in fresh context. Verdict: fail (1 blocker, 1 gap, 
 - **nit 3:** whether the pool retries after a failed first connect is unstated.
 - **nit 4:** `node_adapter_serves_healthz_and_metadata` and `mssql_pool_sets_no_request_timeout` have no Proven-by line.
 - **nit 5:** a soft-deleted vault with the same name blocks stage 1 after a resource group is recreated, and the guide has no line for it.
+
+Revision 6, 2026-11-08, after the system-spec amendment (D-122 to D-124) and the backlog split (D-121, D-125). S-006 is now the image, the Node adapter and MS SQL Server listing, checked locally against SQL Server 2022 in Docker.
+- Blocker (revisions after a vault change) → S-013, with the Azure kit. operations.md now forces a revision on every stage-2 deploy (D-121).
+- Gap (schema `ALTER`, `ALTER ANY SCHEMA`, `db_ddladmin`, schema `CONTROL`, `TAKE OWNERSHIP`) → security.md's closed list refuses each. They are tested among the named routes.
+- Nit 1 (managed-identity reason) and nit 5 (soft-deleted vault) → S-013.
+- Nit 2 (server roles holding `CONTROL SERVER`) → the closed list refuses any server role but `public`.
+- Nit 3 (pool retry) → a failed first connect discards the pool, with a test.
+- Nit 4 → Proven-by lines for the Node adapter's `/healthz` and metadata, and for the pool's `requestTimeout`.
+- The lint's restatement finding on column types → the spec refers to data-model.md.
+
+Gate 6, 2026-11-08, critique in fresh context. Verdict: hold (0 blockers, 5 gaps, 5 nits). All gate-5 findings confirmed resolved or moved to S-013.
+
+- **gap 1:** server-level ownership (`sys.server_principals`, `sys.endpoints`) is never tested. The named routes include none, so owning a user-defined server role could go unrefused off Azure SQL Database.
+- **gap 2:** the ownership-catalog test has no operational definition. Many views carry a `principal_id` that is not an owner. Owner columns security.md does not list, possibly `sys.fulltext_stoplists` and `sys.registered_search_property_lists`, have no path to an amendment.
+- **gap 3:** the `EngineEdition = 5` branch is checked only as statement text. No login-mapped user is ever seen refused before S-013.
+- **gap 4:** the Docker database is not named, so the seed and the defaults measurement could run in `master`.
+- **gap 5:** the Azure portal's query editor may need a client-IP firewall rule on `mcp-test`, against D-125, and the spec has no plan for it.
+- **nit 1:** R-002 and J-003 are only partly delivered here. S-007 and S-013 carry the rest.
+- **nit 2:** the image's `X.Y.Z` is not given. `0.1.0` is already the Worker's, which lacks the 413 change.
+- **nit 3:** `node_adapter_writes_audit_record_to_stdout`, `app_uses_runtime_classifier` and `export_refuses_project_identifiers` have no Proven-by line.
+- **nit 4:** no source is named for the `mcp-test` tables.
+- **nit 5:** no behaviour is given for an invalid `PORT`.
+
+Hold resolved by the product owner, 2026-11-08: "Temporary IP rule" for gap 5, "Run on mcp-test" for gap 3, "Fix all, re-critique" for the rest, and "Confirm all" for D-126 (D-127).
+- Query editor → a client-IP rule for the measurement session only, removed after it, with the removal noted in the build record.
+- Azure SQL Database branch → run on `mcp-test` as `sqlmcp_mapped` and the server admin, both refused, with `sqlmcp_mapped` dropped afterwards.
+- Server-level ownership → tested for a server role and a `DATABASE_MIRRORING` endpoint.
+- Ownership catalogs → checked against `sys` views with an owner-like column, with an exclusion list giving each reason. A view in neither list stops the build for a security.md amendment.
+- Docker database → `sqlmcp`, never `master`.
+- Nits → trace note; version `0.2.0`; Proven-by lines for the Audit line, the classifier seam and the export's refusal; `test/mssql/*.sql` as the source for `mcp-test`; an invalid `PORT` exits non-zero.
+
+Gate 7, 2026-11-08, critique in fresh context. Verdict: hold (0 blockers, 3 gaps, 6 nits). All gate-6 findings confirmed resolved.
+
+- **gap 1:** the ownership-catalog test runs only on SQL Server 2022. Azure SQL Database, the only Operator target (D-120), is evergreen and may have owned-securable views that 2022 lacks (security.md, It owns nothing).
+- **gap 2:** `CREATE LOGIN` and `DROP LOGIN` for `sqlmcp_mapped` run in `master` on Azure SQL Database. The portal's query editor may not connect to `master`, and no other client is named.
+- **gap 3:** the live `EngineEdition = 5` run is not tied to the statement that ships. A defaults amendment would change the statement after D-127's one session.
+- **nit 1:** "no test or seed step runs in `master`" contradicts the seed creating `sqlmcp`.
+- **nit 2:** `mssql_resolver_applies_boundary`, `mssql_resolver_marks_every_column_readable` and `postgres_unlisted_flag_always_false` have no Proven-by line. The Dockerfile's non-root user has neither a test nor a Proven-by line.
+- **nit 3:** the connect-time guard also covers Identity provider fetches, which security.md does not state for them, and no D records it.
+- **nit 4:** where `sqlmcp_reader`'s password on `mcp-test` comes from is unstated. `contained-user.sql` is committed and exported.
+- **nit 5:** the slice backlog's S-006 entry still says no firewall rule is added, which D-127 amends. No Q carries the fix.
+- **nit 6:** how the image container reaches the Compose SQL Server is unstated.
+
+Hold resolved by the product owner, 2026-11-08: "sqlcmd for everything" for gap 2, "Measure, then confirm" for gaps 1 and 3, and "Fix all, re-critique" for the nits (D-128).
+- Client → `sqlcmd` for both `mcp-test` sessions, never the portal's query editor.
+- Sessions → the first measures `public`'s defaults and lists Azure SQL Database's ownership catalogs. The second, after any amendment, runs the shipped `EngineEdition = 5` statement as printed from the bundle (T-012).
+- Nits → only creating `sqlmcp` and the logins runs in `master`; Proven-by lines for the Boundary, readability and PostgreSQL's `unlisted`; the image runs as uid 1000, with a test; the Identity provider's fetch guard is recorded in D-128; `contained-user.sql` takes the password as a `sqlcmd` variable; Q-042 carries the backlog's firewall wording; the container reaches the Compose SQL Server as `host.docker.internal,51433`.
+
+Gate 8, 2026-11-08, critique in fresh context. Verdict: hold (0 blockers, 1 gap, 1 nit). All gate-7 findings confirmed resolved.
+
+- **gap:** how the Database connection's TLS certificate is checked is undecided. SQL Server 2022 in Docker serves a self-signed certificate, which `tedious` refuses by default. Whether the adapter honours `TrustServerCertificate=true` on every target, Azure included, is a system-wide security choice with no decision on record.
+- **nit:** T-012 records the confirmed statement's hash, but nothing compares it with the statement in the published SHA-tagged image.
+
+Hold resolved by the product owner, 2026-11-08: "Mount a CA in Docker" for the gap, and "Fix both, re-critique" (D-129).
+- Database TLS → always encrypted, with the certificate always checked. `TrustServerCertificate=true` or `Encrypt=false` is a configuration error naming `DATABASE_URL`. Docker's SQL Server gets a test CA's certificate, which the tests and the image container trust through `NODE_EXTRA_CA_CERTS`.
+- Statement hash → at verification, the statement printed from the published SHA-tagged image must have the SHA-256 recorded in T-012's session.
+
+Gate 9, 2026-11-08, critique in fresh context. Verdict: pass (0 blockers, 0 gaps, 3 nits). Both gate-8 findings confirmed resolved.
+
+- **nit 1:** which `Encrypt` values pass is unstated, and only refusals are tested. The Azure portal's `Encrypt=True;TrustServerCertificate=False` could be refused.
+- **nit 2:** T-011's live run does not mention the test CA, without which the image cannot connect.
+- **nit 3:** the export's refusal of `test/mssql/certs/` has no test of its own, and the settings reference does not list the TLS refusal.
+
+Nits fixed before the pass: matching is case-insensitive, with `true`, `yes`, `mandatory` and `strict` passing, and a Proven-by line for the portal's string; T-011 mounts the CA; T-009 gains `settings_reference_states_database_tls_rule` and `export_refuses_test_certificates`, and the settings reference states the rule.

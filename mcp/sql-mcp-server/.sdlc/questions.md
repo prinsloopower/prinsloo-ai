@@ -232,3 +232,10 @@ Raised by: slice-spec (S-006) | Blocks: nothing for S-006; S-008's guide and S-0
   - the slice backlog's S-006 line and environments.md's Operator Deployment row say "SQL Server reachable from Azure", but this release supports Azure SQL Database only (D-120).
 Answered by the system-spec amendment of 2026-11-07 (D-121, D-122). An external monitor watches `/healthz` on both clouds, and every wording item is applied to the system spec. The slice backlog's S-006 line changes with the split D-121 asks for.
 
+## Q-042 — The slice backlog's S-006 entry says no firewall rule is added
+Raised by: slice-spec (S-006) | Blocks: nothing
+The slice backlog's S-006 entry says the `mcp-test` defaults are measured "so no firewall rule is added (D-125)", and that they are read in the portal's query editor. D-127 and D-128 amend this: two `sqlcmd` sessions, each through a client-IP rule removed when it ends. The wording should change at the backlog's next revision.
+
+## Q-043 — The system spec does not state the Database connection's TLS rule
+Raised by: slice-spec (S-006) | Blocks: nothing; D-129 decides it for S-006 and S-013
+security.md and environments.md give `Encrypt=true` only in an example. D-129 makes encryption and certificate checking mandatory on MS SQL Server, with no setting to turn the check off. The rule should be added to security.md's Secrets or connection rules and environments.md's `DATABASE_URL` row at the next system-spec revision. It should also say whether PostgreSQL through Hyperdrive needs a matching rule.

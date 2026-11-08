@@ -1034,3 +1034,51 @@ Decided by: human | Date: 2026-11-08 | Phase: slices (amendment, D-121)
 Rationale: the product owner's answer to the backlog amendment's hold, "Docker SQL Server". The image on the product owner's machine runs against SQL Server 2022 in Docker, the Engine the integration tests use. The Azure SQL firewall therefore keeps allowing Azure services only (D-116), and gains no client-IP rule. `mcp-test`'s `public` defaults, which D-123 measures before the account check ships, are read by running the check's query in the Azure portal's query editor. S-006 ships as an image tag on GHCR, with no Deployment. S-013 is the first live use of `mcp-test`.
 Alternatives rejected: a firewall rule for the product owner's public IP, kept until S-013.
 
+
+## D-126 — Choices made re-specifying S-006 after the split
+Decided by: human (confirmed 2026-11-08 at S-006's gate-6 hold; "Confirm all") | Date: 2026-11-08 | Phase: slice-spec (S-006)
+Rationale: choices the narrowed spec makes that the system spec, D-121 and D-125 leave open:
+- **`AccountFlags` gains `unlisted`,** set when MS SQL Server's closed check fails, and `bypassesGrants` includes it. PostgreSQL always sets it false. Mapping a failed closed check onto `superuser`, as D-116 did for named routes, would name a condition the account may not hold.
+- **The local run uses the project's existing Entra ID app registration,** with `http://localhost:8080/oauth/callback` added as a redirect URI. Secrets reach the container through `docker run --env-file`, from a file outside the repository.
+- **`sqlmcp_test` and `sqlmcp_reader` are made on `mcp-test` in S-006,** because measuring `public`'s defaults needs the account a Database administrator would make there. S-013 deploys against them.
+- **Windows and Entra groups have no test of their own.** SQL Server on Linux in Docker cannot make one. The check reads them through `sys.user_token` with everything else.
+- **The Worker is not redeployed.** The shared app's 413 change reaches it at its next deploy. S-006 ships an image tag only (D-125).
+- **The `config_invalid` line for a refused account names `DATABASE_URL` only,** as on PostgreSQL, not the condition that failed.
+Alternatives rejected: a separate Entra registration for local runs; redeploying the Worker in S-006; naming the failed condition in the operational line, which could carry a Hidden object's name.
+
+## D-127 — S-006's gate-6 hold: a temporary firewall rule, the Azure SQL branch run live, and the fixes that go with it
+Decided by: human | Date: 2026-11-08 | Phase: slice-spec (S-006)
+Rationale: the product owner's answers to gate 6's hold: "Temporary IP rule", "Run on mcp-test", "Fix all, re-critique" and "Confirm all" (D-126).
+- **A client-IP firewall rule on `prinslooai.database.windows.net`** is allowed for the defaults measurement's query-editor session only, and removed when it ends. This amends D-125 for that session. Outside it, the server allows Azure services only (D-116).
+- **The `EngineEdition = 5` statement is run on `mcp-test` in S-006,** as `sqlmcp_reader` (passes), and as a login-mapped user `sqlmcp_mapped` and the server admin (both refused). `sqlmcp_mapped` and its login are dropped afterwards.
+- **The fixes as offered:**
+  - server-level ownership is tested;
+  - the ownership-catalog test has an exclusion list with reasons, and a view in neither list stops the build for an amendment;
+  - the Docker database is `sqlmcp`;
+  - the package version goes to `0.2.0`;
+  - an invalid `PORT` exits non-zero with one `config_invalid` line;
+  - `test/mssql/*.sql` is the seed source for `mcp-test`;
+  - the missing Proven-by lines are added.
+Alternatives rejected: no rule, with a Q raised if the editor refused; deferring the `mcp-test` measurement to S-013; statement-text checks only for the Azure SQL branch; forcing that branch in Docker.
+
+## D-128 — S-006's gate-7 hold: sqlcmd, two sessions on mcp-test, and the fixes that go with it
+Decided by: human | Date: 2026-11-08 | Phase: slice-spec (S-006)
+Rationale: the product owner's answers to gate 7's hold: "sqlcmd for everything", "Measure, then confirm" and "Fix all, re-critique".
+- **`sqlcmd` is the client for `mcp-test`,** because `sqlmcp_mapped`'s login is made and dropped in `master`, which the portal's query editor may not reach.
+- **Two sessions, each with its own temporary client-IP rule** (amending D-127's one session). The first measures `public`'s defaults and lists Azure SQL Database's ownership catalogs, because the service is evergreen. The second runs the `EngineEdition = 5` statement exactly as the bundle ships it, after any amendment the first one causes.
+- **The container's connect-time fetch guard also covers the Identity provider,** because the app has one `fetch`. security.md requires the guard only for the Client ID Metadata Document, so a private Identity provider is refused on containers. Private networking (D-064) revisits it.
+- **The fixes as offered:**
+  - `contained-user.sql` takes the reader's password as a `sqlcmd` variable;
+  - the image runs as uid 1000;
+  - the container reaches the Compose SQL Server through `host.docker.internal`;
+  - the missing Proven-by lines are added.
+Alternatives rejected: the portal's query editor, with `sqlcmd` for `master` only; a GUI client; one session after the build; a separate unguarded fetch for the Identity provider.
+
+## D-129 — The MS SQL Server connection is always encrypted, with its certificate checked; Docker uses a test CA
+Decided by: human | Date: 2026-11-08 | Phase: slice-spec (S-006)
+Rationale: the product owner's answer to S-006's gate-8 hold, "Mount a CA in Docker". SQL Server 2022 in Docker serves a self-signed certificate. Letting `TrustServerCertificate=true` through for local runs would leave a setting that turns the check off on Azure too.
+- **On every target,** the Node adapter encrypts the connection and checks the server's certificate against Node's trusted CAs. A `DATABASE_URL` setting `Encrypt` to anything but true, or `TrustServerCertificate` to true, is a configuration error naming `DATABASE_URL`. Azure SQL Database's certificate chains to a public CA, so Operators need nothing more.
+- **In Docker,** `npm run db:mssql:certs` makes a test CA and a server certificate for `localhost` and `host.docker.internal`, kept out of git and the clean copy. The tests and the local image trust the CA through `NODE_EXTRA_CA_CERTS`.
+- **The confirmed check statement is tied to the image:** at verification, the statement printed from the published SHA tag must match the SHA-256 recorded on `mcp-test`.
+- security.md and environments.md say nothing of Database TLS, so Q-043 carries the rule to the system spec's next revision.
+Alternatives rejected: honouring `TrustServerCertificate=true` only for `localhost` and `host.docker.internal`; honouring it anywhere, with a warning in the documentation.
