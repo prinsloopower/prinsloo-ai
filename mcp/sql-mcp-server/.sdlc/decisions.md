@@ -1106,3 +1106,9 @@ Rationale: choices the spec's Data section leaves open:
 - **The Docker passwords for `sa` and `sqlmcp_reader` are committed in `test/mssql/connection.ts` and the Compose file,** as PostgreSQL's `postgres:postgres` is. They reach only a container on the developer's machine.
 - **The alias-type column is `sqlmcp_test.orders.contact`,** in the fully granted table, because the spec's proof is that it is listed as `user-defined` while `phone` appears nowhere. A column named `phone` would put the word in the listing.
 Alternatives rejected: one Compose service started by `db:up`, which would need the CA before PostgreSQL could start; a `cross-env` wrapper for `npm test`, which would set `NODE_EXTRA_CA_CERTS` even with no CA on disk, and Node warns at every start when the file is missing.
+
+## D-133 — `prinslooai` allows SQL authentication alongside Entra ID
+Decided by: human | Date: 2026-11-08 | Phase: build (S-006, T-005)
+Rationale: the first `mcp-test` session found the server set to Microsoft Entra authentication only, which refuses every password login. That includes `sqlmcp_reader`, the contained SQL-authenticated user security.md requires on Azure SQL Database, which the Server signs in as with a password (D-116). The product owner's answer: "1", turning off "Support only Microsoft Entra authentication for this server". Entra sign-in keeps working.
+The same session found the server's public network access set to Disable, not the "allow Azure services" D-116 describes. The session opens it to Selected networks with one client-IP rule and sets it back to Disable afterwards. S-013 has to open it for the Container App.
+Alternatives rejected: keeping Entra-only and having the Server sign in with an Entra identity, which reopens D-116 and security.md's contained-user rule.
