@@ -1,4 +1,4 @@
-import { Hono, type Context } from "hono";
+import { Hono, type Context, type MiddlewareHandler } from "hono";
 import { readConfig, type RuntimeVariables } from "./config.js";
 import type { Database, QueryEngine, ReasonClass } from "./engine/database.js";
 import { handleMcp } from "./mcp.js";
@@ -39,6 +39,44 @@ export const NOT_AUTHENTICATED =
 /** Protected-resource metadata lives under the well-known prefix plus the resource's path (RFC 9728). */
 const PRM_PREFIX = "/.well-known/oauth-protected-resource";
 
+/** The largest MCP request body the Server reads (operations.md). */
+export const BODY_MAX = 1024 * 1024;
+
+/**
+ * Counts an MCP request's body as it streams, whatever its Content-Length says, and refuses it
+ * past the limit before anything reads it as JSON. A true Content-Length over the limit is refused at once.
+ */
+const limitBody: MiddlewareHandler = async (c, next) => {
+  const raw = c.req.raw;
+  if (!raw.body) return next();
+  const tooLarge = () => page("The request body is larger than 1 MiB.", 413);
+  if (Number(raw.headers.get("content-length")) > BODY_MAX) return tooLarge();
+  const reader = raw.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.byteLength;
+    if (size > BODY_MAX) {
+      await reader.cancel().catch(() => {});
+      return tooLarge();
+    }
+    chunks.push(value);
+  }
+  const body = new Uint8Array(size);
+  let at = 0;
+  for (const chunk of chunks) {
+    body.set(chunk, at);
+    at += chunk.byteLength;
+  }
+  const headers = new Headers(raw.headers);
+  headers.set("content-length", String(size));
+  headers.delete("transfer-encoding");
+  c.req.raw = new Request(raw.url, { method: raw.method, headers, body, signal: raw.signal });
+  return next();
+};
+
 export function createApp(deps: Deps) {
   const app = new Hono();
   // An uncaught fault answers 500 and leaves one operational line naming the path, never the
@@ -47,6 +85,8 @@ export function createApp(deps: Deps) {
     op("server_fault", { path: new URL(c.req.url).pathname });
     return page("The Server could not complete this request", 500);
   });
+  app.use("/mcp", limitBody);
+  app.use("/mcp/*", limitBody);
   const read = readConfig(deps.env ?? {});
   const result = read.ok && deps.adapterConfigError ? { ok: false as const, variable: deps.adapterConfigError } : read;
   if (!result.ok) op("config_invalid", { variable: result.variable });
