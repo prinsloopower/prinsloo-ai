@@ -108,3 +108,4 @@
 {"iteration": 1, "phase": "slice-spec", "slice": "S-006", "gate": "fail", "duration_s": null, "rework_count": 2, "defects_found": 2, "output_bytes": 41835}
 {"iteration": 1, "phase": "system-spec", "slice": null, "gate": "fail", "duration_s": null, "rework_count": 2, "defects_found": 8, "output_bytes": 53282}
 {"iteration": 1, "phase": "system-spec", "slice": null, "gate": "pass", "duration_s": null, "rework_count": 2, "defects_found": 0, "output_bytes": 53282}
+{"iteration": 1, "phase": "slices", "slice": null, "gate": "pass", "duration_s": null, "rework_count": 1, "defects_found": 0, "output_bytes": 13152}

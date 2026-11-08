@@ -26,20 +26,26 @@ After: S-003
 The benchmark's sample Database lives in `sqlmcp_test` (D-060).
 
 ## S-005 — Deploying on Cloudflare from the docs alone
-Delivers: an Operator new to the project can deploy a public, read-only Deployment on Cloudflare against their own Supabase PostgreSQL, set its Boundary, Database account, Row limit and Sign-in, and have Staff members answering questions in under an hour, using only the Deployment kit's docs. One timed run by someone new to the project is recorded in the deployment trial log. MS SQL Server organisations have no Deployment yet.
+Delivers: an Operator new to the project can deploy a public, read-only Deployment on Cloudflare against their own Supabase PostgreSQL, and have it deployed, connected to the Database and reachable in under an hour, using only the Deployment kit's docs (R-013). Setting its Boundary, Database account, Row limit and Sign-in, and Staff members answering questions, are timed too, outside the hour (Q-038). One timed run by someone new to the project is recorded in the deployment trial log. MS SQL Server organisations have no Deployment yet.
 Traces: J-001, R-001, R-013
 After: S-003
 
-## S-006 — Signing in to an MS SQL Server Deployment on Azure
-Delivers: an Operator can deploy a public, read-only Deployment on Azure Container Apps from the Bicep template, against Azure SQL Database or SQL Server reachable from Azure. A Staff member can sign in from Claude or ChatGPT and see which tables are available, as S-001 and S-002 allow on Cloudflare. They cannot yet read any rows, and nobody has timed the deployment.
-Traces: J-001, J-002, J-003, R-001, R-002, R-003, R-009
+## S-006 — Listing MS SQL Server tables from the container image
+Delivers: the product owner, acting as a Staff member, runs the published container image on their own machine against MS SQL Server 2022 in Docker, and adds it to Claude Code, which can reach a local server. They sign in through Entra ID and ask which tables they may query. They get exactly what the Database account is granted, inside the Boundary, as S-002 gives on Cloudflare. Each question leaves one Audit record on the container's standard output, naming them. An account that holds anything past the read-only list is refused. This is how the image is checked, not a supported way for Staff members to use it (D-064). Claude and ChatGPT cannot reach it yet, because nothing runs on Azure, and it reads no rows.
+Traces: J-002, J-003, R-002, R-003, R-009, R-010
 After: S-002
-First build of the container image and the Node runtime adapter, with Bicep, Key Vault and the MS SQL Server catalog. Picks the image registry (operations.md), and adds MS SQL Server 2022 to the Docker Compose file. Waits on Q-022 for the Azure subscription and database (D-065, D-066).
+First build of the Node runtime adapter and the container image, published to GHCR (D-115). Adds MS SQL Server's Allow-list and its closed Database account check (security.md, D-122 to D-124), and MS SQL Server 2022 in Docker Compose. The account check's `public` defaults are measured before it ships (D-123): on SQL Server 2022 in Docker, and on `mcp-test` by running the check's query in the Azure portal's query editor, so no firewall rule is added (D-125). It ships as an image tag on GHCR, with no Deployment, and S-013 is the first live use of `mcp-test`. Split from the first S-006 (D-121), whose spec and critique record carry over.
+
+## S-013 — Deploying an MS SQL Server Deployment on Azure
+Delivers: an Operator can deploy a public, read-only Deployment to Azure Container Apps with the two-stage Bicep kit and its guide, against Azure SQL Database. A Staff member can then sign in from Claude and from ChatGPT and see which tables are available, as S-006 gives locally. A grant or revoke shows on the next question, and each question's Audit record is in Log Analytics. They cannot yet read any rows, and nobody has timed the deployment. SQL Server outside Azure SQL Database waits for private networking (D-120).
+Traces: J-001, J-002, J-003, R-001, R-002, R-003, R-009, R-010
+After: S-006
+Adds the Bicep kit, the Key Vault arrangement, forced revisions for rotation and the Azure guide with its monitoring queries (operations.md, D-117 to D-119, D-121). Creates the project's MS SQL Server test Deployment in `ai-dev` (D-113).
 
 ## S-007 — Answering questions from MS SQL Server
 Delivers: a Staff member on an MS SQL Server Deployment can do everything S-003 allows: answers from the Agent's own SELECT, cut-short results, Refusals that name nothing hidden, and an Operator trail with redacted T-SQL in Azure Monitor. Nobody has yet measured how well it answers.
 Traces: J-004, J-008, R-002, R-004, R-006, R-011, R-015
-After: S-003, S-006
+After: S-003, S-013
 
 ## S-008 — Measuring MS SQL Server
 Delivers: the project can state, for MS SQL Server as for PostgreSQL, the benchmark's correctness and give-up figures, and that the visibility test run shows no Hidden object names at the read-only tier. One timed Azure deployment by someone new to the project is recorded in the deployment trial log.
@@ -96,5 +102,18 @@ Hold resolved by the product owner, 2026-10-18:
 - Nits → all four fixed. S-006 now comes after S-002, and the write slices state their tier matrix and Hidden-object coverage on both Engines.
 
 Deferred: everything D-063 puts out of scope, R-001's AWS part included. Private Deployments (D-064). Schema changes other than creating a table (D-030). Copilot and other AI tools (D-043). Q-007's metric, which has no figure to rest on.
+
+Amendment, 2026-11-08 (D-121): S-006 is split. It now covers the container image, the Node adapter and MS SQL Server listing, run locally against Azure SQL Database. The new S-013 deploys it on Azure with the Bicep kit and connects Claude and ChatGPT. S-007 now comes after S-013. The MS SQL Server Operator target is Azure SQL Database only (D-120), which applies Q-041's backlog item.
+
+Amendment review, 2026-11-08, by a fresh critic. Verdict: hold (0 blockers, 1 gap, 5 nits).
+- **gap:** S-006 ran in an environment nothing defined. The image on the product owner's machine could not reach `mcp-test` through a firewall that allows Azure services only.
+- **nits:**
+  - Q-038's S-005 correction was not applied;
+  - S-006 read as a supported local setup, against D-064;
+  - S-013 said "Claude or ChatGPT";
+  - S-006 did not mention its Audit record;
+  - S-013 did not trace R-003.
+
+Hold resolved by the product owner, 2026-11-08: "Docker SQL Server". S-006 is checked live against SQL Server 2022 in Docker, and `mcp-test`'s defaults are measured in the portal's query editor (D-125). The nits are fixed, and S-013 also traces R-010. The product owner then passed the amendment: "Pass".
 
 Amendment, 2026-10-20 (D-074, iteration 2): S-002 now reads the Allow-list from the Database account's grants instead of a connector-URL segment. Its helper command and the Q-015 live test are gone. S-012's Created objects become visible elsewhere by grant. S-001's line names Entra ID only (D-073).

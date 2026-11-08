@@ -85,10 +85,10 @@
       "gate": {
         "result": "pass",
         "by": "human",
-        "at": "2026-10-25T16:15:14+00:00",
-        "quote": "Approve all three (Recommended)"
+        "at": "2026-11-08T16:55:34+00:00",
+        "quote": "Pass"
       },
-      "hash": "sha256:811f4c9cf2563322"
+      "hash": "sha256:1d230803446066fd"
     },
     "retro": {
       "status": "approved",
@@ -357,6 +357,22 @@
           "at": "2026-11-08T03:25:35+00:00"
         }
       }
+    },
+    {
+      "id": "S-013",
+      "title": "Deploying an MS SQL Server Deployment on Azure",
+      "status": "planned",
+      "traces": [
+        "J-001",
+        "J-002",
+        "J-003",
+        "R-001",
+        "R-002",
+        "R-003",
+        "R-009",
+        "R-010"
+      ],
+      "size_at_creation": "product"
     },
     {
       "id": "S-007",

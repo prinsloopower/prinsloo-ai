@@ -1029,3 +1029,8 @@ Rationale: the product owner asked that the MS SQL Server specs match PostgreSQL
 So an account PostgreSQL accepts can be refused on MS SQL Server: one with an extra non-SELECT grant, or one that owns a table. The Deployment kit and the Security material state the difference.
 Alternatives rejected: a named list of refused routes for MS SQL Server, matching PostgreSQL's behaviour but open to an unnamed route; the closed form on both Engines, which reopens S-002's verified check.
 
+## D-125 — S-006 is checked against MS SQL Server 2022 in Docker; `mcp-test` is first used live in S-013
+Decided by: human | Date: 2026-11-08 | Phase: slices (amendment, D-121)
+Rationale: the product owner's answer to the backlog amendment's hold, "Docker SQL Server". The image on the product owner's machine runs against SQL Server 2022 in Docker, the Engine the integration tests use. The Azure SQL firewall therefore keeps allowing Azure services only (D-116), and gains no client-IP rule. `mcp-test`'s `public` defaults, which D-123 measures before the account check ships, are read by running the check's query in the Azure portal's query editor. S-006 ships as an image tag on GHCR, with no Deployment. S-013 is the first live use of `mcp-test`.
+Alternatives rejected: a firewall rule for the product owner's public IP, kept until S-013.
+
