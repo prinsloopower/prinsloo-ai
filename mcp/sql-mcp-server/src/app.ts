@@ -39,7 +39,7 @@ export const NOT_AUTHENTICATED =
 /** Protected-resource metadata lives under the well-known prefix plus the resource's path (RFC 9728). */
 const PRM_PREFIX = "/.well-known/oauth-protected-resource";
 
-/** The largest MCP request body the Server reads (operations.md). */
+/** The largest MCP request body the Server reads. */
 export const BODY_MAX = 1024 * 1024;
 
 /**

@@ -13,6 +13,8 @@
     "typecheck": "tsc --noEmit",
     "db:up": "docker compose -f test/docker-compose.yml up -d --wait",
     "db:down": "docker compose -f test/docker-compose.yml down",
+    "db:mssql:certs": "node scripts/mssql-certs.mjs",
+    "db:mssql:seed": "tsx test/mssql/seed.ts",
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
     "setup": "tsx deploy/cloudflare/setup.ts",

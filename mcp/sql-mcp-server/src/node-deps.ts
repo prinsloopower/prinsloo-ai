@@ -49,7 +49,7 @@ function parseDatabaseUrl(text: string): MssqlConnection | undefined {
   if (encrypt !== undefined && !ENCRYPTED.has(encrypt)) return undefined;
   const trust = setting("trustservercertificate");
   if (trust !== undefined && !CHECKED.has(trust)) return undefined;
-  // On every target the connection is encrypted and the server's certificate checked (D-129).
+  // On every target the connection is encrypted and the server's certificate checked.
   return { ...parsed, options: { ...parsed.options, encrypt: true, trustServerCertificate: false } };
 }
 
@@ -61,7 +61,7 @@ export function readNodeSettings(env: RuntimeVariables): NodeSettingsResult {
   if (!connection) return { ok: false, variable: "DATABASE_URL" };
   const publicUrl = value(env, "PUBLIC_URL");
   if (!publicUrl) return { ok: false, variable: "PUBLIC_URL" };
-  // MS SQL Server's account check is the read-only tier's alone (security.md, At higher tiers).
+  // MS SQL Server's Database account check allows the read-only tier's grants alone.
   const tier = value(env, "PERMISSION_TIER") ?? "read-only";
   if (tier !== "read-only") return { ok: false, variable: "PERMISSION_TIER" };
   return { ok: true, settings: { connection, publicUrl } };
@@ -77,7 +77,7 @@ export function readPort(env: RuntimeVariables): number | undefined {
 
 /**
  * The app's dependencies on Node, read from the environment once, at process start. Every fetch
- * the app makes, to the Client ID Metadata Document and the Identity provider, is guarded (D-128).
+ * the app makes, to the Client ID Metadata Document and the Identity provider, is guarded.
  */
 export function nodeDeps(env: RuntimeVariables, makeDatabase?: (connection: MssqlConnection) => Database, opts: { resolve?: Resolve } = {}): Deps {
   const settings = readNodeSettings(env);

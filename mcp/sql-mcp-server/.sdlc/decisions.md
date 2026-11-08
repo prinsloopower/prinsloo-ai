@@ -1096,3 +1096,13 @@ Alternatives rejected: a hand-written ADO parser, which could disagree with the 
 Decided by: model | Date: 2026-11-08 | Phase: build (S-006, T-003)
 Rationale: security.md's Fetches rule lists loopback, RFC 1918, link-local, CGNAT, ULA and multicast. The guard also refuses `0.0.0.0/8`, `240.0.0.0/4` (which holds `255.255.255.255`) and `::`, because a connection to the unspecified address reaches the host itself, and the reserved range reaches nothing. This only narrows what may be fetched. IPv4-mapped IPv6 addresses are matched against the IPv4 rules, in the lookup and as literals. A refused fetch rejects as `fetch failed`, as an unreachable host does, so the Sign-in broker logs it as `network`.
 Alternatives rejected: the spec's list alone, which would let `https://0.0.0.0/` reach the container's own ports.
+
+## D-132 — How SQL Server in Docker is started and trusted for S-006's tests
+Decided by: model | Date: 2026-11-08 | Phase: build (S-006)
+Rationale: choices the spec's Data section leaves open:
+- **The `mssql` Compose service is under its own profile.** `npm run db:up` still starts PostgreSQL alone, as environments.md's sequence says. `npm run db:mssql:seed` makes the test CA if it is missing, starts SQL Server, and seeds it. A developer working only on PostgreSQL needs neither `openssl` nor the SQL Server image.
+- **The test CA is made with its own minimal OpenSSL config,** so a machine's `OPENSSL_CONF` cannot break or change it. A second CA that signs nothing is made beside it for the untrusted-certificate test.
+- **Test processes trust the CA through `tls.setDefaultCACertificates`, set in a vitest setup file.** Node reads `NODE_EXTRA_CA_CERTS` only at start-up, and setting it in the vitest config does not reach the test processes. The tests that prove `NODE_EXTRA_CA_CERTS` itself, trusted and untrusted, run in a fresh Node process with the variable set or unset.
+- **The Docker passwords for `sa` and `sqlmcp_reader` are committed in `test/mssql/connection.ts` and the Compose file,** as PostgreSQL's `postgres:postgres` is. They reach only a container on the developer's machine.
+- **The alias-type column is `sqlmcp_test.orders.contact`,** in the fully granted table, because the spec's proof is that it is listed as `user-defined` while `phone` appears nowhere. A column named `phone` would put the word in the listing.
+Alternatives rejected: one Compose service started by `db:up`, which would need the CA before PostgreSQL could start; a `cross-env` wrapper for `npm test`, which would set `NODE_EXTRA_CA_CERTS` even with no CA on disk, and Node warns at every start when the file is missing.

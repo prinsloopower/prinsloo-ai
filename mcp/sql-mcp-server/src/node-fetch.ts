@@ -10,7 +10,7 @@ export type Resolve = (hostname: string) => Promise<{ address: string; family: n
 const systemResolve: Resolve = (hostname) => dnsLookup(hostname, { all: true, verbatim: true });
 
 /**
- * Addresses a fetch made on a caller's behalf may not reach (security.md, Fetches): loopback,
+ * Addresses a fetch made on a caller's behalf may not reach: loopback,
  * RFC 1918, link-local, CGNAT, ULA and multicast, plus the unspecified and reserved ranges, which
  * reach the host itself or nothing. IPv4-mapped IPv6 addresses match the IPv4 rules.
  */
