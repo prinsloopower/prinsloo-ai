@@ -1,7 +1,6 @@
 import { Hono, type Context } from "hono";
 import { readConfig, type RuntimeVariables } from "./config.js";
-import type { Database, QueryEngine } from "./engine/database.js";
-import { classifyPostgresError } from "./engine/postgres.js";
+import type { Database, QueryEngine, ReasonClass } from "./engine/database.js";
 import { handleMcp } from "./mcp.js";
 import { op } from "./oplog.js";
 import { page, SignInBroker, type Staff } from "./signin/broker.js";
@@ -26,6 +25,10 @@ export interface Deps {
   queryEngine?: () => Promise<QueryEngine>;
   /** The setting naming the Database account in config_invalid lines. */
   connectionSetting?: string;
+  /** The runtime's Database error classifier; without one, every Database error is `other`. */
+  classify?: (error: unknown) => ReasonClass;
+  /** A setting the runtime adapter requires and found missing or invalid; named after any `readConfig` failure. */
+  adapterConfigError?: string;
   /** Answers a signed-in MCP request; the SDK handler unless a test swaps it. */
   mcpHandler?: (request: Request, staff: Staff) => Promise<Response>;
 }
@@ -44,7 +47,8 @@ export function createApp(deps: Deps) {
     op("server_fault", { path: new URL(c.req.url).pathname });
     return page("The Server could not complete this request", 500);
   });
-  const result = readConfig(deps.env ?? {});
+  const read = readConfig(deps.env ?? {});
+  const result = read.ok && deps.adapterConfigError ? { ok: false as const, variable: deps.adapterConfigError } : read;
   if (!result.ok) op("config_invalid", { variable: result.variable });
 
   app.get("/healthz", async (c) => {
@@ -112,7 +116,7 @@ export function createApp(deps: Deps) {
           boundary: config.boundary,
           deployment: broker.origin(c.req.url),
           connectionSetting: deps.connectionSetting ?? "HYPERDRIVE",
-          classify: classifyPostgresError,
+          classify: deps.classify ?? (() => "other"),
           now,
           // A failed load is not kept, so the next Tool call tries again.
           ...(loadQueryEngine

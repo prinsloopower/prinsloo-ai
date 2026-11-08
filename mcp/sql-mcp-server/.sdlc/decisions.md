@@ -1082,3 +1082,12 @@ Rationale: the product owner's answer to S-006's gate-8 hold, "Mount a CA in Doc
 - **The confirmed check statement is tied to the image:** at verification, the statement printed from the published SHA tag must match the SHA-256 recorded on `mcp-test`.
 - security.md and environments.md say nothing of Database TLS, so Q-043 carries the rule to the system spec's next revision.
 Alternatives rejected: honouring `TrustServerCertificate=true` only for `localhost` and `host.docker.internal`; honouring it anywhere, with a warning in the documentation.
+﻿
+## D-130 — Choices made building S-006's Node adapter settings
+Decided by: model | Date: 2026-11-08 | Phase: build (S-006, T-001)
+Rationale: choices the spec leaves open:
+- **`DATABASE_URL` is read with `mssql`'s own parser,** so the adapter and the driver cannot disagree about the server, the database or the credentials. The TLS rule reads the raw `Encrypt` and `TrustServerCertificate` values through `@tediousjs/connection-string`, the parser `mssql` itself uses. `mssql` reads any value but `false`, `no` or empty as true, so `TrustServerCertificate=banana` would trust. The adapter therefore refuses any `Encrypt` outside `true`, `yes`, `mandatory` and `strict`, and any `TrustServerCertificate` but `false` or `no`. Whatever the string says, the pool is given `encrypt: true` and `trustServerCertificate: false`. `@tediousjs/connection-string` is declared in `dependencies`, beside the three packages the spec names, because the adapter imports it directly.
+- **`ENGINE` must be exactly `mssql` after trimming,** so `MSSQL` is refused, as the spec's "exactly" reads.
+- **A runtime that passes no classifier gets `other` for every Database error.** Both runtimes pass one, which `app_uses_runtime_classifier` checks.
+Alternatives rejected: a hand-written ADO parser, which could disagree with the driver's; `mssql`'s booleans alone, which read a misspelt value as on.
+

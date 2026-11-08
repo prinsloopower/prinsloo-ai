@@ -2,6 +2,7 @@ import { base64url, exportJWK, generateKeyPair, SignJWT, UnsecuredJWT } from "jo
 import { vi } from "vitest";
 import { createApp } from "../../src/app.js";
 import type { Database, QueryEngine } from "../../src/engine/database.js";
+import { classifyPostgresError } from "../../src/engine/postgres.js";
 
 export const ORIGIN = "https://sql.example.com";
 export const RESOURCE = `${ORIGIN}/mcp`;
@@ -165,7 +166,7 @@ export async function harness(
     env,
     fetch: idp.fetch,
     now: clock.now,
-    ...(opts.database ? { database: opts.database } : {}),
+    ...(opts.database ? { database: opts.database, classify: classifyPostgresError } : {}),
     ...(opts.queryEngine ? { queryEngine: opts.queryEngine } : {}),
     ...(opts.serverVersion ? { serverVersion: opts.serverVersion } : {}),
     ...(opts.realMcp
