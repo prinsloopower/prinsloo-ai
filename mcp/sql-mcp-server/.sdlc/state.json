@@ -70,12 +70,12 @@
     },
     "system-spec": {
       "status": "approved",
-      "rework": 1,
+      "rework": 2,
       "gate": {
         "result": "pass",
         "by": "human",
-        "at": "2026-10-25T16:15:14+00:00",
-        "quote": "Approve all three (Recommended)"
+        "at": "2026-11-08T16:47:21+00:00",
+        "quote": "Pass"
       },
       "hash": "sha256:cdb1cd7543cf1537"
     },
@@ -346,7 +346,17 @@
         "R-003",
         "R-009"
       ],
-      "size_at_creation": "product"
+      "size_at_creation": "product",
+      "rework": {
+        "slice-spec": 2
+      },
+      "gates": {
+        "slice-spec": {
+          "result": "fail",
+          "by": "model",
+          "at": "2026-11-08T03:25:35+00:00"
+        }
+      }
     },
     {
       "id": "S-007",

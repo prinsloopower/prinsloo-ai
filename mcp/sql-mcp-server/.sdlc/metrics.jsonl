@@ -101,3 +101,10 @@
 {"iteration": 1, "phase": "review", "slice": "S-005", "gate": "pass", "duration_s": null, "rework_count": 2, "defects_found": 0, "output_bytes": 33631}
 {"iteration": 1, "phase": "deploy", "slice": "S-005", "gate": "pass", "duration_s": null, "rework_count": 0, "defects_found": 0, "output_bytes": 4381}
 {"iteration": 1, "phase": "verify", "slice": "S-005", "gate": "pass", "duration_s": 193, "rework_count": 0, "defects_found": 0, "output_bytes": 1353}
+{"iteration": 1, "phase": "slice-spec", "slice": "S-006", "gate": "fail", "duration_s": 573, "rework_count": 1, "defects_found": 14, "output_bytes": 18939}
+{"iteration": 1, "phase": "slice-spec", "slice": "S-006", "gate": "hold", "duration_s": 535, "rework_count": 1, "defects_found": 6, "output_bytes": 31147}
+{"iteration": 1, "phase": "slice-spec", "slice": "S-006", "gate": "hold", "duration_s": null, "rework_count": 1, "defects_found": 5, "output_bytes": 32557}
+{"iteration": 1, "phase": "slice-spec", "slice": "S-006", "gate": "hold", "duration_s": null, "rework_count": 1, "defects_found": 3, "output_bytes": 37418}
+{"iteration": 1, "phase": "slice-spec", "slice": "S-006", "gate": "fail", "duration_s": null, "rework_count": 2, "defects_found": 2, "output_bytes": 41835}
+{"iteration": 1, "phase": "system-spec", "slice": null, "gate": "fail", "duration_s": null, "rework_count": 2, "defects_found": 8, "output_bytes": 53282}
+{"iteration": 1, "phase": "system-spec", "slice": null, "gate": "pass", "duration_s": null, "rework_count": 2, "defects_found": 0, "output_bytes": 53282}

@@ -888,3 +888,144 @@ Added after review 7, on the product owner's "Simplify the swap, then pass", whi
 - **One list defines a local file:** the copy's .gitignore, `GITIGNORE` in the export. The export keeps exactly the names that list ignores, so nothing ignored is lost and nothing kept can be committed. A test checks this against real git, with `git status --ignored`, in both directions. `git check-ignore` is not used, because it reports a name that a negated pattern matches as matched.
 - **The slice words** are slice, slices, sliced and slicing. A compound such as "subslice" is not caught, and the comment says so.
 Alternatives rejected: undoing a failed write by moving the old copy back over it, the approach reviews 5 to 7 found new faults in each time.
+
+## D-113 — The MS SQL Server slices test on Azure SQL Database `mcp-test`, in resource group `ai-dev`; answers Q-022
+Decided by: human | Date: 2026-11-07 | Phase: slice-spec (S-006)
+Rationale: the product owner's answer to Q-022. Tenant `Prinsloo147.onmicrosoft.com`, subscription `f3773fcf-7f0c-445f-9184-b50b3e74a99c`, resource group `ai-dev` in Central US, logical server `prinslooai.database.windows.net`, database `mcp-test`. The product owner confirmed that a `sqlmcp_test` schema and a dedicated Database account can be created there. The Container App, its environment, Log Analytics workspace and Key Vault go into the same resource group. The database's tier was not stated: if it is serverless with auto-pause, the first connection after a pause can exceed the 5-second connect limit and end as a Database error of class `connection`.
+Alternatives rejected: S-006 creating a new database, which the product owner did not choose.
+
+## D-114 — A container Deployment reports the package version alone; answers Q-037
+Decided by: human | Date: 2026-11-07 | Phase: slice-spec (S-006)
+Rationale: the product owner's answer to Q-037, "Package version only". `initialize` on the Node adapter reports `SERVER_INFO.version` with no deploy id. A benchmark report on MS SQL Server (S-008) therefore cannot tell two deploys of the same package version apart, so its run record names the image tag instead.
+Alternatives rejected: the image tag passed by Bicep as a setting and reported as `<version>+<tag>`.
+
+## D-115 — The container image is published to GHCR, public, as `ghcr.io/prinsloopower/sql-mcp`
+Decided by: human | Date: 2026-11-07 | Phase: slice-spec (S-006)
+Rationale: the product owner's choice of registry, which operations.md leaves to the first slice that builds the image. It is public, so an Operator's Container App pulls it without credentials, and it costs nothing. The image is named after the clean copy (D-111), and tagged `X.Y.Z` and with the commit SHA (operations.md).
+Alternatives rejected: a private Azure Container Registry, which needs pull access per Operator and costs about US$5 a month; both registries.
+
+## D-116 — Choices made specifying S-006
+Decided by: human (confirmed 2026-11-08 at the system-spec amendment gate; "Allow Azure services") | Date: 2026-11-07 | Phase: slice-spec (S-006)
+Rationale: choices the spec makes that the system spec and D-113 to D-115 leave open:
+- **The account check on Azure SQL Database skips the server-level checks,** because a user database cannot read server-scope permissions (`EngineEdition = 5`). The server admin login maps to `dbo`, so it is still caught as `db_owner`.
+- **MS SQL Server's results map onto the existing `AccountFlags`:** `superuser` for `sysadmin`, `CONTROL SERVER`, `SELECT ALL USER SECURABLES`, `db_owner` and database `CONTROL`; `readAllData` for `db_datareader` and database `SELECT`. The other three flags are always false. This keeps `bypassesGrants` and its callers unchanged.
+- **The liveness probe is TCP, not `/healthz`.** `/healthz` answers 503 when the Database is unreachable or unsafe. A liveness probe on it would restart a healthy container in a loop, and a readiness probe would take Sign-in and metadata offline with it, which D-077 keeps answering.
+- **The Database account signs in with a password in Key Vault,** not the Container App's managed identity. The same kit then works for SQL Server reachable from Azure, which has no Entra identity.
+- **The Database firewall allows Azure services.** Container Apps on the consumption plan have no fixed outbound address. This lets any Azure-hosted client reach the server's login endpoint, though not past authentication. The guide and the Security material say so. Private networking stays deferred.
+- **No Azure setup command yet.** The guide gives `az` commands, and S-008's timed trial shows whether one is needed.
+Alternatives rejected: a new engine-neutral account-check interface, which changes S-002's tested code for naming alone; a `/healthz` liveness probe; managed identity authentication; fixed outbound IPs through a NAT gateway, which adds cost and setup inside the hour.
+Revised after the spec's first critique: the bullet marking user-defined types unreadable is withdrawn. D-085 already answered Q-034, so every MS SQL Server column is readable, and D-081 governs how its type is shown.
+
+## D-117 — Revising S-006's spec after its first critique
+Decided by: human (confirmed 2026-11-08 at the system-spec amendment gate) | Date: 2026-11-07 | Phase: slice-spec (S-006)
+Rationale: the gate-1 critique failed the spec (docs/slices/S-006/spec.md). The fixes needed these choices:
+- **The Azure kit deploys in two stages.** `base.bicep` makes the Log Analytics workspace, the Container Apps environment, the identity and the Key Vault. It grants the Operator Key Vault Secrets Officer on that vault, and outputs the final `publicUrl`. The Operator then registers in Entra ID and writes the secrets, and `app.bicep` makes the Container App. Key Vault references are resolved when a revision is made, so the secrets must exist first. An RBAC vault gives a resource group Owner no right to write them without that role.
+- **Two new `Deps` fields carry the Engine and runtime differences:** `classify`, and `adapterConfigError` for settings only the Node adapter requires. `readConfig` and the Worker are unchanged.
+- **The routes D-081 refuses on PostgreSQL have MS SQL Server equivalents,** and they are refused the same way: `db_securityadmin`, `db_accessadmin`, `ALTER ANY ROLE`, `ALTER ANY USER`, `ALTER ANY APPLICATION ROLE`, `IMPERSONATE` on a user, and `IMPERSONATE ANY LOGIN`. They map to `createRole`, PostgreSQL's flag for the same risk.
+- **The Allow-list is read with `HAS_PERMS_BY_NAME` per column alone.** It counts table-level and column-level grants and denies, so data-model.md's `fn_my_permissions` per table adds nothing. The system spec is out of step until Q-041 is applied.
+- **The 1 MiB body limit is enforced in the shared app,** so the Worker gains it too. operations.md states it for every Deployment, and nothing enforced it before.
+- **Deploys and rollbacks name the SHA tag.** Hand pushes overwrite `X.Y.Z` (D-104).
+- **`PUBLIC_URL` is a parameter when given,** and computed from the environment's default domain otherwise, so a custom domain still works.
+Alternatives rejected: one template with a pre-existing vault parameter, which leaves the Operator to make the vault and its roles by hand; changing `readConfig` to require the Node adapter's settings, which would have to tell the runtimes apart; leaving the D-081 routes to S-007, which would run the Agent's SQL as an account the check had not fully judged.
+
+## D-118 — S-006's gate-2 hold: monitoring by guide queries, and the fixes that go with it
+Decided by: human | Date: 2026-11-07 | Phase: slice-spec (S-006)
+Rationale: the product owner's answers to gate 2's hold, "Guide queries only" and "Fix all, then re-critique".
+- **Monitoring.** The Azure guide gives each operations.md signal other than `/healthz` as a Log Analytics query with its threshold, for the Operator to save as an Azure Monitor alert, as the Cloudflare guide does (D-106). The templates create no alert rule or action group.
+- **The image holds one bundle.** esbuild inlines every dependency into `dist/server.js`. The image has no `node_modules`, so `pg` and the PostgreSQL parser stay out without changing `package.json` for the Worker. If a dependency of `mssql` cannot be bundled, the build fails rather than shipping a partial image, and the build record says which one.
+- **The fixes as offered:** stage 1 needs Owner or User Access Administrator; the 413 is counted as the body streams; the error number decides the class at connect and request time; a `readConfig` failure is named before the adapter's; `DATABASE_URL` is trimmed; nested-role tests are named per route.
+Alternatives rejected: alert rules in `base.bicep`; deferring monitoring to S-008; passing on these fixes without a third critique.
+
+## D-119 — S-006's gate-3 hold: the 5xx signal as a metric alert on a count, and the fixes that go with it
+Decided by: human | Date: 2026-11-07 | Phase: slice-spec (S-006)
+Rationale: the product owner's answers to gate 3's hold, "Metric alert on a count" and "Fix all, then re-critique".
+- **5xx.** Container Apps reports response status only as its `Requests` metric, and a metric alert cannot express a share of requests. The guide's alert fires at more than 1 5xx response in 15 minutes. That is stricter than operations.md's "more than 1% of requests over 15 minutes, with at least 20 requests", so it calls a human sooner and more often. operations.md's figure stands for Cloudflare, and the Azure difference joins Q-041's list.
+- **The fixes as offered:**
+  - the guide gives a login plus a user for SQL Server outside Azure SQL;
+  - the fetch guard checks IP-literal hosts;
+  - the guide has rotation steps for all three secrets;
+  - `logRetentionDays` is limited to 30 to 730;
+  - the new packages are named;
+  - stage 1 outputs its resource names and stage 2 takes them;
+  - the vault is named `kv-<uniqueString(resource group id, app name)>`;
+  - object names are built with `QUOTENAME`;
+  - the adapter's 5-second connect limit overrides the connection string's.
+Alternatives rejected: deferring 5xx to Q-041; a log-based ratio, which needs a diagnostic setting and more Bicep; passing without a fourth critique.
+
+## D-120 — S-006 supports Azure SQL Database only; the account check covers every route to a self-granted bypass
+Decided by: human | Date: 2026-11-07 | Phase: slice-spec (S-006)
+Rationale: the product owner's answers to gate 4's hold, "Azure SQL only" and "Fix all, then re-critique".
+- **Azure SQL Database only.** Container Apps on the consumption plan have no fixed outbound address. A SQL Server on a VM or on-premises could only be reached by opening its port to every Azure address, and that waits for private networking (D-064). This narrows the slice backlog's "or SQL Server reachable from Azure", and environments.md's Operator Deployment row, for this release. Both join Q-041's list. Gate 3's login-plus-user form of the Database account is withdrawn. The Engine adapter still runs against SQL Server 2022 in Docker for the integration tests.
+- **The account check's D-081 routes** gain:
+  - the `securityadmin` server role;
+  - `ALTER ANY SERVER ROLE`;
+  - `IMPERSONATE` or `CONTROL` on any one login;
+  - ownership of, or `ALTER` on, a database role whose members would bypass grants.
+  Every permission is read as an effective permission, so one implied by another, such as `IMPERSONATE` by `CONTROL`, counts.
+- **The fixes as offered:**
+  - docs/settings.md covers the Azure Deployment;
+  - an unparseable `DATABASE_URL` is a configuration error;
+  - Azure SQL's 10928 and 10929 are `connection`;
+  - the vault name and the packages have tests;
+  - the local smoke check uses a reader login and `PUBLIC_URL=http://localhost:8080`.
+Alternatives rejected: supporting SQL Server elsewhere by opening 1433 to the `AzureCloud` service tag, with the exposure stated; passing without a fifth critique.
+
+## D-121 — After S-006's spec failed twice: amend the system spec, then split S-006; every Azure deploy restarts the app
+Decided by: human | Date: 2026-11-07 | Phase: slice-spec (S-006)
+Rationale: S-006's spec reached two gate failures (gates 1 and 5), so the pipeline stopped to fix upstream. The product owner's answer: "Amend the system spec, then split 6", and on gate 5's blocker, "I like this fix: force a restart on every deploy and say how to confirm the new value is live".
+- **The system spec is amended first,** for what S-006's gates had to decide inside the slice:
+  - a complete definition of the MS SQL Server Database account check;
+  - secrets and rotation on Azure;
+  - monitoring on Azure, `/healthz` and 5xx included;
+  - `PUBLIC_URL` on Azure;
+  - Azure SQL Database as the only MS SQL Server target (D-120);
+  - the Allow-list statement.
+  The amendment answers Q-041, and goes to the product owner's gate.
+- **S-006 is then split in the slice backlog:** first the Node adapter, the container image and MS SQL Server's catalog and account check, proven locally and in Docker; then the Azure kit and the live Deployment. The backlog goes to the product owner's gate.
+- **Rotation on Azure:** every stage-2 deploy forces a new revision, so a changed Key Vault secret is read again. The guide says how the Operator confirms the new value is live.
+- The current S-006 spec, its critique findings and D-113 to D-120 are kept as the record, and the split slices' specs start from them.
+Alternatives rejected: fixing gate 5's findings and passing on the product owner's word; amending the system spec without splitting the slice.
+
+## D-122 — The MS SQL Server Database account check is a closed list; `/healthz` is watched externally on both clouds; answers Q-041
+Decided by: human (confirmed 2026-11-08 at the system-spec amendment gate) | Date: 2026-11-07 | Phase: system-spec (amendment, D-121)
+Rationale: the system-spec amendment D-121 asked for.
+- **The MS SQL Server account check passes only what it lists** (security.md, Database account check):
+  - not `dbo`, and not the database owner;
+  - no fixed role but `public`;
+  - owns nothing;
+  - database grants only `CONNECT`, `public`'s two default `VIEW ANY COLUMN … KEY DEFINITION`, and `SELECT` on schemas, tables and columns;
+  - server grants only `CONNECT SQL` and `VIEW ANY DATABASE`.
+  
+  S-006's gates 1, 4 and 5 each found a route past the grants that D-077's and D-081's lists did not name, such as `db_securityadmin`, `IMPERSONATE` on one login, role ownership, schema `ALTER` and `db_ddladmin`. A list of what is refused can always be extended by one more route. A list of what is allowed refuses routes nobody has named. Every route those lists or S-006's critiques named fails the new check. PostgreSQL keeps D-077 and D-081's form, which S-002 built and tested.
+- **`/healthz` is watched by an external monitor the Operator chooses, on both clouds.** Container Apps' probe is TCP, because a probe can only restart a replica or take it out of service. `/healthz` answers 503 while the Database is unreachable or unsafe, which a probe would turn into an outage of Sign-in.
+- **Q-041's wording items** are applied:
+  - the Allow-list statement (data-model.md);
+  - `PUBLIC_URL` on Azure, the `VERSION_METADATA` binding and Azure SQL Database only (environments.md);
+  - the account check (security.md);
+  - 5xx as a count, the two-stage deploy with forced revisions, and the 1 MiB limit's enforcement (operations.md).
+Alternatives rejected:
+- extending the refused routes for MS SQL Server, which three critiques in a row showed to be incomplete;
+- a closed list for PostgreSQL as well, which changes S-002's built and verified check without a finding against it;
+- an Application Insights availability test on `/healthz`, whose shortest interval is 5 minutes, against the 90-second rule.
+
+## D-123 — Revising the system-spec amendment after its critique
+Decided by: human (confirmed 2026-11-08 at the system-spec amendment gate) | Date: 2026-11-07 | Phase: system-spec (amendment, D-121)
+Rationale: the amendment's critique failed it (4 blockers, 4 gaps, 3 nits; security.md, Critique findings). The fixes needed these choices:
+- **The account's principals come from the session's tokens** (`sys.user_token`, and `sys.login_token` where readable), so Entra and Windows groups count. On Azure SQL Database, where server-level membership cannot be read, only a contained SQL-authenticated user mapped to no login passes. environments.md already asked for that form.
+- **The list gains what a correct read-only account holds:** `SHOWPLAN`, which ADR-005's plan layer needs; `CONNECT` on endpoints, which `public` holds on SQL Server; `public`'s rows on system objects; and `SELECT` on any object, not only tables, because only user tables are Visible.
+- **Ownership is checked in every catalog of owned securables** the supported versions have, both in the database and on the server, and is not limited to eight classes.
+- **The list is the read-only tier's.** Each write slice widens it for its own tier, and until then MS SQL Server refuses any tier above `read-only` at start-up.
+- **Defaults are measured before the check ships,** on SQL Server 2022 and on `mcp-test`.
+- **Rotation confirmation** deletes the old client secret before the Sign-in check, and a failed check means restarting the revision, then checking the reference after 30 minutes.
+- **Serverless with auto-pause is supported,** at the cost of one `connection` error after each pause.
+Alternatives rejected: listing Entra users as supported on Azure SQL Database, whose group roles a database cannot fully see; a per-tier list written now, before any write tier exists on MS SQL Server; refusing serverless tiers.
+
+## D-124 — MS SQL Server's account check is stricter than PostgreSQL's, by choice
+Decided by: human | Date: 2026-11-08 | Phase: system-spec (amendment, D-121)
+Rationale: the product owner asked that the MS SQL Server specs match PostgreSQL's apart from what MS SQL Server or Azure cannot support. On how the Allow-list is read, they do: on both Engines, what the Database account is granted SELECT on is what a Staff member sees (ADR-006). The Database account check differs in form, and the product owner's answer was "Keep MS SQL allow-list":
+- PostgreSQL refuses a named list of routes past the grants (D-077, D-081). It has few such routes, and all are named.
+- MS SQL Server passes only a listed set of grants (D-122, D-123). It has many routes, and S-006's critiques found a new one three times running.
+
+So an account PostgreSQL accepts can be refused on MS SQL Server: one with an extra non-SELECT grant, or one that owns a table. The Deployment kit and the Security material state the difference.
+Alternatives rejected: a named list of refused routes for MS SQL Server, matching PostgreSQL's behaviour but open to an unnamed route; the closed form on both Engines, which reopens S-002's verified check.
+

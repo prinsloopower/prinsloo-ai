@@ -105,6 +105,7 @@ Answered by the product owner after the system-spec gate: see D-060.
 ## Q-022 — Which Azure subscription and Azure SQL Database do the MS SQL Server slices test against?
 Raised by: slices | Blocks: slice-spec for S-006
 D-065 says the product owner provides them. Until they exist, nothing can deploy to Azure or measure MS SQL Server. The answer is the subscription, the resource group, the Azure SQL Database (server, database and tier), and confirmation that a `sqlmcp_test` schema can be created there.
+Answered by the product owner at S-006's slice-spec: see D-113.
 
 ## Q-023 — Who creates the Google OAuth client for the Sign-in test run, and when?
 Raised by: slice-spec (S-001) | Blocks: S-001 verification (T-011)
@@ -195,6 +196,7 @@ Answered by the product owner, 2026-10-25: "accepted", the first option. See D-0
 ## Q-037 — How does a container Deployment name the release it runs?
 Raised by: slice-spec (S-004) | Blocks: slice-spec for S-006 and S-008 (benchmark run on MS SQL Server)
 On Workers, S-004 has `initialize` report `<package version>+<Worker version id>` from the `VERSION_METADATA` binding, so a benchmark report names the deployed release. Containers have no such binding, so S-006's Azure image would report the package version alone, which does not change between deploys. One option is that the Bicep template passes the image tag (`X.Y.Z`) or the commit SHA (operations.md) as a setting, and the Node adapter reports it the same way. environments.md also needs the `VERSION_METADATA` binding in its table. That waits for the next system-spec revision, with Q-030 and Q-033.
+Answered by the product owner at S-006's slice-spec: see D-114. The package version alone.
 
 ## Q-038 — Corrections S-005 owes the slice backlog, ADR-005 and operations.md
 Raised by: slice-spec (S-005) | Blocks: nothing; apply at the next revision of each document
@@ -215,4 +217,18 @@ security.md's planned rotation sets the old value as `SERVER_SECRET_PREVIOUS`, s
 - a `npm run setup -- rotate` form that holds the old and new values in memory only, setting `SERVER_SECRET_PREVIOUS` and `SERVER_SECRET` in one run;
 - showing `SERVER_SECRET` once at setup, for the Operator to store;
 - accepting the sign-out.
+
+## Q-041 — How Azure meets operations.md's `/healthz` rule, and the system-spec wording S-006 departs from
+Raised by: slice-spec (S-006) | Blocks: nothing for S-006; S-008's guide and S-009's review read the answer
+- **`/healthz` monitoring.** operations.md says the Container Apps probe checks `/healthz` every 30 s and calls a human at 3 failures. A probe can only restart a replica or take it out of service. `/healthz` answers 503 while the Database is unreachable or unsafe, so as a liveness probe it restarts a healthy container in a loop, and as a readiness probe it takes Sign-in and metadata offline with it. S-006's probe is TCP (D-116), so nothing calls a human. Options:
+  - an Azure Monitor alert on the Audit records' and operational lines' counts, with no `/healthz` signal;
+  - an Application Insights availability test on `/healthz`, whose shortest interval is 5 minutes, not 30 s;
+  - amending operations.md to name the TCP probe and an Operator-chosen external monitor, as on Cloudflare.
+- **Wording S-006 departs from**, to apply at the next system-spec revision with Q-030, Q-033 and Q-038:
+  - data-model.md's MS SQL Server Allow-list names `fn_my_permissions` per table, which S-006 does not use (D-117);
+  - environments.md gives `PUBLIC_URL` as a template parameter. On Azure it is optional, computed from the environment when unset (D-117);
+  - D-077's MS SQL Server account check gains D-081's routes (D-117);
+  - operations.md's 5xx row is met on Azure by a metric alert on a count, at more than 1 in 15 minutes, not a 1% share (D-119);
+  - the slice backlog's S-006 line and environments.md's Operator Deployment row say "SQL Server reachable from Azure", but this release supports Azure SQL Database only (D-120).
+Answered by the system-spec amendment of 2026-11-07 (D-121, D-122). An external monitor watches `/healthz` on both clouds, and every wording item is applied to the system spec. The slice backlog's S-006 line changes with the split D-121 asks for.
 

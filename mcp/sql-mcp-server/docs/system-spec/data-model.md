@@ -8,6 +8,8 @@ Keys come from the deployment secret (`SERVER_SECRET`, environments.md) through 
 
 Four entities are not domain terms: the OAuth values a stateless authorization server needs (Client registration, Authorization request, Authorization code, Refresh token). They exist to serve ADR-004, not as product concepts (D-050).
 
+Amended 2026-11-07 by D-117 and D-122: the Allow-list's MS SQL Server statement is `HAS_PERMS_BY_NAME` per column, with `QUOTENAME`. Column types are shown by name only when built in, with MS SQL Server's lengths in characters.
+
 ## Sign-in
 Traces: R-009, R-017, J-002
 The access token the Server issues once a Staff member completes Sign-in, presented as `Authorization: Bearer` on every MCP request. It is a JWE, so its contents are opaque to the AI tool.
@@ -101,9 +103,9 @@ Not a stored value. On each Tool call, the Visibility resolver reads it from the
 | Engine | read with |
 |---|---|
 | PostgreSQL | `has_table_privilege` and `has_column_privilege` over the user tables in `pg_class` and `pg_attribute`, which count role membership |
-| MS SQL Server | `sys.fn_my_permissions(<table>, 'OBJECT')` per candidate table, with `HAS_PERMS_BY_NAME(<table>, 'OBJECT', 'SELECT', <column>, 'COLUMN')` per column |
+| MS SQL Server | `HAS_PERMS_BY_NAME(QUOTENAME(<schema>) + '.' + QUOTENAME(<table>), 'OBJECT', 'SELECT', <column>, 'COLUMN')` per column of every user table, which counts table-, schema- and column-level grants and denies through roles (D-117) |
 
-Names come from the Database catalog as they are stored. System schemas never count, and nor do tables the Database account owns, except the Created objects a Conversation token names (D-076, D-077). The same statement runs ADR-006's check on the account.
+Names come from the Database catalog as they are stored. A column's type is shown by name only when it is a built-in type. Any other type is shown as `user-defined`, because a type's name can carry a hidden schema's or table's name (D-081). On MS SQL Server, built-in means `sys.types.is_user_defined = 0`. The name carries the declared length in characters (`nvarchar(50)`, though `max_length` stores 100 bytes), `max` where `max_length` is -1, and precision and scale where they apply. System schemas never count, and nor do tables the Database account owns, except the Created objects a Conversation token names (D-076, D-077). The same statement runs the Database account check (security.md).
 Retention: none on the Server. The grants live in the Database.
 Migration: none. The URL-path form (2026-10-11) was never built, so no connector URL carries a segment to read.
 
