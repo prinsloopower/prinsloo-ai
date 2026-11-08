@@ -1091,3 +1091,8 @@ Rationale: choices the spec leaves open:
 - **A runtime that passes no classifier gets `other` for every Database error.** Both runtimes pass one, which `app_uses_runtime_classifier` checks.
 Alternatives rejected: a hand-written ADO parser, which could disagree with the driver's; `mssql`'s booleans alone, which read a misspelt value as on.
 
+
+## D-131 — The container's fetch guard also refuses the unspecified and reserved ranges
+Decided by: model | Date: 2026-11-08 | Phase: build (S-006, T-003)
+Rationale: security.md's Fetches rule lists loopback, RFC 1918, link-local, CGNAT, ULA and multicast. The guard also refuses `0.0.0.0/8`, `240.0.0.0/4` (which holds `255.255.255.255`) and `::`, because a connection to the unspecified address reaches the host itself, and the reserved range reaches nothing. This only narrows what may be fetched. IPv4-mapped IPv6 addresses are matched against the IPv4 rules, in the lookup and as literals. A refused fetch rejects as `fetch failed`, as an unreachable host does, so the Sign-in broker logs it as `network`.
+Alternatives rejected: the spec's list alone, which would let `https://0.0.0.0/` reach the container's own ports.

@@ -4,6 +4,7 @@ import type { Deps } from "./app.js";
 import type { RuntimeVariables } from "./config.js";
 import type { Database } from "./engine/database.js";
 import { classifyMssqlError } from "./engine/mssql.js";
+import { guardedFetch, type Resolve } from "./node-fetch.js";
 
 /** The Database connection `DATABASE_URL` gives, with encryption and the certificate check forced on. */
 export type MssqlConnection = mssql.config;
@@ -74,13 +75,17 @@ export function readPort(env: RuntimeVariables): number | undefined {
   return port >= 1 && port <= 65535 ? port : undefined;
 }
 
-/** The app's dependencies on Node, read from the environment once, at process start. */
-export function nodeDeps(env: RuntimeVariables, makeDatabase?: (connection: MssqlConnection) => Database): Deps {
+/**
+ * The app's dependencies on Node, read from the environment once, at process start. Every fetch
+ * the app makes, to the Client ID Metadata Document and the Identity provider, is guarded (D-128).
+ */
+export function nodeDeps(env: RuntimeVariables, makeDatabase?: (connection: MssqlConnection) => Database, opts: { resolve?: Resolve } = {}): Deps {
   const settings = readNodeSettings(env);
   const database = settings.ok && makeDatabase ? makeDatabase(settings.settings.connection) : undefined;
   return {
     ping: async () => database?.ping(),
     env,
+    fetch: guardedFetch(opts),
     ...(database ? { database } : {}),
     connectionSetting: "DATABASE_URL",
     classify: classifyMssqlError,
