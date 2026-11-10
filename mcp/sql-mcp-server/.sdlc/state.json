@@ -74,8 +74,8 @@
       "gate": {
         "result": "pass",
         "by": "human",
-        "at": "2026-11-08T16:47:21+00:00",
-        "quote": "Pass"
+        "at": "2026-11-10T03:06:35+00:00",
+        "quote": "approved"
       },
       "hash": "sha256:cdb1cd7543cf1537"
     },
@@ -453,7 +453,5 @@
   ],
   "blocked_on": null,
   "open_questions": [],
-  "phase": "build",
-  "phase_paused_s": 386,
-  "phase_started_at": "2026-11-08T18:07:17+00:00"
+  "phase": null
 }
