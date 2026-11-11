@@ -17,6 +17,8 @@
     "db:mssql:seed": "tsx test/mssql/seed.ts",
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
+    "build:image": "esbuild src/server.ts --bundle --platform=node --target=node24 --format=esm --outfile=dist/server.js \"--banner:js=import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);\"",
+    "print:check-sql": "node dist/server.js --print-check-sql",
     "setup": "tsx deploy/cloudflare/setup.ts",
     "export": "tsx release/export.ts",
     "smoke": "node scripts/smoke.mjs",
