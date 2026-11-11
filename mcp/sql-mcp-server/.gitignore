@@ -6,3 +6,4 @@ node_modules/
 dist/
 bench/.signin.json
 /wrangler.*.jsonc
+test/mssql/certs/

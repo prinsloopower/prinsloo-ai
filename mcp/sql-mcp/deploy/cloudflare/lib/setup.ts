@@ -63,8 +63,13 @@ export async function setup(form: Form, deps: SetupDeps): Promise<void> {
 
 /** `npm run setup`: from answers to a deployed, checked Deployment, resuming whatever an earlier run left. */
 async function setUpOrResume(deps: SetupDeps) {
-  const worker = await askValid(deps, { key: "worker", text: "Worker name (lowercase letters, digits and dashes; also the workers.dev hostname)" }, (v) =>
-    WORKER_NAME.test(v) ? undefined : "Use lowercase letters, digits and dashes, starting and ending with a letter or digit.",
+  const worker = await askValid(
+    deps,
+    {
+      key: "worker",
+      text: "Worker name: a new name, which setup creates, or the name an earlier run used, to carry on (lowercase letters, digits and dashes; also the workers.dev hostname)",
+    },
+    (v) => (WORKER_NAME.test(v) ? undefined : "Use lowercase letters, digits and dashes, starting and ending with a letter or digit."),
   );
   const existing = readOperator(deps, worker);
   if (!existing) {
@@ -81,7 +86,7 @@ async function setUpOrResume(deps: SetupDeps) {
   );
   const port = await askValid(deps, { key: "port", text: "Its port", default: "5432" }, (v) => (/^\d{1,5}$/.test(v) ? undefined : "Give a port number."));
   const database = await askValid(deps, { key: "database", text: "Database name", default: "postgres" }, nonEmpty);
-  const projectRef = await askValid(deps, { key: "projectRef", text: "Supabase project ref (the id in your project's URL)" }, (v) =>
+  const projectRef = await askValid(deps, { key: "projectRef", text: "Supabase project ref (Project Settings → General → Project ID; also the id in your project's URL)" }, (v) =>
     /^[a-z0-9]+$/.test(v) ? undefined : "Give the project ref alone: lowercase letters and digits.",
   );
   const role = await askValid(
@@ -96,7 +101,7 @@ async function setUpOrResume(deps: SetupDeps) {
   );
   const schemasText = await deps.ask({
     key: "schemas",
-    text: "Schemas in the Boundary, comma-separated (blank for none: the grants alone decide). Name your own schemas if the Database account's listing showed anything",
+    text: "Schemas in the Boundary: the schemas holding the tables the Agent may see, comma-separated, e.g. sales, reporting (blank for none: the grants alone decide)",
     default: (existing ? boundaryOf(existing).schemas : undefined)?.join(", ") ?? "",
   });
   const schemas = schemasText.split(",").map((s) => s.trim()).filter(Boolean);

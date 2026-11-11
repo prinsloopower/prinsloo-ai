@@ -12,7 +12,7 @@ import { answerListing, LIST_TABLES, LIST_TABLES_DESCRIPTION, listing, validateL
 import { answerQuery, QUERY, queryDescription, validateQuery } from "./tools/query.js";
 import { bypassesGrants, visibleObjects } from "./visibility.js";
 
-export const SERVER_INFO = { name: "sql-mcp-server", version: "0.1.0" };
+export const SERVER_INFO = { name: "sql-mcp-server", version: "0.2.0" };
 
 const UNSAFE_ACCOUNT = "Deployment misconfigured: Database account bypasses grants";
 

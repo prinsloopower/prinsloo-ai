@@ -1,4 +1,4 @@
-# Deploying sql-mcp-server on Cloudflare
+ # Deploying sql-mcp-server on Cloudflare
 
 This guide takes you from a fresh clone to a Deployment that Staff members use from Claude or ChatGPT. It serves PostgreSQL on Supabase, through a Cloudflare Worker and Hyperdrive. It is public and read-only.
 
@@ -33,11 +33,11 @@ The Server connects as a Database account of its own: a PostgreSQL role used by 
 - **Its grants are the Allow-list.** The Agent sees exactly the tables and columns the Database administrator grants this role, and nothing else (section 6).
 - **It must not bypass grants.** Supabase's `postgres` role does, so the Server refuses it, and so does setup. So does any role with `BYPASSRLS` or membership of `pg_read_all_data`. With such an account, every Tool call answers "Deployment misconfigured" and `/healthz` reports `database: unsafe`.
 
-You do not write this role's SQL yourself. In section 3, `npm run setup` makes the role's password, which you never see. It prints SQL that creates the role with only a SCRAM verifier of that password, so the password itself never reaches Supabase. Run that SQL as `postgres` in the Supabase SQL editor when setup asks.
+You do not create this role yourself, and you should not give setup a role that already exists. In section 3, `npm run setup` asks for a new role name, makes the role's password, which you never see, and prints SQL that creates the role with only a SCRAM verifier of that password, so the password itself never reaches Supabase. Run that SQL as `postgres` in the Supabase SQL editor when setup asks.
 
-The SQL ends with a listing of every table and column the new role can already read, with no Boundary.
+The SQL ends with a listing of every table and column the new role can already read, ignoring the Boundary. Setup shows the SQL after all its questions, so you see this listing after you have answered the Boundary question.
 - **Expect no rows.** A new role has no grants.
-- **If rows appear,** something in your Database is granted to `PUBLIC`, which every role inherits: Supabase itself, or an extension. When setup then asks for the Boundary, name the schemas that hold your own data, so nothing else is visible.
+- **If rows appear,** something in your Database is granted to `PUBLIC`, which every role inherits: Supabase itself, or an extension. If you named your schemas in the Boundary, as section 3 recommends, those rows are already hidden unless they are in your schemas. If you left the Boundary blank, set it now: edit `BOUNDARY` in `wrangler.<worker>.jsonc` once setup has finished, as in section 8, and run `npm run setup -- deploy`.
 
 Setup marks the role it creates with a comment naming this Deployment. Run again, for a rerun or a new password, the same SQL gives that role a new password. It refuses any other role of that name, which another Deployment may be using: choose another name.
 
@@ -49,24 +49,29 @@ Run:
 npm run setup
 ```
 
-It asks:
+Setup creates everything on Cloudflare itself: the Worker, its Hyperdrive config and its secret. Nothing needs to exist there beforehand except your account and its `workers.dev` subdomain. In Supabase, it needs only your existing project and the schema and tables you want Staff members to ask about; it gives you the SQL for the role.
 
-| question | becomes |
-|---|---|
-| Worker name | the Worker's name, its hostname `https://<worker>.<your subdomain>.workers.dev`, and its Hyperdrive config's name |
-| Supabase session pooler host and port | where Hyperdrive connects. In Supabase, open **Connect**, then **Session pooler**: the host looks like `aws-0-us-east-2.pooler.supabase.com`, port `5432` |
-| database name | usually `postgres` |
-| Supabase project ref | the id in your project's URL. The pooler's user name is `<role>.<project ref>` |
-| Database account | the new role's name, such as `sqlmcp_reader` |
-| schemas in the Boundary | the Boundary (`BOUNDARY`). Blank means none, so the grants alone decide. Name your schemas if section 2's listing showed rows |
-| Row limit | the Row limit (`ROW_LIMIT`), 500 unless you choose otherwise |
-| Cloudflare account | asked only if Wrangler's Cloudflare login reaches more than one |
-| whether this is a lost Deployment | asked only when no file for that Worker name is here. Press Enter for a new Deployment; section 9 covers adopting |
+It asks these questions, in this order. A value in brackets is the default, which Enter accepts.
+
+| question | what to answer | becomes |
+|---|---|---|
+| Worker name | **A new name you choose**, such as `sql-mcp`. Setup creates the Worker; do not create one first. Lowercase letters, digits and dashes. If a Worker of that name already exists in your account and setup did not make it, setup stops and asks for another name. To carry on after a stop, give the name the earlier run used | the Worker's name, its hostname `https://<worker>.<your subdomain>.workers.dev`, its Hyperdrive config's name, and the file `wrangler.<worker>.jsonc` |
+| whether this is a lost Deployment | **Press Enter.** Asked only when no `wrangler.<worker>.jsonc` for that name is in this folder, which is always the case the first time. Typing the name is only for recovering a lost file (section 9) | nothing, for a new Deployment |
+| Supabase session pooler host | In Supabase, open your project, choose **Connect** at the top, then the **Session pooler** connection. Copy the host alone, such as `aws-0-us-east-2.pooler.supabase.com`, with no `postgresql://`, user, port or path | where Hyperdrive connects |
+| its port | Press Enter for `5432`, the session pooler's port. Not `6543`, which is the transaction pooler | the port Hyperdrive connects to |
+| database name | Press Enter for `postgres`, which is Supabase's database. Your own schema is not a database: name it in the Boundary question below | the database Hyperdrive connects to |
+| Supabase project ref | In Supabase, **Project Settings**, then **General**, then **Project ID**: about 20 lowercase letters, such as `abcdefghijklmnopqrst`. It is also the id in your dashboard URL, `supabase.com/dashboard/project/<project ref>` | with the role, the pooler's user name `<role>.<project ref>` |
+| Database account | **A new role name**, such as the default `sqlmcp_reader`. Not `postgres`, which setup refuses, and not a role you already use: the SQL setup prints creates it. Lowercase letters, digits and underscores | the PostgreSQL role the Server connects as (section 2) |
+| schemas in the Boundary | **The schema or schemas holding the tables Staff members should see**, comma-separated, such as `sales` or `sales, reporting`. Recommended: it keeps out anything Supabase or an extension grants to `PUBLIC`. Blank means no Boundary, so the grants alone decide. Naming a schema exposes nothing by itself: the Agent still sees only what you grant in section 6 | the Boundary (`BOUNDARY`) |
+| Row limit | Press Enter for `500`, or give a whole number from 1 to 10,000 | the Row limit (`ROW_LIMIT`): the most rows one query returns |
+| Cloudflare account | Choose the account to deploy to. Asked only if Wrangler's Cloudflare login reaches more than one | the account the Worker is created in |
+
+Every answer except the Worker name can be changed later: rerun `npm run setup` with the same Worker name and give the new answer, or, for the Boundary and Row limit, edit your file (section 8).
 
 Then it works through these steps, stopping at the first failure with what failed and what to do. Rerunning `npm run setup` with the same Worker name resumes where it stopped.
 1. **Uses Wrangler's Cloudflare login.** It runs `wrangler whoami --json` to check the login and list your accounts, then `wrangler auth token --json` to read the token that login holds. It also calls `GET /accounts/<account>/workers/subdomain` to check that your account has a `workers.dev` subdomain.
-2. **Checks the Worker name.** It calls `GET /accounts/<account>/workers/scripts/<worker>/settings` to see whether a Worker of that name exists, and `GET /accounts/<account>/hyperdrive/configs` to list your Hyperdrive configs. It never deploys over a Worker it did not make. Before the questions, when no config file for that Worker name is here, setup asks whether this is a Deployment it made whose file is lost (section 9); press Enter for a new one.
-3. **Prints the Database account's SQL** (section 2) and waits while you run it.
+2. **Checks the Worker name.** It calls `GET /accounts/<account>/workers/scripts/<worker>/settings` to see whether a Worker of that name exists, and `GET /accounts/<account>/hyperdrive/configs` to list your Hyperdrive configs. It never deploys over a Worker it did not make.
+3. **Prints the Database account's SQL** (section 2) and waits while you run it. Copy everything from the first `--` comment line to the final `ORDER BY 1, 2, 3;`. In Supabase, open **SQL Editor**, paste it into a new query and choose **Run**: the editor runs as `postgres`. It should report success and show no rows (section 2 says what rows mean). Then return to the terminal and press Enter. If the SQL fails, do not press Enter: press Ctrl-C, fix what the error names, and rerun `npm run setup` with the same Worker name. It prints the SQL again with a new password.
 4. **Creates the Hyperdrive config** with `POST /accounts/<account>/hyperdrive/configs`, with query caching disabled. A rerun updates it with `PATCH /accounts/<account>/hyperdrive/configs/<id>`. The password goes only in that request's body. Wrangler's own Hyperdrive commands would put it on a command line, so setup does not use them.
 5. **Writes `wrangler.<worker>.jsonc`** in this folder. A first version is written at step 3, before the SQL is shown, so a rerun after a stop there finds it. That file holds this Deployment's own settings: its name, account, Hyperdrive config id, Database account and `vars`. It holds no secret. **Keep a backup of it.** It is gitignored, so it stays on this machine. Section 9 says what to do if it is lost.
 6. **Sets `SERVER_SECRET`,** the secret every key derives from: 32 random bytes, through `wrangler secret put` on standard input. A rerun keeps the one already set: the Worker's settings from step 2 list its secrets by name.

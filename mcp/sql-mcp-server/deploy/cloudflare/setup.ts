@@ -74,7 +74,12 @@ const node = nodeRunner(ROOT, spawn);
 try {
   await setup(form, {
     ask,
-    pause: (text) => ask({ key: "pause", text: `${text}\nPress Enter when done` }).then(() => undefined),
+    // Printed before the prompt, not as part of it: readline redraws its whole prompt on each refresh,
+    // so a long multi-line prompt, such as the Database account's SQL, would appear several times.
+    pause: (text) => {
+      console.log(`${text}\n`);
+      return ask({ key: "pause", text: "Press Enter when done" }).then(() => undefined);
+    },
     say: (text) => console.log(text),
     wrangler: wranglerRunner(ROOT, spawn),
     fetch,

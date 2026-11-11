@@ -52,7 +52,7 @@ describe("the clean copy's export", () => {
     const pkg = JSON.parse(read(join(out, "package.json"))) as { scripts: Record<string, string>; version: string };
     for (const script of ["benchmark", "export", "deploy"]) expect(pkg.scripts, script).not.toHaveProperty(script);
     // The package and the Server's own `initialize` report one version.
-    expect(pkg.version).toBe("0.1.0");
+    expect(pkg.version).toBe("0.2.0");
     expect(SERVER_INFO.version).toBe(pkg.version);
     expect(read(join(out, "tsconfig.json"))).not.toMatch(/bench|release/);
     expect(read(join(out, ".gitignore"))).not.toMatch(/bench/);

@@ -70,12 +70,12 @@
     },
     "system-spec": {
       "status": "approved",
-      "rework": 1,
+      "rework": 2,
       "gate": {
         "result": "pass",
         "by": "human",
-        "at": "2026-10-25T16:15:14+00:00",
-        "quote": "Approve all three (Recommended)"
+        "at": "2026-11-10T03:06:35+00:00",
+        "quote": "approved"
       },
       "hash": "sha256:cdb1cd7543cf1537"
     },
@@ -85,10 +85,10 @@
       "gate": {
         "result": "pass",
         "by": "human",
-        "at": "2026-10-25T16:15:14+00:00",
-        "quote": "Approve all three (Recommended)"
+        "at": "2026-11-08T16:55:34+00:00",
+        "quote": "Pass"
       },
-      "hash": "sha256:811f4c9cf2563322"
+      "hash": "sha256:1d230803446066fd"
     },
     "retro": {
       "status": "approved",
@@ -291,7 +291,7 @@
     {
       "id": "S-005",
       "title": "Deploying on Cloudflare from the docs alone",
-      "status": "deployed",
+      "status": "verified",
       "traces": [
         "J-001",
         "R-001",
@@ -324,13 +324,19 @@
           "result": "pass",
           "by": "script",
           "at": "2026-11-03T00:17:42+00:00"
+        },
+        "verify": {
+          "result": "pass",
+          "by": "human",
+          "at": "2026-11-07T14:46:27+00:00",
+          "quote": "I ran the deploy successfully, added the connector to Claude and asked a question and got an answer"
         }
       }
     },
     {
       "id": "S-006",
       "title": "Signing in to an MS SQL Server Deployment on Azure",
-      "status": "planned",
+      "status": "specified",
       "traces": [
         "J-001",
         "J-002",
@@ -339,6 +345,32 @@
         "R-002",
         "R-003",
         "R-009"
+      ],
+      "size_at_creation": "product",
+      "rework": {
+        "slice-spec": 2
+      },
+      "gates": {
+        "slice-spec": {
+          "result": "pass",
+          "by": "model",
+          "at": "2026-11-08T18:02:47+00:00"
+        }
+      }
+    },
+    {
+      "id": "S-013",
+      "title": "Deploying an MS SQL Server Deployment on Azure",
+      "status": "planned",
+      "traces": [
+        "J-001",
+        "J-002",
+        "J-003",
+        "R-001",
+        "R-002",
+        "R-003",
+        "R-009",
+        "R-010"
       ],
       "size_at_creation": "product"
     },

@@ -105,6 +105,7 @@ Answered by the product owner after the system-spec gate: see D-060.
 ## Q-022 — Which Azure subscription and Azure SQL Database do the MS SQL Server slices test against?
 Raised by: slices | Blocks: slice-spec for S-006
 D-065 says the product owner provides them. Until they exist, nothing can deploy to Azure or measure MS SQL Server. The answer is the subscription, the resource group, the Azure SQL Database (server, database and tier), and confirmation that a `sqlmcp_test` schema can be created there.
+Answered by the product owner at S-006's slice-spec: see D-113.
 
 ## Q-023 — Who creates the Google OAuth client for the Sign-in test run, and when?
 Raised by: slice-spec (S-001) | Blocks: S-001 verification (T-011)
@@ -195,6 +196,7 @@ Answered by the product owner, 2026-10-25: "accepted", the first option. See D-0
 ## Q-037 — How does a container Deployment name the release it runs?
 Raised by: slice-spec (S-004) | Blocks: slice-spec for S-006 and S-008 (benchmark run on MS SQL Server)
 On Workers, S-004 has `initialize` report `<package version>+<Worker version id>` from the `VERSION_METADATA` binding, so a benchmark report names the deployed release. Containers have no such binding, so S-006's Azure image would report the package version alone, which does not change between deploys. One option is that the Bicep template passes the image tag (`X.Y.Z`) or the commit SHA (operations.md) as a setting, and the Node adapter reports it the same way. environments.md also needs the `VERSION_METADATA` binding in its table. That waits for the next system-spec revision, with Q-030 and Q-033.
+Answered by the product owner at S-006's slice-spec: see D-114. The package version alone.
 
 ## Q-038 — Corrections S-005 owes the slice backlog, ADR-005 and operations.md
 Raised by: slice-spec (S-005) | Blocks: nothing; apply at the next revision of each document
@@ -216,3 +218,50 @@ security.md's planned rotation sets the old value as `SERVER_SECRET_PREVIOUS`, s
 - showing `SERVER_SECRET` once at setup, for the Operator to store;
 - accepting the sign-out.
 
+## Q-041 — How Azure meets operations.md's `/healthz` rule, and the system-spec wording S-006 departs from
+Raised by: slice-spec (S-006) | Blocks: nothing for S-006; S-008's guide and S-009's review read the answer
+- **`/healthz` monitoring.** operations.md says the Container Apps probe checks `/healthz` every 30 s and calls a human at 3 failures. A probe can only restart a replica or take it out of service. `/healthz` answers 503 while the Database is unreachable or unsafe, so as a liveness probe it restarts a healthy container in a loop, and as a readiness probe it takes Sign-in and metadata offline with it. S-006's probe is TCP (D-116), so nothing calls a human. Options:
+  - an Azure Monitor alert on the Audit records' and operational lines' counts, with no `/healthz` signal;
+  - an Application Insights availability test on `/healthz`, whose shortest interval is 5 minutes, not 30 s;
+  - amending operations.md to name the TCP probe and an Operator-chosen external monitor, as on Cloudflare.
+- **Wording S-006 departs from**, to apply at the next system-spec revision with Q-030, Q-033 and Q-038:
+  - data-model.md's MS SQL Server Allow-list names `fn_my_permissions` per table, which S-006 does not use (D-117);
+  - environments.md gives `PUBLIC_URL` as a template parameter. On Azure it is optional, computed from the environment when unset (D-117);
+  - D-077's MS SQL Server account check gains D-081's routes (D-117);
+  - operations.md's 5xx row is met on Azure by a metric alert on a count, at more than 1 in 15 minutes, not a 1% share (D-119);
+  - the slice backlog's S-006 line and environments.md's Operator Deployment row say "SQL Server reachable from Azure", but this release supports Azure SQL Database only (D-120).
+Answered by the system-spec amendment of 2026-11-07 (D-121, D-122). An external monitor watches `/healthz` on both clouds, and every wording item is applied to the system spec. The slice backlog's S-006 line changes with the split D-121 asks for.
+
+## Q-042 — The slice backlog's S-006 entry says no firewall rule is added
+Raised by: slice-spec (S-006) | Blocks: nothing
+The slice backlog's S-006 entry says the `mcp-test` defaults are measured "so no firewall rule is added (D-125)", and that they are read in the portal's query editor. D-127 and D-128 amend this: two `sqlcmd` sessions, each through a client-IP rule removed when it ends. The wording should change at the backlog's next revision.
+
+## Q-043 — The system spec does not state the Database connection's TLS rule
+Raised by: slice-spec (S-006) | Blocks: nothing; D-129 decides it for S-006 and S-013
+security.md and environments.md give `Encrypt=true` only in an example. D-129 makes encryption and certificate checking mandatory on MS SQL Server, with no setting to turn the check off. The rule should be added to security.md's Secrets or connection rules and environments.md's `DATABASE_URL` row at the next system-spec revision. It should also say whether PostgreSQL through Hyperdrive needs a matching rule.
+
+## Q-044 — At connect time, tedious keeps no error number, so the code decides the class
+Raised by: build (S-006, T-007) | Blocks: nothing; every connect-time number the spec lists is `connection`, as `ELOGIN` is
+S-006's spec says the error number decides first "at connect time and on a pooled connection's request alike". `tedious` 20 builds a failed login's error as `ConnectionError(message, 'ELOGIN')` and drops the server's number (18456, 4060, 40613 and the rest), and `mssql` passes that on unchanged. At connect time the classifier therefore sees only the code. Every number the spec lists for connect time is `connection`, and so is `ELOGIN`, so no class changes. A future connect-time number in another class, such as a permission error at login, would still read `connection` until the driver keeps it. `classifyMssqlError` reads a number wherever `mssql` or `tedious` puts one, so it uses one as soon as the driver supplies it. The spec's wording should say this at its next revision.
+
+## Q-045 — Fourteen sys views on SQL Server 2022 name an owner that security.md's ownership list leaves out
+Raised by: build (S-006, T-005) | Blocks: S-006's build, which stops for a security.md amendment as the spec requires; T-006 builds the check on the amended list
+`mssql_ownership_list_covers_catalog_views` lists the 63 `sys` views on SQL Server 2022 with a `principal_id` or `owning_principal_id` column. 17 are on security.md's "It owns nothing" list. 32 are excluded in the test, each with its reason: subsets of `sys.objects`, `sys.types`, `sys.endpoints` or `sys.server_principals`, session tokens, and two columns that name a mapping rather than an owner. These 14 are in neither:
+- **in the database:** `database_scoped_credentials`, `database_credentials` (its deprecated alias), `event_notifications`, `fulltext_stoplists`, `registered_search_property_lists`, `external_languages`, `external_libraries`, `external_libraries_installed`, `external_library_setup_errors`, `external_streams`, `external_streaming_jobs`;
+- **on the server:** `server_audits`, `server_file_audits`, `server_event_notifications`.
+
+The build's reading, for the amendment to confirm or correct:
+- **Owners, to add to the list:** `database_scoped_credentials`, `event_notifications`, `fulltext_stoplists`, `registered_search_property_lists`, `external_languages`, `external_libraries`, and on the server `server_audits` and `server_event_notifications`.
+- **Covered by a view above, to exclude with that reason:** `database_credentials` (deprecated alias of `database_scoped_credentials`), `server_file_audits` (a subset of `server_audits`), and `external_libraries_installed` and `external_library_setup_errors` (rows about an `external_libraries` entry).
+- **Unknown:** `external_streams` and `external_streaming_jobs`, Azure SQL Edge's streaming objects, whose `principal_id` may be `sys.objects`' "owner if not the schema's". Listing them as owners is the closed list's safe side.
+
+`public`'s defaults on SQL Server 2022 are all covered (the build record is in the T-005 commit). Azure SQL Database's views and defaults are not measured yet. The first `sqlcmd` session on `mcp-test` runs `test/mssql/contained-user.sql` and `test/mssql/schema.sql` as `dbo`, then `test/mssql/measure-database-defaults.sql` as `sqlmcp_reader`, and `test/mssql/ownership-views.sql`. Its rows may add to this list, so the amendment is best made after that session.
+
+The first `mcp-test` session (2026-11-08) listed 53 views on Azure SQL Database. Four are not on SQL Server 2022, and none is on security.md's list or in the test's exclusions:
+- `external_models`: an owned securable, made by `CREATE EXTERNAL MODEL`. The build reads it as an owner, to add to the database list;
+- `devops_database_access`, `devops_database_principals` and `devops_principals`: Microsoft Purview DevOps policy assignments. The build reads their `principal_id` as the principal a policy covers, not an owner, to exclude with that reason. A DevOps policy grants access outside the database's own permissions, so the amendment should say whether the check needs to read them at all.
+Of SQL Server 2022's fourteen views, Azure SQL Database also has `database_credentials`, `database_scoped_credentials`, `event_notifications`, `external_libraries`, `external_library_setup_errors`, `external_streams`, `external_streaming_jobs`, `fulltext_stoplists` and `registered_search_property_lists`. It has none of the server-level ones, which the check does not read there.
+The same session measured `sqlmcp_reader`'s defaults on `mcp-test` with `test/mssql/measure-database-defaults.sql`: 258 rows, every one covered by security.md's list. `public` holds `SELECT` on 252 system objects (negative `major_id`), and `SELECT` on one user object, `917578307`. `sqlmcp_reader` holds `CONNECT` on the database and its seeded `SELECT` grants on `orders` and on `customers`' three columns. Unlike SQL Server 2022, `public` holds neither `VIEW ANY COLUMN … KEY DEFINITION` grant. `public`'s `SELECT` on a user object is allowed by the list, but every account inherits it. If the object is a table, every Deployment on `mcp-test` lists it, which S-013's live check has to expect.
+The 53 catalog views with a `principal_id` or `owning_principal_id` column on `mcp-test`, as the product owner's session listed them, which the test's Azure SQL Database fixture holds: `all_objects`, `all_views`, `assemblies`, `assembly_types`, `asymmetric_keys`, `certificates`, `check_constraints`, `conversation_endpoints`, `database_credentials`, `database_principals`, `database_scoped_credentials`, `default_constraints`, `devops_database_access`, `devops_database_principals`, `devops_principals`, `edge_constraints`, `event_notifications`, `extended_procedures`, `external_libraries`, `external_library_setup_errors`, `external_models`, `external_streaming_jobs`, `external_streams`, `external_tables`, `foreign_keys`, `fulltext_catalogs`, `fulltext_stoplists`, `internal_tables`, `key_constraints`, `login_token`, `objects`, `procedures`, `registered_search_property_lists`, `remote_service_bindings`, `routes`, `schemas`, `security_policies`, `sequences`, `server_principals`, `service_contracts`, `service_message_types`, `service_queues`, `services`, `symmetric_keys`, `synonyms`, `system_objects`, `system_views`, `table_types`, `tables`, `types`, `user_token`, `views`, `xml_schema_collections`.
+
+Answered by the system-spec amendment of 2026-11-08 (D-135), pending its gate: every view above is either on security.md's ownership list or named there as not an owner, with its reason. Object `917578307`, which `public` may SELECT on `mcp-test`, is still unidentified, for S-013 to settle before its live check.

@@ -7,7 +7,7 @@ A release is a git tag `vX.Y.Z`. CI builds two artifacts from it: the Worker bun
 | cloud | deploy | rollback |
 |---|---|---|
 | Cloudflare | `npm run deploy` (Wrangler). Settings are `vars` in `wrangler.jsonc`, secrets come from `wrangler secret put` | `npx wrangler rollback <version-id>`. Wrangler prints the version ID on every deploy, and `npx wrangler deployments list` shows past ones |
-| Azure | `az deployment group create` with the Bicep template, the new image tag and parameters | the same command with the previous image tag |
+| Azure | `az deployment group create` in two stages (D-117): stage 1 makes the Log Analytics workspace, the Container Apps environment, the managed identity and the Key Vault. The Operator then writes the secrets, and stage 2 makes or updates the Container App with the image's commit SHA tag and the parameters. Every stage-2 deploy forces a new revision, so secrets are read again (security.md, D-121) | stage 2 again with the previous SHA tag. The `X.Y.Z` tag moves while images are pushed by hand (D-104) |
 
 Every Server setting change is a redeploy (Deployment, in the domain model). Rolling back the code never needs a data step, because the Server keeps no data. Rolling back one release is always safe for tokens, because of the two-release format rule (data-model.md). Rolling back further, across a release that raised `v`, voids the newer tokens: every Staff member signs in again, and Created objects drop out of the Conversations that used them. The rollback procedure checks the release notes for a `v` change first.
 
@@ -25,7 +25,7 @@ After every deploy, the Operator runs `npm run smoke -- <url>`. The Deployment k
 | BOUNDARY | the sample Database's schemas | `{"schemas":["sqlmcp_test"]}` on both test Deployments (D-060, D-065) | unset: no exclusion, the grants alone decide (D-075) |
 | Database account | a local role with test grants | `sqlmcp_reader`, granted only on `sqlmcp_test` (D-077) | a dedicated account the Database administrator grants; never a role that bypasses grants |
 | IDP_ISSUER | a test provider, or unset to exercise D-017 | the product owner's Entra ID tenant (D-073) | the organisation's provider |
-| Host log retention | n/a | Workers Logs: 7 days (paid plan) | Operator's own policy (D-052). On Azure, the Bicep template takes it as a required parameter with no default, so the choice cannot be skipped. On Cloudflare, Workers Logs keeps 3 days on the Free plan and 7 on Paid, and the period cannot be changed |
+| Host log retention | n/a | Workers Logs: 7 days (paid plan) | Operator's own policy (D-052). On Azure, the Bicep template takes it as a required parameter with no default, so the choice cannot be skipped. Log Analytics accepts 30 to 730 days, so an Azure Operator whose policy needs less than 30 days cannot meet it on the Host. On Cloudflare, Workers Logs keeps 3 days on the Free plan and 7 on Paid, and the period cannot be changed |
 
 **Workers Logs limits that bear on Audit records** (Cloudflare docs, checked 2026-10-18):
 - Retention is fixed at 3 days (Free) or 7 days (Paid). An Operator whose policy needs longer cannot meet it on Cloudflare while keeping records on the Host. Logpush and tail Workers both move records off it, which D-006 forbids. With PostgreSQL served only from Cloudflare (D-063), such an Operator has no supported PostgreSQL Deployment this iteration. The Security material and the Deployment kit both say so.
@@ -34,16 +34,16 @@ After every deploy, the Operator runs `npm run smoke -- <url>`. The Deployment k
 
 ## Monitoring, and what calls a human
 
-The Deployment kit sets these up where the platform can, and documents them where it cannot.
+The Deployment kit documents each signal as a query or an alert for the Operator to save, and creates none itself (D-106, D-118).
 
 | signal | source | a human is called when |
 |---|---|---|
-| `/healthz` | the platform's health check: Container Apps probe every 30 s; on Cloudflare, an external monitor the Operator chooses | 3 failures in a row (90 s) |
+| `/healthz` | an external HTTPS monitor the Operator chooses, on both clouds. Container Apps' own liveness probe is TCP on the port. A probe on `/healthz` would restart a healthy container whenever the Database is unreachable, or, as a readiness probe, take Sign-in offline with it (D-116, D-122) | 3 failures in a row (90 s) |
 | Database errors | Audit records with `outcome.kind = "database_error"` and `reason_class` `connection` or `timeout` | more than 10 within 5 minutes |
 | Identity provider failures | operational lines with event `idp_unreachable` or `idp_invalid_response` (D-070) | more than 5 within 5 minutes |
 | Server faults | operational lines with event `signin_error` or `server_fault` (D-070) | any |
 | configuration errors | operational lines with event `config_invalid` | any |
-| 5xx responses | the platform's request metrics | more than 1% of requests over 15 minutes, with at least 20 requests |
+| 5xx responses | the platform's request metrics: the Worker's Metrics tab; on Azure, the Container App's `Requests` metric filtered to status code category 5xx | Cloudflare: more than 1% of requests over 15 minutes, with at least 20 requests. Azure: more than 1 in 15 minutes, because a metric alert cannot express a share (D-119) |
 
 Nothing in the Server pages anyone. Alerting is the Host platform's job, configured by the Operator. Audit records are never the alert channel's payload; alerts carry counts only.
 
@@ -51,7 +51,7 @@ Nothing in the Server pages anyone. Alerting is the Host platform's job, configu
 
 | limit | value | on breach |
 |---|---|---|
-| MCP request body | 1 MiB | 413, before parsing |
+| MCP request body | 1 MiB, enforced in the shared app on both runtimes, counted as the body streams whatever `Content-Length` says (D-117) | 413, before parsing |
 | `request_text` | 1–4,000 characters | Refusal, `invalid_input` |
 | Agent-written query text | 64 KiB | Refusal, `query_check` |
 | Typed tool row inputs (insert, update, delete) | 100 rows per Tool call | Refusal, `invalid_input` |
@@ -74,6 +74,14 @@ These are the sizes the release test harness checks one Deployment against:
 - `/healthz` p95 at most 500 ms, including one Database round trip.
 
 Beyond this, an organisation runs more Deployments (ADR-012). On Azure, the Container App runs 1 replica by default, and the Bicep template allows up to 3, scaling at 70% CPU.
+
+Amended 2026-11-07 by D-117, D-119, D-121 and D-122, answering Q-041:
+- Azure deploys in two stages, by the commit SHA tag, and every deploy forces a new revision;
+- `/healthz` is watched by an external monitor on both clouds, and the Container Apps probe is TCP;
+- Azure's 5xx alert is a count;
+- the kit documents alerts and creates none;
+- Log Analytics' 30-day floor;
+- the 1 MiB body limit's enforcement.
 
 ## Critique findings
 
