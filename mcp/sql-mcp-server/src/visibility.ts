@@ -47,7 +47,7 @@ export function visibleObjects(catalog: Catalog, boundary?: Boundary): VisibleOb
 
 /** Whether the account holds a grant that reaches every table at once. */
 export function bypassesGrants(flags: AccountFlags): boolean {
-  return flags.superuser || flags.bypassRls || flags.readAllData || flags.writeAllData || flags.createRole;
+  return flags.superuser || flags.bypassRls || flags.readAllData || flags.writeAllData || flags.createRole || flags.unlisted;
 }
 
 /**

@@ -91,12 +91,13 @@ describe("MS SQL Server's defaults, measured", () => {
     const master = await adminPool("master");
     expect((await master.request().query("SELECT SCHEMA_ID('sqlmcp_test') AS id")).recordset[0].id).toBeNull();
     await master.close();
-    // Only creating the user database and logins runs in master.
+    // Only creating the user database and logins, and server-scope fixtures SQL Server allows nowhere
+    // else, run in master.
     for (const file of readdirSync("test/mssql").filter((f) => f.endsWith(".ts") || f.endsWith(".sql"))) {
       const text = readFileSync(`test/mssql/${file}`, "utf8");
-      for (const m of text.matchAll(/(?:asAdmin\(([\s\S]*?),\s*"master"\)|(\w+)\.request\(\)\.batch\(([^;]*;))/g)) {
-        const statement = m[1] ?? (m[2] === "master" ? m[3] : undefined);
-        if (statement) expect(statement, `${file} runs in master`).toMatch(/\b(LOGIN|DATABASE)\b/);
+      for (const m of text.matchAll(/(?:asAdmin\(([\s\S]*?),\s*"master"\)|(\w+)\.request\(\)\.batch\(([^;]*;)|inMaster\((?!sql\b)([^;]*;))/g)) {
+        const statement = m[1] ?? (m[2] === "master" ? m[3] : m[4]);
+        if (statement) expect(statement, `${file} runs in master`).toMatch(/\b(LOGIN|DATABASE|SERVER|SECURABLES|ENDPOINT|CERTIFICATE|MASTER KEY|sp_configure)\b/);
       }
       expect(text, file).not.toMatch(/\bUSE\s+\[?master\]?/i);
     }

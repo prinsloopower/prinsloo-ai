@@ -10,6 +10,8 @@ export interface AccountFlags {
   readAllData: boolean;
   writeAllData: boolean;
   createRole: boolean;
+  /** MS SQL Server only: the account holds something outside the read-only tier's closed list. */
+  unlisted: boolean;
 }
 
 /** One column of a user table the account can reach, and whether SELECT on it is granted. */

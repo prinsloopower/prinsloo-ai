@@ -1,5 +1,6 @@
 import { serve } from "@hono/node-server";
 import { createApp } from "./app.js";
+import { MssqlDatabase } from "./engine/mssql.js";
 import { nodeDeps, readPort } from "./node-deps.js";
 import { op } from "./oplog.js";
 
@@ -10,5 +11,5 @@ if (port === undefined) {
   op("config_invalid", { variable: "PORT" });
   process.exitCode = 1;
 } else {
-  serve({ fetch: createApp(nodeDeps(process.env)).fetch, port });
+  serve({ fetch: createApp(nodeDeps(process.env, (connection) => new MssqlDatabase(connection))).fetch, port });
 }
