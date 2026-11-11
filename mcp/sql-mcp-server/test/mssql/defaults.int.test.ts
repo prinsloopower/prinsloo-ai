@@ -40,44 +40,10 @@ function record(label: string, rows: PermissionRow[]) {
 }
 
 /**
- * sys views with a principal_id or owning_principal_id column that name no owner of a securable the
- * account could hold, each with its reason. A view in neither this list nor security.md's fails.
+ * The views `test/mssql/ownership-views.sql` returned on Azure SQL Database `mcp-test` in the product
+ * owner's first sqlcmd session (Q-045), which the suite cannot reach.
  */
-const NOT_OWNERS: Record<string, string> = {
-  user_token: "the session's own database token, not ownership",
-  login_token: "the session's own server token, not ownership",
-  conversation_endpoints: "the principal whose certificate a dialog uses, not the endpoint's owner",
-  server_principal_credentials: "the login a credential is mapped to, not its owner",
-  // Subsets of a view on security.md's list, which the check reads instead.
-  all_objects: "sys.objects plus system objects, which only sys owns",
-  system_objects: "objects shipped with SQL Server, which only sys owns",
-  all_views: "views from sys.objects plus system views, which only sys owns",
-  system_views: "views shipped with SQL Server, which only sys owns",
-  views: "a subset of sys.objects",
-  tables: "a subset of sys.objects",
-  internal_tables: "a subset of sys.objects",
-  procedures: "a subset of sys.objects",
-  extended_procedures: "a subset of sys.objects",
-  sequences: "a subset of sys.objects",
-  synonyms: "a subset of sys.objects",
-  check_constraints: "a subset of sys.objects",
-  default_constraints: "a subset of sys.objects",
-  edge_constraints: "a subset of sys.objects",
-  foreign_keys: "a subset of sys.objects",
-  key_constraints: "a subset of sys.objects",
-  security_policies: "a subset of sys.objects",
-  service_queues: "a subset of sys.objects",
-  external_tables: "a subset of sys.objects",
-  table_types: "a subset of sys.types",
-  assembly_types: "a subset of sys.types",
-  sql_logins: "a subset of sys.server_principals",
-  database_mirroring_endpoints: "a subset of sys.endpoints",
-  http_endpoints: "a subset of sys.endpoints",
-  service_broker_endpoints: "a subset of sys.endpoints",
-  soap_endpoints: "a subset of sys.endpoints",
-  tcp_endpoints: "a subset of sys.endpoints",
-  via_endpoints: "a subset of sys.endpoints",
-};
+const AZURE_VIEWS = readFileSync("test/mssql/azure-ownership-views.txt", "utf8").split("\n").filter(Boolean);
 
 beforeAll(async () => {
   // A reader as a Database administrator makes one: a login, its user, and SELECT on one table.
@@ -108,9 +74,15 @@ describe("MS SQL Server's defaults, measured", () => {
     await pool.close();
     console.log(`MEASURED sys views with an owner-like column on SQL Server 2022: ${views.length}\n  ${views.join(", ")}`);
     const listed = new Set([...OWNERSHIP_CATALOGS.database, ...OWNERSHIP_CATALOGS.server]);
+    const notOwners = new Set(OWNERSHIP_CATALOGS.notOwners);
     expect(listed.size).toBeGreaterThan(0);
-    for (const v of Object.keys(NOT_OWNERS)) expect(listed.has(v), `${v} is both listed and excluded`).toBe(false);
-    expect(views.filter((v) => !listed.has(v) && !(v in NOT_OWNERS)), "in neither security.md's list nor the exclusions").toEqual([]);
+    expect(notOwners.size).toBeGreaterThan(0);
+    for (const v of notOwners) expect(listed.has(v), `${v} is both listed and not an owner`).toBe(false);
+    for (const [edition, found] of [["SQL Server 2022", views], ["Azure SQL Database", AZURE_VIEWS]] as const) {
+      expect(found.filter((v) => !listed.has(v) && !notOwners.has(v)), `${edition}: in neither of security.md's lists`).toEqual([]);
+    }
+    const measured = new Set([...views, ...AZURE_VIEWS]);
+    expect([...listed, ...notOwners].filter((v) => !measured.has(v)), "on security.md's lists but on neither edition").toEqual([]);
   });
 
   it("mssql_tests_connect_to_sqlmcp", async () => {

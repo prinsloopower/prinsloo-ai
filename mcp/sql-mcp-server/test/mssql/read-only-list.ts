@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
  * The MS SQL Server read-only list as security.md states it, read from the document itself so the
  * tests follow an amendment and never keep a second copy.
  */
-function ownershipCatalogs(): { database: string[]; server: string[] } {
+function ownershipCatalogs(): { database: string[]; server: string[]; notOwners: string[] } {
   const text = readFileSync("docs/system-spec/security.md", "utf8");
   const views = (line: string | undefined) => [...(line ?? "").matchAll(/`sys\.(\w+)`/g)].map((m) => m[1]!);
   const block = text.slice(text.indexOf("**It owns nothing.**"));
@@ -12,6 +12,8 @@ function ownershipCatalogs(): { database: string[]; server: string[] } {
   return {
     database: views(lines.find((l) => l.trim().startsWith("- in the database:"))),
     server: views(lines.find((l) => l.trim().startsWith("- where the server level can be read:"))),
+    // Each not-owner line gives its reason, then after the colon the views it covers.
+    notOwners: lines.filter((l) => l.trim().startsWith("- not owners")).flatMap((l) => views(l.slice(l.indexOf(":")))),
   };
 }
 
