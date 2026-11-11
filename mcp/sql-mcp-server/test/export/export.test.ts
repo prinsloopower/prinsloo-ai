@@ -280,9 +280,72 @@ describe("the clean copy's export", () => {
       if (name !== "Statement execution") expect(value, name).toBe(uncited(s[1]!));
       expect(breach, name).toBe(uncited(s[2]!));
     }
-    // Monitoring: the same signals and thresholds. Sources are worded for Cloudflare.
-    const signals = (text: string) => table(text, "## Monitoring").map((r) => [r[0], r[2]]);
+    // Monitoring: the same signals and thresholds, without citations. Sources are worded for Cloudflare.
+    const signals = (text: string) => table(text, "## Monitoring").map((r) => [r[0], uncited(r[2]!)]);
     expect(signals(settings)).toEqual(signals(read("docs/system-spec/operations.md")));
+  });
+
+  it("settings_reference_covers_container_settings", () => {
+    const settings = read("docs/settings.md");
+    const row = (name: string) => table(settings, "## Variables").find((r) => r[0] === name)?.join(" | ") ?? fail(`no ${name} row`);
+    // The container reads DATABASE_URL and PORT now; nothing says a later release will.
+    expect(settings).not.toMatch(/later release|not read by this release/i);
+    expect(row("ENGINE")).toContain("`mssql` in the container");
+    for (const name of ["DATABASE_URL", "PUBLIC_URL"]) expect(row(name), name).toContain("required by the container");
+    expect(row("PORT")).toMatch(/port the container listens on.*`8080` \(default\)/);
+    expect(settings).toContain("the container reads them once, at process start");
+    expect(settings).toContain("On MS SQL Server, `read-only` is the only Permission tier");
+    // A missing or invalid container setting answers the same 503, and a bad PORT ends the process.
+    expect(settings).toMatch(/The container also requires `ENGINE=mssql`, a `DATABASE_URL` [^.]*, and `PUBLIC_URL`, and answers the same 503/);
+    expect(settings).toMatch(/A `PORT` that is not an integer from 1 to 65535 [^.]*exits/);
+  });
+
+  it("settings_reference_states_database_tls_rule", () => {
+    const settings = read("docs/settings.md");
+    expect(settings).toMatch(/`Encrypt` may be unset or `true`, `yes`, `mandatory` or `strict`, matched without regard to case/);
+    expect(settings).toContain("`Encrypt=True;TrustServerCertificate=False`");
+    expect(settings).toMatch(/Any other `Encrypt`, `Encrypt=false` among them, and `TrustServerCertificate=true` answer 503 naming `DATABASE_URL`/);
+    expect(settings).toMatch(/`NODE_EXTRA_CA_CERTS`/);
+  });
+
+  it("export_keeps_image_files", () => {
+    const files = listTree(out);
+    for (const f of ["Dockerfile", ".dockerignore", "src/server.ts", "src/node-deps.ts", "src/node-fetch.ts", "src/engine/mssql.ts", "vitest.config.ts",
+      "scripts/mssql-certs.mjs", "test/docker-compose.yml", "test/node/image.test.ts", "test/mssql/account-check.int.test.ts", "test/mssql/contained-user.sql"]) {
+      expect(files, f).toContain(f);
+    }
+    // The tests that read the read-only list from the pipeline's documents stay here.
+    for (const f of ["test/mssql/defaults.int.test.ts", "test/mssql/read-only-list.ts", "test/mssql/azure-ownership-views.txt"]) expect(files, f).not.toContain(f);
+    const pkg = JSON.parse(read(join(out, "package.json"))) as { scripts: Record<string, string> };
+    for (const script of ["build:image", "print:check-sql", "db:mssql:certs", "db:mssql:seed"]) expect(pkg.scripts, script).toHaveProperty(script);
+  });
+
+  it("export_refuses_project_identifiers", () => {
+    // The project's tenant, its domain, its Azure subscription and its Database server, in a document or a test script alike.
+    const ids = ["9416b60e-03b2-44ee-84ff-5d25e16cf730", "Prinsloo147.onmicrosoft.com", "f3773fcf-7f0c-445f-9184-b50b3e74a99c", "prinslooai.database.windows.net", "Server=tcp:prinslooai,1433"];
+    for (const id of ids) {
+      for (const file of ["docs/planted.md", "test/mssql/planted.sql"]) {
+        writeFileSync(join(out, file), `a line\n${id}\n`);
+        try {
+          expect(checkTree(out), `${file}: ${id}`).toEqual([expect.stringMatching(new RegExp(`^${file.replaceAll(".", "\\.")}:2: `))]);
+        } finally {
+          rmSync(join(out, file));
+        }
+      }
+    }
+  });
+
+  it("export_refuses_test_certificates", () => {
+    // Anything under test/mssql/certs/ is refused by its path, binary or not, whatever it holds.
+    mkdirSync(join(out, "test", "mssql", "certs"), { recursive: true });
+    for (const [file, content] of [["test/mssql/certs/ca.key", Buffer.from("x\n")], ["test/mssql/certs/server.pfx", Buffer.from([0, 1, 2])]] as const) {
+      writeFileSync(join(out, file), content);
+      try {
+        expect(checkTree(out), file).toEqual([`${file}: a test certificate or key`]);
+      } finally {
+        rmSync(join(out, file));
+      }
+    }
   });
 
   it("constructs_reference_matches_system_spec", () => {

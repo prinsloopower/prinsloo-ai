@@ -1,12 +1,11 @@
 import mssql from "mssql";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createApp } from "../../src/app.js";
-import { accountCheckSql, classifyMssqlError, MssqlDatabase, OWNED_IN_DATABASE, OWNED_ON_SERVER } from "../../src/engine/mssql.js";
+import { accountCheckSql, classifyMssqlError, MssqlDatabase } from "../../src/engine/mssql.js";
 import { nodeDeps } from "../../src/node-deps.js";
 import { baseEnv, callMcp, captureConsole, Clock, FakeIdentityProvider, opLines, ORIGIN, signIn, type Harness } from "../signin/helpers.js";
 import { adminPool, DATABASE, databaseUrl, HOST, PORT, READER, READER_PASSWORD } from "./connection.js";
 import { asAdmin, databaseAs, dropUser, FIXTURE_PASSWORD, freshUser, inMaster } from "./fixtures.js";
-import { OWNERSHIP_CATALOGS } from "./read-only-list.js";
 
 // SQL Server 2022 from `npm run db:mssql:seed`. Each case makes the login it_checked afresh, gives it one
 // thing, runs the account check as it, and takes the thing back. Fixtures live in the schema it_chk.
@@ -246,9 +245,6 @@ describe("MS SQL Server's Database account check", () => {
 
   it("mssql_check_refuses_owned_securables", async () => {
     await refusedEach(OWNED);
-    // The statement reads every catalog security.md lists, and no other.
-    expect([...OWNED_IN_DATABASE].sort()).toEqual([...OWNERSHIP_CATALOGS.database].sort());
-    expect([...OWNED_ON_SERVER].sort()).toEqual([...OWNERSHIP_CATALOGS.server].sort());
   }, 300_000);
 
   it("mssql_check_refuses_server_level_ownership", async () => {

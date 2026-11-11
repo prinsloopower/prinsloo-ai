@@ -275,3 +275,5 @@ Answered by D-136.
 ## Q-047 — The export refuses test/mssql files that cite the system spec, and the ownership test reads it
 Raised by: build (S-006, T-006) | Blocks: T-009 (the export), and `npm test` passing
 Since T-005, the export refuses `test/mssql/contained-user.sql`, `test/mssql/defaults.int.test.ts` and `test/mssql/read-only-list.ts` for citing `security.md` or `Q-045`, so seven export tests fail at `dbc0379`. Rewording the comments is not enough: `read-only-list.ts` reads `docs/system-spec/security.md` itself, so the test keeps no second copy of the list, and the clean copy ships no system spec. T-009 has to decide whether the clean copy ships the measurement and ownership tests, which need the list in a file it does ship, or leaves them out as development-process tests.
+
+Answered by D-137.

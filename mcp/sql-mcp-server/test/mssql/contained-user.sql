@@ -1,4 +1,4 @@
--- The reader as a contained SQL-authenticated user, for Azure SQL Database (security.md). Run as dbo in
+-- The reader as a contained SQL-authenticated user, for Azure SQL Database. Run as dbo in
 -- the user database, never master, before schema.sql:
 --   sqlcmd -S <server> -d <database> -U <admin> -i test/mssql/contained-user.sql -v READER_PASSWORD="$READER_PASSWORD"
 -- The password comes from the shell; this file holds none.

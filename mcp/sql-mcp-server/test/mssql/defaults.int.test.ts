@@ -1,6 +1,7 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import mssql from "mssql";
+import { OWNED_IN_DATABASE, OWNED_ON_SERVER } from "../../src/engine/mssql.js";
 import { adminPool, DATABASE, READER, READER_PASSWORD } from "./connection.js";
 import { asAdmin, dropUser, FIXTURE_PASSWORD, freshUser } from "./fixtures.js";
 import { databaseRowCovered, OWNERSHIP_CATALOGS, serverRowCovered, type PermissionRow } from "./read-only-list.js";
@@ -83,6 +84,9 @@ describe("MS SQL Server's defaults, measured", () => {
     }
     const measured = new Set([...views, ...AZURE_VIEWS]);
     expect([...listed, ...notOwners].filter((v) => !measured.has(v)), "on security.md's lists but on neither edition").toEqual([]);
+    // The account check reads every catalog security.md lists, and no other.
+    expect([...OWNED_IN_DATABASE].sort()).toEqual([...OWNERSHIP_CATALOGS.database].sort());
+    expect([...OWNED_ON_SERVER].sort()).toEqual([...OWNERSHIP_CATALOGS.server].sort());
   });
 
   it("mssql_tests_connect_to_sqlmcp", async () => {
