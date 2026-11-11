@@ -453,5 +453,6 @@
   ],
   "blocked_on": null,
   "open_questions": [],
-  "phase": null
+  "phase": null,
+  "phase_paused_s": 65591
 }
