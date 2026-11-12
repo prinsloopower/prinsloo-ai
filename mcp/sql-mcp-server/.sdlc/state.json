@@ -453,5 +453,7 @@
   ],
   "blocked_on": null,
   "open_questions": [],
-  "phase": null
+  "phase": null,
+  "phase_paused_s": 68295,
+  "waiting_since": "2026-11-11T22:38:59+00:00"
 }

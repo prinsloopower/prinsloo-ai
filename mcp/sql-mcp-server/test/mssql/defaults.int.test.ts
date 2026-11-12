@@ -1,6 +1,7 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import mssql from "mssql";
+import { OWNED_IN_DATABASE, OWNED_ON_SERVER } from "../../src/engine/mssql.js";
 import { adminPool, DATABASE, READER, READER_PASSWORD } from "./connection.js";
 import { asAdmin, dropUser, FIXTURE_PASSWORD, freshUser } from "./fixtures.js";
 import { databaseRowCovered, OWNERSHIP_CATALOGS, serverRowCovered, type PermissionRow } from "./read-only-list.js";
@@ -40,44 +41,10 @@ function record(label: string, rows: PermissionRow[]) {
 }
 
 /**
- * sys views with a principal_id or owning_principal_id column that name no owner of a securable the
- * account could hold, each with its reason. A view in neither this list nor security.md's fails.
+ * The views `test/mssql/ownership-views.sql` returned on Azure SQL Database `mcp-test` in the product
+ * owner's first sqlcmd session (Q-045), which the suite cannot reach.
  */
-const NOT_OWNERS: Record<string, string> = {
-  user_token: "the session's own database token, not ownership",
-  login_token: "the session's own server token, not ownership",
-  conversation_endpoints: "the principal whose certificate a dialog uses, not the endpoint's owner",
-  server_principal_credentials: "the login a credential is mapped to, not its owner",
-  // Subsets of a view on security.md's list, which the check reads instead.
-  all_objects: "sys.objects plus system objects, which only sys owns",
-  system_objects: "objects shipped with SQL Server, which only sys owns",
-  all_views: "views from sys.objects plus system views, which only sys owns",
-  system_views: "views shipped with SQL Server, which only sys owns",
-  views: "a subset of sys.objects",
-  tables: "a subset of sys.objects",
-  internal_tables: "a subset of sys.objects",
-  procedures: "a subset of sys.objects",
-  extended_procedures: "a subset of sys.objects",
-  sequences: "a subset of sys.objects",
-  synonyms: "a subset of sys.objects",
-  check_constraints: "a subset of sys.objects",
-  default_constraints: "a subset of sys.objects",
-  edge_constraints: "a subset of sys.objects",
-  foreign_keys: "a subset of sys.objects",
-  key_constraints: "a subset of sys.objects",
-  security_policies: "a subset of sys.objects",
-  service_queues: "a subset of sys.objects",
-  external_tables: "a subset of sys.objects",
-  table_types: "a subset of sys.types",
-  assembly_types: "a subset of sys.types",
-  sql_logins: "a subset of sys.server_principals",
-  database_mirroring_endpoints: "a subset of sys.endpoints",
-  http_endpoints: "a subset of sys.endpoints",
-  service_broker_endpoints: "a subset of sys.endpoints",
-  soap_endpoints: "a subset of sys.endpoints",
-  tcp_endpoints: "a subset of sys.endpoints",
-  via_endpoints: "a subset of sys.endpoints",
-};
+const AZURE_VIEWS = readFileSync("test/mssql/azure-ownership-views.txt", "utf8").split("\n").filter(Boolean);
 
 beforeAll(async () => {
   // A reader as a Database administrator makes one: a login, its user, and SELECT on one table.
@@ -108,9 +75,18 @@ describe("MS SQL Server's defaults, measured", () => {
     await pool.close();
     console.log(`MEASURED sys views with an owner-like column on SQL Server 2022: ${views.length}\n  ${views.join(", ")}`);
     const listed = new Set([...OWNERSHIP_CATALOGS.database, ...OWNERSHIP_CATALOGS.server]);
+    const notOwners = new Set(OWNERSHIP_CATALOGS.notOwners);
     expect(listed.size).toBeGreaterThan(0);
-    for (const v of Object.keys(NOT_OWNERS)) expect(listed.has(v), `${v} is both listed and excluded`).toBe(false);
-    expect(views.filter((v) => !listed.has(v) && !(v in NOT_OWNERS)), "in neither security.md's list nor the exclusions").toEqual([]);
+    expect(notOwners.size).toBeGreaterThan(0);
+    for (const v of notOwners) expect(listed.has(v), `${v} is both listed and not an owner`).toBe(false);
+    for (const [edition, found] of [["SQL Server 2022", views], ["Azure SQL Database", AZURE_VIEWS]] as const) {
+      expect(found.filter((v) => !listed.has(v) && !notOwners.has(v)), `${edition}: in neither of security.md's lists`).toEqual([]);
+    }
+    const measured = new Set([...views, ...AZURE_VIEWS]);
+    expect([...listed, ...notOwners].filter((v) => !measured.has(v)), "on security.md's lists but on neither edition").toEqual([]);
+    // The account check reads every catalog security.md lists, and no other.
+    expect([...OWNED_IN_DATABASE].sort()).toEqual([...OWNERSHIP_CATALOGS.database].sort());
+    expect([...OWNED_ON_SERVER].sort()).toEqual([...OWNERSHIP_CATALOGS.server].sort());
   });
 
   it("mssql_tests_connect_to_sqlmcp", async () => {
@@ -119,12 +95,13 @@ describe("MS SQL Server's defaults, measured", () => {
     const master = await adminPool("master");
     expect((await master.request().query("SELECT SCHEMA_ID('sqlmcp_test') AS id")).recordset[0].id).toBeNull();
     await master.close();
-    // Only creating the user database and logins runs in master.
+    // Only creating the user database and logins, and server-scope fixtures SQL Server allows nowhere
+    // else, run in master.
     for (const file of readdirSync("test/mssql").filter((f) => f.endsWith(".ts") || f.endsWith(".sql"))) {
       const text = readFileSync(`test/mssql/${file}`, "utf8");
-      for (const m of text.matchAll(/(?:asAdmin\(([\s\S]*?),\s*"master"\)|(\w+)\.request\(\)\.batch\(([^;]*;))/g)) {
-        const statement = m[1] ?? (m[2] === "master" ? m[3] : undefined);
-        if (statement) expect(statement, `${file} runs in master`).toMatch(/\b(LOGIN|DATABASE)\b/);
+      for (const m of text.matchAll(/(?:asAdmin\(([\s\S]*?),\s*"master"\)|(\w+)\.request\(\)\.batch\(([^;]*;)|inMaster\((?!sql\b)([^;]*;))/g)) {
+        const statement = m[1] ?? (m[2] === "master" ? m[3] : m[4]);
+        if (statement) expect(statement, `${file} runs in master`).toMatch(/\b(LOGIN|DATABASE|SERVER|SECURABLES|ENDPOINT|CERTIFICATE|MASTER KEY|sp_configure)\b/);
       }
       expect(text, file).not.toMatch(/\bUSE\s+\[?master\]?/i);
     }

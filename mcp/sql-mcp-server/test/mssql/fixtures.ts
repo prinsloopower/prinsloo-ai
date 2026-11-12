@@ -23,6 +23,20 @@ export async function asAdmin(sql: string, database = DATABASE): Promise<void> {
   }
 }
 
+/**
+ * Runs server-scope T-SQL as `sa` in master, which SQL Server requires for server-scope grants and
+ * endpoint certificates. Nothing of the user database is made there.
+ */
+export async function inMaster(sql: string): Promise<void> {
+  // Every call names its statement literally, which the suite checks is server-scope.
+  const pool: mssql.ConnectionPool = await adminPool("master");
+  try {
+    await pool.request().batch(sql);
+  } finally {
+    await pool.close();
+  }
+}
+
 /** A login and its user in `sqlmcp`, made fresh: only the login is made in master. */
 export async function freshUser(name: string): Promise<void> {
   await dropUser(name);

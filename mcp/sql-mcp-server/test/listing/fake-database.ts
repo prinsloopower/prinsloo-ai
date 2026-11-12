@@ -3,7 +3,7 @@ import type { AccountFlags, Catalog, CatalogRow, Database, NamedTable, QueryOutc
 /** A Database whose catalog the test writes by hand; counts how often it is read. */
 export class FakeDatabase implements Database {
   rows: CatalogRow[] = [];
-  flags: AccountFlags = { superuser: false, bypassRls: false, readAllData: false, writeAllData: false, createRole: false };
+  flags: AccountFlags = { superuser: false, bypassRls: false, readAllData: false, writeAllData: false, createRole: false, unlisted: false };
   failure: unknown;
   catalogReads = 0;
   /** Runs inside each catalog read, before it answers; lets a test move the clock. */

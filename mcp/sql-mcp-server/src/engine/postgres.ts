@@ -116,6 +116,7 @@ const flagsOf = (r: FlagsRow): AccountFlags => ({
   readAllData: r.read_all_data,
   writeAllData: r.write_all_data,
   createRole: r.create_role,
+  unlisted: false,
 });
 
 /** PostgreSQL behind the Engine adapter: one connection per call, closed when it ends. */

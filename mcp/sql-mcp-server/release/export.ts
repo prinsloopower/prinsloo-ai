@@ -18,7 +18,11 @@ export const INCLUDE = [
   "deploy/",
   "scripts/smoke.mjs",
   "scripts/smoke-signin.mjs",
+  "scripts/mssql-certs.mjs",
   "test/",
+  "Dockerfile",
+  ".dockerignore",
+  "vitest.config.ts",
   "docs/security-material/",
   "docs/settings.md",
   "docs/development.md",
@@ -28,16 +32,31 @@ export const INCLUDE = [
   "package-lock.json",
   "tsconfig.json",
 ];
-/** Within those, what stays here: the benchmark's tests and this export's own. */
-export const EXCLUDE = ["test/bench/", "test/export/"];
+/**
+ * Within those, what stays here: the benchmark's tests, this export's own, and the MS SQL Server tests
+ * that read the read-only list from the pipeline's documents, with the measurements they read.
+ */
+export const EXCLUDE = [
+  "test/bench/",
+  "test/export/",
+  "test/mssql/defaults.int.test.ts",
+  "test/mssql/read-only-list.ts",
+  "test/mssql/measure-database-defaults.sql",
+  "test/mssql/measure-server-defaults.sql",
+  "test/mssql/ownership-views.sql",
+  "test/mssql/azure-ownership-views.txt",
+];
+/** Docker's test CA and server certificate and their keys, made on the developer's machine and never shipped. */
+const TEST_CERTIFICATES = "test/mssql/certs/";
 /** Files the export writes itself rather than copies. */
 export const WRITTEN = ["LICENSE", "wrangler.jsonc", ".gitignore", ".gitattributes"];
 /**
  * The copy's .gitignore, and the one definition of a local file: what a tried copy holds that the
  * copy does not own. Installed packages, Wrangler's state, local secrets (`.dev.vars*` and `.env*`),
  * build output and Operator files. `.dev.vars.example` is the copy's own, so it is re-included.
+ * Docker's test certificates are ignored too, though a re-export, which replaces `test/`, does not keep them.
  */
-export const GITIGNORE = ["node_modules/", ".wrangler/", ".dev.vars*", "!.dev.vars.example", ".env*", "dist/", "/wrangler.*.jsonc"];
+export const GITIGNORE = ["node_modules/", ".wrangler/", ".dev.vars*", "!.dev.vars.example", ".env*", "dist/", "/wrangler.*.jsonc", TEST_CERTIFICATES];
 
 /** A top-level name GITIGNORE ignores: the last pattern that matches decides, as in git. */
 export function keep(name: string): boolean {
@@ -69,6 +88,10 @@ const IDENTIFIERS = [
   /eb6eadef54d546ae84c12c419a4c2d9f/,
   /dwsikgvekndbmowzdcnx/,
   /AI Golf App/i,
+  // The Azure tenant's domain, the subscription and the Database server.
+  /Prinsloo147/i,
+  /f3773fcf-7f0c-445f-9184-b50b3e74a99c/,
+  /\bprinslooai\b/i,
 ];
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -193,10 +216,17 @@ export function listTree(root: string): string[] {
   return out.sort();
 }
 
-/** Each line of each text file under `root` that refers to the development process or the project, as `path:line: text`. */
+/**
+ * Each line of each text file under `root` that refers to the development process or the project, as
+ * `path:line: text`, and each test certificate or key, by its path alone.
+ */
 export function checkTree(root: string): string[] {
   const problems: string[] = [];
   for (const f of listTree(root)) {
+    if (f.startsWith(TEST_CERTIFICATES)) {
+      problems.push(`${f}: a test certificate or key`);
+      continue;
+    }
     const bytes = readFileSync(join(root, f));
     // A NUL byte marks a binary file, which holds no prose to check.
     if (bytes.subarray(0, 8000).includes(0)) continue;

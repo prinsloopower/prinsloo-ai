@@ -63,9 +63,71 @@ LEFT JOIN sys.types ty ON ty.user_type_id = c.user_type_id
 WHERE t.is_ms_shipped = 0
 ORDER BY s.name, t.name, c.column_id;`;
 
+/** The catalogs of owned securables the check reads in the database, and where the server level can be read. */
+export const OWNED_IN_DATABASE = [
+  "schemas", "objects", "types", "xml_schema_collections", "assemblies", "certificates", "asymmetric_keys", "symmetric_keys",
+  "fulltext_catalogs", "fulltext_stoplists", "registered_search_property_lists", "service_contracts", "service_message_types",
+  "services", "routes", "remote_service_bindings", "event_notifications", "database_scoped_credentials", "external_languages",
+  "external_libraries", "external_models", "external_streams", "external_streaming_jobs", "database_principals",
+];
+export const OWNED_ON_SERVER = ["server_principals", "endpoints", "server_audits", "server_event_notifications"];
+
+/** The two catalogs only one supported edition has, skipped where the instance lacks them. Any other missing one fails. */
+const EDITION_SPECIFIC = new Set(["external_models", "external_languages"]);
+
+/** A principal's owner is `owning_principal_id`; every other catalog's is `principal_id`. */
+function ownedBy(view: string, principals: string): string {
+  const column = view.endsWith("_principals") ? "owning_principal_id" : "principal_id";
+  const test = `IF EXISTS (SELECT 1 FROM sys.${view} WHERE ${column} IN (SELECT principal_id FROM ${principals})) SET @unlisted = 1;`;
+  return EDITION_SPECIFIC.has(view) ? `IF OBJECT_ID(N'sys.${view}') IS NOT NULL ${test}` : test;
+}
+
+/**
+ * The MS SQL Server Database account check: `unlisted` is 1 when the account holds anything outside
+ * the read-only tier's closed list. The account's principals are its session tokens, so roles at any depth
+ * and groups count. On Azure SQL Database (`azure`), which cannot read the server level, the account
+ * must instead be a contained SQL-authenticated user. DENY rows only narrow, so they never refuse.
+ */
+export function accountCheckSql(azure: boolean): string {
+  const database = [
+    "DECLARE @unlisted bit = 0;",
+    "DECLARE @db TABLE (principal_id int);",
+    "INSERT INTO @db SELECT principal_id FROM sys.user_token;",
+    // It is not dbo, and holds no fixed database role but public.
+    "IF EXISTS (SELECT 1 FROM @db WHERE principal_id = 1) SET @unlisted = 1;",
+    "IF EXISTS (SELECT 1 FROM @db p JOIN sys.database_principals r ON r.principal_id = p.principal_id WHERE r.is_fixed_role = 1) SET @unlisted = 1;",
+    ...OWNED_IN_DATABASE.map((v) => ownedBy(v, "@db")),
+    `IF EXISTS (SELECT 1 FROM sys.database_permissions g
+  WHERE g.grantee_principal_id IN (SELECT principal_id FROM @db) AND g.state IN ('G', 'W')
+    AND NOT ((g.class = 0 AND g.permission_name IN (N'CONNECT', N'SHOWPLAN', N'VIEW ANY COLUMN ENCRYPTION KEY DEFINITION', N'VIEW ANY COLUMN MASTER KEY DEFINITION'))
+      OR (g.class IN (1, 3) AND g.permission_name = N'SELECT')
+      OR (g.grantee_principal_id = 0 AND g.class = 1 AND g.major_id < 0)))
+  SET @unlisted = 1;`,
+  ];
+  const contained =
+    "IF NOT EXISTS (SELECT 1 FROM sys.database_principals WHERE principal_id = DATABASE_PRINCIPAL_ID() AND type = 'S' AND authentication_type = 2) SET @unlisted = 1;";
+  const server = [
+    "DECLARE @server TABLE (principal_id int);",
+    "INSERT INTO @server SELECT principal_id FROM sys.login_token;",
+    // No server role but public (principal 2), fixed or user-defined.
+    "IF EXISTS (SELECT 1 FROM sys.login_token WHERE type = 'SERVER ROLE' AND principal_id <> 2) SET @unlisted = 1;",
+    "IF EXISTS (SELECT 1 FROM @server p JOIN sys.server_principals r ON r.principal_id = p.principal_id WHERE r.type = 'R' AND r.principal_id <> 2) SET @unlisted = 1;",
+    ...OWNED_ON_SERVER.map((v) => ownedBy(v, "@server")),
+    `IF EXISTS (SELECT 1 FROM sys.server_permissions g
+  WHERE g.grantee_principal_id IN (SELECT principal_id FROM @server) AND g.state IN ('G', 'W')
+    AND NOT ((g.class = 100 AND g.permission_name IN (N'CONNECT SQL', N'VIEW ANY DATABASE'))
+      OR (g.class = 105 AND g.permission_name = N'CONNECT')))
+  SET @unlisted = 1;`,
+  ];
+  return [...database, ...(azure ? [contained] : server), "SELECT @unlisted AS unlisted;"].join("\n");
+}
+
+const flagsOf = (unlisted: boolean): AccountFlags => ({ superuser: false, bypassRls: false, readAllData: false, writeAllData: false, createRole: false, unlisted });
+
 /** MS SQL Server through `mssql`: one pool per process, made from DATABASE_URL on first use. */
 export class MssqlDatabase implements Database {
   private pool: Promise<mssql.ConnectionPool> | undefined;
+  private check: Promise<string> | undefined;
 
   constructor(
     private readonly connection: mssql.config,
@@ -101,16 +163,33 @@ export class MssqlDatabase implements Database {
     await (await this.connect()).request().query("SELECT 1");
   }
 
-  async accountFlags(): Promise<AccountFlags> {
-    await this.connect();
-    throw new Error("The MS SQL Server account check is not built yet");
+  /** The account check for this server's edition, read once: Azure SQL Database is EngineEdition 5. */
+  private checkSql(pool: mssql.ConnectionPool): Promise<string> {
+    this.check ??= pool
+      .request()
+      .query<{ edition: number | null }>("SELECT CAST(SERVERPROPERTY('EngineEdition') AS int) AS edition")
+      .then((r) => accountCheckSql(r.recordset[0]?.edition === 5))
+      .catch((e: unknown) => {
+        this.check = undefined;
+        throw e;
+      });
+    return this.check;
   }
 
+  async accountFlags(): Promise<AccountFlags> {
+    const pool = await this.connect();
+    const result = await pool.request().query<{ unlisted: boolean }>(await this.checkSql(pool));
+    return flagsOf(result.recordset[0]?.unlisted !== false);
+  }
+
+  /** The account check and the Allow-list in one catalog Server statement. */
   async catalog(): Promise<Catalog> {
-    const result = await (await this.connect()).request().query<CatalogRecord>(ALLOW_LIST_SQL);
+    const pool = await this.connect();
+    const result = await pool.request().query(`${await this.checkSql(pool)}\n${ALLOW_LIST_SQL}`);
+    const [check, rows] = result.recordsets as unknown as [{ unlisted: boolean }[], CatalogRecord[]];
     return {
-      flags: { superuser: false, bypassRls: false, readAllData: false, writeAllData: false, createRole: false },
-      rows: result.recordset.map((r) => ({ schema: r.schema_name, table: r.table_name, column: r.column_name, type: r.type_name, granted: r.granted === 1, readable: true })),
+      flags: flagsOf(check[0]?.unlisted !== false),
+      rows: rows.map((r) => ({ schema: r.schema_name, table: r.table_name, column: r.column_name, type: r.type_name, granted: r.granted === 1, readable: true })),
     };
   }
 
@@ -122,6 +201,7 @@ export class MssqlDatabase implements Database {
   async close(): Promise<void> {
     const pool = this.pool;
     this.pool = undefined;
+    this.check = undefined;
     await (await pool?.catch(() => undefined))?.close();
   }
 }
