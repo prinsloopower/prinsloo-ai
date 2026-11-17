@@ -83,6 +83,6 @@ Resolved: recorded as D-142.
 Where: src/node-fetch.ts:19
 Axis: spec and scope
 The fetch guard also refuses `0.0.0.0/8`, `240.0.0.0/4` and `::`. D-131 records that choice, but security.md's Fetches rule does not list those ranges, so the system spec and the shipped Security material now disagree. Raised as Q-049, as Q-043 was for TLS.
-Open: Q-049, for the product owner.
+Resolved: D-143 (answering Q-049), the product owner's decision. security.md gains the ranges at the next system-spec revision.
 
 Verdict: hold (0 blockers, 7 gaps, 6 nits)

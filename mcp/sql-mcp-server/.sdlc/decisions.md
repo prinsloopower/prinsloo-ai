@@ -1167,3 +1167,8 @@ Alternatives rejected: branching on the edition inside one statement, which cann
 Decided by: model | Date: 2026-11-16 | Phase: review (S-006)
 Rationale: review 1's nit on `testTimeout`. Tests that start Node or tsx child processes, such as `node_adapter_exits_on_invalid_port`, ran past Vitest's 5-second default while `npm run build:image` bundled alongside them in the same run. The integration tests already pass their own longer timeouts. A hang in a later test shows after 30 seconds, not 5.
 Alternatives rejected: per-test timeouts on each child-process test, which every later test that starts a child would have to remember; running the image's bundle test alone, which puts the build in a separate step.
+
+## D-143 — security.md's Fetches rule gains D-131's ranges at the next system-spec revision
+Decided by: human | Date: 2026-11-17 | Confirmed: proposed by model, chosen by the product owner ("Yes") | Phase: review (S-006)
+Rationale: Q-049. The product owner confirms D-131: the container's fetch guard refuses `0.0.0.0/8`, `240.0.0.0/4` and `::` as well as security.md's list. The rule belongs in the system spec, so the shipped Security material and the spec say the same thing. As with Q-043's TLS rule, the amendment is made by the system-spec phase at its next revision, not by this slice, so a gated artifact is not edited outside its own phase. Until then, D-131 and this entry are the record.
+Alternatives rejected: recording that the code and the material go further than the spec, which leaves the spec narrower than the Server for every later engine; editing security.md from the review, which changes a gated artifact outside its phase.

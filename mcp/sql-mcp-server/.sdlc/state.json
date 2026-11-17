@@ -464,5 +464,6 @@
   "blocked_on": "review: 0 blockers, 7 gaps, 6 nits; Q-048, Q-049 raised",
   "open_questions": [],
   "phase": null,
-  "phase_paused_s": 4185
+  "phase_paused_s": 4185,
+  "waiting_since": "2026-11-17T03:37:26+00:00"
 }
