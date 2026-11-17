@@ -1142,3 +1142,28 @@ Alternatives rejected: shipping the tests with the list moved into a document th
 Decided by: model | Date: 2026-11-12 | Phase: build (S-006, T-010)
 Rationale: T-010's check asks that each point in `docs/security-material/visibility.md` name its rule or decision. The clean copy ships that folder, and the export refuses register IDs and the system spec's file names in any shipped file, so the material cannot carry them. Each point is mapped to its rule or decision in T-010's commit message instead, where the manual check is recorded. The material is written for a Security reviewer, who has neither register nor spec.
 Alternatives rejected: citing IDs in the text and leaving the folder out of the clean copy, which drops the Security material from what Operators receive; an export exception for this one file.
+
+## D-139 — The host's cut-off /mcp responses are taken as environmental, and a manual check proves it before the image is pushed
+Decided by: human | Date: 2026-11-16 | Confirmed: proposed by model, chosen by the product owner ("Go with a, but make sure we find a way to test it, even if that means manually") | Phase: review (S-006)
+Rationale: Q-048. A bare Hono app on the Windows host has its /mcp responses cut off the same way, and the Server's smoke run passes 6 of 6 from inside the container's network, so the host is the likely cause. That stays an assumption until the check below shows it. The check runs against `sql-mcp:local` before the push to GHCR, so a Server defect is found before anything is published. Its commands and output go in the deploy record:
+1. With the image running as T-008 runs it, `npm run smoke -- http://localhost:8080` from the host reproduces the failure (expected: 4 of 6, /mcp cut off).
+2. The same smoke run from a container on the Server's network (`docker run --network container:<name> node:24-slim node /smoke.mjs http://localhost:8080`) passes 6 of 6.
+3. Norton 360's and then Kaspersky's web and network protection are paused one at a time, or given an exclusion for localhost:8080, and the host smoke run is repeated after each change. It must reach 6 of 6, and the record names which product's protection, once paused, let it through.
+4. If the host run still fails with both paused, the host is not shown to be the cause. The push waits, and the failure is investigated as a possible Server defect (option c).
+T-011 then runs with that product's protection paused or excluded, as in step 3, so its outcome reflects the Server and not the host.
+Alternatives rejected: running T-011 from another machine (option b), which leaves the host failure unexplained; investigating the Server first (option c), which the bare Hono app's identical failure argues against, and which step 4 falls back to.
+
+## D-140 — An account the account check cannot read for is refused as unlisted
+Decided by: human | Date: 2026-11-16 | Confirmed: proposed by model, approved by the product owner ("Yes, go ahead") | Phase: review (S-006)
+Rationale: review 1's second gap. `db_denydatareader` denies the catalog views the check reads, so the check statement raised a permission error and the Operator got a `permission` Database error, where the spec's Proven by line promises 503, a `config_invalid` line naming `DATABASE_URL` and `/healthz` `unsafe` for every fixed role but `public`. `accountFlags()` and `catalog()` now answer a permission-class error from that statement as `unlisted`, so every route to the check gives the promised refusal. Any `DENY` that stops the check reading what it needs is therefore refused too, even one that would pass if the check could read past it: the check cannot show the account is safe, and it fails closed. The test helper no longer treats a permission error as a refusal, and the 503 and `/healthz` tests each gain a `db_denydatareader` case. All three were recorded failing again.
+Alternatives rejected: a separate refusal message for an account the check cannot read for, which the spec does not name and the next engine would need too; leaving the permission error, which tells the Operator the database is unreachable when the account is the fault.
+
+## D-141 — MS SQL Server's edition is probed once, by its own statement, and cached until close
+Decided by: model | Date: 2026-11-16 | Phase: review (S-006)
+Rationale: review 1's nit on the edition probe. The first account check runs `SELECT SERVERPROPERTY('EngineEdition')` and keeps the check statement it chose until `close()`. A failed probe is not kept. A Server's edition cannot change while it runs, and a separate probe keeps each edition's statement whole, so the one printed by `npm run print:check-sql` is exactly what runs on Azure SQL Database (T-012's SHA-256). S-007's query path reads the same cached choice rather than making its own.
+Alternatives rejected: branching on the edition inside one statement, which cannot be printed and hashed as the Azure statement alone, and whose server-level branch would still have to compile on Azure SQL Database.
+
+## D-142 — The suite's default test timeout is 30 seconds
+Decided by: model | Date: 2026-11-16 | Phase: review (S-006)
+Rationale: review 1's nit on `testTimeout`. Tests that start Node or tsx child processes, such as `node_adapter_exits_on_invalid_port`, ran past Vitest's 5-second default while `npm run build:image` bundled alongside them in the same run. The integration tests already pass their own longer timeouts. A hang in a later test shows after 30 seconds, not 5.
+Alternatives rejected: per-test timeouts on each child-process test, which every later test that starts a child would have to remember; running the image's bundle test alone, which puts the build in a separate step.

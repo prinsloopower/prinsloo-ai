@@ -28,11 +28,11 @@ export function classifyMssqlError(error: unknown): ReasonClass {
   return typeof code === "string" && CONNECTION_CODES.has(code) ? "connection" : "other";
 }
 
-interface CatalogRecord {
+interface CatalogQueryRow {
   schema_name: string;
   table_name: string;
   column_name: string;
-  type_name: string;
+  column_type: string;
   granted: number | null;
 }
 
@@ -42,7 +42,7 @@ interface CatalogRecord {
  * with its length in characters, `max`, or its precision and scale. Any other type is `user-defined`,
  * because its name can carry a hidden object's name.
  */
-const ALLOW_LIST_SQL = `
+const CATALOG_SQL = `
 SELECT s.name AS schema_name, t.name AS table_name, c.name AS column_name,
   CASE
     WHEN ty.user_type_id IS NULL OR ty.is_user_defined = 1 THEN 'user-defined'
@@ -53,7 +53,7 @@ SELECT s.name AS schema_name, t.name AS table_name, c.name AS column_name,
     WHEN ty.name IN ('decimal', 'numeric') THEN ty.name + '(' + CAST(c.precision AS varchar(3)) + ',' + CAST(c.scale AS varchar(3)) + ')'
     WHEN ty.name IN ('datetime2', 'time', 'datetimeoffset') THEN ty.name + '(' + CAST(c.scale AS varchar(3)) + ')'
     ELSE ty.name
-  END AS type_name,
+  END AS column_type,
   HAS_PERMS_BY_NAME(QUOTENAME(s.name) + N'.' + QUOTENAME(t.name), N'OBJECT', N'SELECT', c.name, N'COLUMN') AS granted
 FROM sys.tables t
 JOIN sys.schemas s ON s.schema_id = t.schema_id
@@ -124,6 +124,9 @@ export function accountCheckSql(azure: boolean): string {
 
 const flagsOf = (unlisted: boolean): AccountFlags => ({ superuser: false, bypassRls: false, readAllData: false, writeAllData: false, createRole: false, unlisted });
 
+/** An account denied the catalogs the check reads, such as one in db_denydatareader, is refused as unlisted: the check fails closed. */
+const deniedTheCheck = (e: unknown): boolean => classifyMssqlError(e) === "permission";
+
 /** MS SQL Server through `mssql`: one pool per process, made from DATABASE_URL on first use. */
 export class MssqlDatabase implements Database {
   private pool: Promise<mssql.ConnectionPool> | undefined;
@@ -178,18 +181,31 @@ export class MssqlDatabase implements Database {
 
   async accountFlags(): Promise<AccountFlags> {
     const pool = await this.connect();
-    const result = await pool.request().query<{ unlisted: boolean }>(await this.checkSql(pool));
-    return flagsOf(result.recordset[0]?.unlisted !== false);
+    const sql = await this.checkSql(pool);
+    try {
+      const result = await pool.request().query<{ unlisted: boolean }>(sql);
+      return flagsOf(result.recordset[0]?.unlisted !== false);
+    } catch (e) {
+      if (deniedTheCheck(e)) return flagsOf(true);
+      throw e;
+    }
   }
 
   /** The account check and the Allow-list in one catalog Server statement. */
   async catalog(): Promise<Catalog> {
     const pool = await this.connect();
-    const result = await pool.request().query(`${await this.checkSql(pool)}\n${ALLOW_LIST_SQL}`);
-    const [check, rows] = result.recordsets as unknown as [{ unlisted: boolean }[], CatalogRecord[]];
+    const sql = `${await this.checkSql(pool)}\n${CATALOG_SQL}`;
+    let result: mssql.IResult<unknown>;
+    try {
+      result = await pool.request().query(sql);
+    } catch (e) {
+      if (deniedTheCheck(e)) return { flags: flagsOf(true), rows: [] };
+      throw e;
+    }
+    const [check, rows] = result.recordsets as unknown as [{ unlisted: boolean }[], CatalogQueryRow[]];
     return {
       flags: flagsOf(check[0]?.unlisted !== false),
-      rows: rows.map((r) => ({ schema: r.schema_name, table: r.table_name, column: r.column_name, type: r.type_name, granted: r.granted === 1, readable: true })),
+      rows: rows.map((r) => ({ schema: r.schema_name, table: r.table_name, column: r.column_name, type: r.column_type, granted: r.granted === 1, readable: true })),
     };
   }
 

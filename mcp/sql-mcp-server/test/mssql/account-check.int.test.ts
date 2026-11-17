@@ -1,7 +1,7 @@
 import mssql from "mssql";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createApp } from "../../src/app.js";
-import { accountCheckSql, classifyMssqlError, MssqlDatabase } from "../../src/engine/mssql.js";
+import { accountCheckSql, MssqlDatabase } from "../../src/engine/mssql.js";
 import { nodeDeps } from "../../src/node-deps.js";
 import { baseEnv, callMcp, captureConsole, Clock, FakeIdentityProvider, opLines, ORIGIN, signIn, type Harness } from "../signin/helpers.js";
 import { adminPool, DATABASE, databaseUrl, HOST, PORT, READER, READER_PASSWORD } from "./connection.js";
@@ -108,11 +108,6 @@ async function unlisted(holding: Holding | undefined, through: "user" | "nested 
     const database = databaseAs(CHECKED);
     try {
       return (await database.accountFlags()).unlisted;
-    } catch (e) {
-      // Any error while the check runs refuses the account, so the check fails closed; db_denydatareader denies
-      // even the catalog views. Only a permission error counts, so a broken statement still fails.
-      if (classifyMssqlError(e) === "permission") return true;
-      throw e;
     } finally {
       await database.close();
     }
@@ -304,47 +299,53 @@ async function nodeHarness(user: string, password = FIXTURE_PASSWORD): Promise<{
 
 describe("an account the check refuses, through the Node adapter", () => {
   it("mssql_unsafe_account_answers_503_naming_database_url", async () => {
-    await freshUser(CHECKED);
-    await asAdmin(`GRANT SELECT ON it_chk.t TO [${CHECKED}]; GRANT VIEW DEFINITION TO [${CHECKED}];`);
-    const { h, database } = await nodeHarness(CHECKED);
-    try {
-      const s = await signIn(h);
-      const lines = await captureConsole(async () => {
-        for (const id of [1, 2]) {
-          const res = await callMcp(h, s.access_token, "/mcp", { jsonrpc: "2.0", id, method: "tools/call", params: { name: "list_tables", arguments: { request_text: "Which tables?" } } });
-          expect(res.status).toBe(503);
-          expect(await res.text()).toMatch(new RegExp(`^${UNSAFE_ACCOUNT} \\(reference [0-9a-f-]{36}\\)$`));
-        }
-      });
-      expect(lines.filter((l) => l.startsWith('{"type":"audit"'))).toHaveLength(2);
-      const invalid = opLines(lines).filter((l) => l.event === "config_invalid");
-      expect(invalid).toHaveLength(2);
-      for (const l of invalid) expect(l.variable).toBe("DATABASE_URL");
-      expect(lines.join("\n")).not.toContain(FIXTURE_PASSWORD);
-      // Sign-in and metadata still answer.
-      expect((await h.app.request(`${ORIGIN}/.well-known/oauth-protected-resource/mcp`)).status).toBe(200);
-      expect((await signIn(h)).access_token).toBeTruthy();
-    } finally {
-      await database.close();
-      await dropUser(CHECKED);
+    // An unlisted grant, and a fixed role that denies the check's own catalog reads.
+    for (const holding of [`GRANT VIEW DEFINITION TO [${CHECKED}];`, `ALTER ROLE db_denydatareader ADD MEMBER [${CHECKED}];`]) {
+      await freshUser(CHECKED);
+      await asAdmin(`GRANT SELECT ON it_chk.t TO [${CHECKED}]; ${holding}`);
+      const { h, database } = await nodeHarness(CHECKED);
+      try {
+        const s = await signIn(h);
+        const lines = await captureConsole(async () => {
+          for (const id of [1, 2]) {
+            const res = await callMcp(h, s.access_token, "/mcp", { jsonrpc: "2.0", id, method: "tools/call", params: { name: "list_tables", arguments: { request_text: "Which tables?" } } });
+            expect(res.status).toBe(503);
+            expect(await res.text()).toMatch(new RegExp(`^${UNSAFE_ACCOUNT} \\(reference [0-9a-f-]{36}\\)$`));
+          }
+        });
+        expect(lines.filter((l) => l.startsWith('{"type":"audit"'))).toHaveLength(2);
+        const invalid = opLines(lines).filter((l) => l.event === "config_invalid");
+        expect(invalid).toHaveLength(2);
+        for (const l of invalid) expect(l.variable).toBe("DATABASE_URL");
+        expect(lines.join("\n")).not.toContain(FIXTURE_PASSWORD);
+        // Sign-in and metadata still answer.
+        expect((await h.app.request(`${ORIGIN}/.well-known/oauth-protected-resource/mcp`)).status).toBe(200);
+        expect((await signIn(h)).access_token).toBeTruthy();
+      } finally {
+        await database.close();
+        await dropUser(CHECKED);
+      }
     }
   }, 120_000);
 
   it("mssql_healthz_reports_unsafe_account", async () => {
-    await freshUser(CHECKED);
-    await asAdmin(`ALTER ROLE db_datareader ADD MEMBER [${CHECKED}];`);
-    const unsafe = await nodeHarness(CHECKED);
-    const safe = await nodeHarness(READER, READER_PASSWORD);
-    try {
-      const u = await unsafe.h.app.request(`${ORIGIN}/healthz`);
-      expect(u.status).toBe(503);
-      expect(await u.json()).toEqual({ status: "degraded", database: "unsafe" });
-      const ok = await safe.h.app.request(`${ORIGIN}/healthz`);
-      expect(await ok.json()).toEqual({ status: "ok", database: "ok" });
-    } finally {
-      await unsafe.database.close();
-      await safe.database.close();
-      await dropUser(CHECKED);
+    // A fixed role the check reads, and one that denies the check's own catalog reads.
+    for (const role of ["db_datareader", "db_denydatareader"]) {
+      await freshUser(CHECKED);
+      await asAdmin(`ALTER ROLE ${role} ADD MEMBER [${CHECKED}];`);
+      const unsafe = await nodeHarness(CHECKED);
+      const safe = await nodeHarness(READER, READER_PASSWORD);
+      try {
+        const u = await unsafe.h.app.request(`${ORIGIN}/healthz`);
+        expect(u.status).toBe(503);
+        expect(await u.json()).toEqual({ status: "degraded", database: "unsafe" });
+        const ok = await safe.h.app.request(`${ORIGIN}/healthz`);
+        expect(await ok.json()).toEqual({ status: "ok", database: "ok" });
+      } finally {
+        await unsafe.database.close();
+        await safe.database.close();
+        await dropUser(CHECKED);
+      }
     }
   }, 120_000);
 });

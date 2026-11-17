@@ -1,12 +1,12 @@
 import { parse as parseConnectionString } from "@tediousjs/connection-string";
 import mssql from "mssql";
 import type { Deps } from "./app.js";
-import type { RuntimeVariables } from "./config.js";
+import { value, type RuntimeVariables } from "./config.js";
 import type { Database } from "./engine/database.js";
 import { classifyMssqlError } from "./engine/mssql.js";
 import { guardedFetch, type Resolve } from "./node-fetch.js";
 
-/** The Database connection `DATABASE_URL` gives, with encryption and the certificate check forced on. */
+/** The Database connection `DATABASE_URL` gives. `parseDatabaseUrl` refuses one without encryption and the certificate check, and `MssqlDatabase` forces both on. */
 export type MssqlConnection = mssql.config;
 
 /** The settings only the Node adapter requires. */
@@ -19,11 +19,6 @@ export type NodeSettingsResult = { ok: true; settings: NodeSettings } | { ok: fa
 
 /** The `PORT` the container listens on when it is unset. */
 export const DEFAULT_PORT = 8080;
-
-function value(env: RuntimeVariables, name: string): string | undefined {
-  const v = env[name];
-  return typeof v === "string" && v.trim() !== "" ? v.trim() : undefined;
-}
 
 /** `Encrypt` values that keep the connection encrypted, matched without regard to case. */
 const ENCRYPTED = new Set(["true", "yes", "mandatory", "strict"]);

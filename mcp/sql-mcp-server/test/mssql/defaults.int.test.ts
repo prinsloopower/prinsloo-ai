@@ -2,7 +2,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import mssql from "mssql";
 import { OWNED_IN_DATABASE, OWNED_ON_SERVER } from "../../src/engine/mssql.js";
-import { adminPool, DATABASE, READER, READER_PASSWORD } from "./connection.js";
+import { adminPool, DATABASE, HOST, PORT, READER, READER_PASSWORD } from "./connection.js";
 import { asAdmin, dropUser, FIXTURE_PASSWORD, freshUser } from "./fixtures.js";
 import { databaseRowCovered, OWNERSHIP_CATALOGS, serverRowCovered, type PermissionRow } from "./read-only-list.js";
 
@@ -21,7 +21,7 @@ const OWNERSHIP_VIEWS = readFileSync("test/mssql/ownership-views.sql", "utf8");
 
 async function readAs(user: string, password: string, sql: string): Promise<PermissionRow[]> {
   const pool = await new mssql.ConnectionPool({
-    server: "localhost", port: 51433, database: DATABASE, user, password,
+    server: HOST, port: PORT, database: DATABASE, user, password,
     options: { encrypt: true, trustServerCertificate: false },
   }).connect();
   try {
@@ -36,7 +36,9 @@ function record(label: string, rows: PermissionRow[]) {
   const systemObjects = rows.filter((r) => r.principal === "public" && r.class_desc === "OBJECT_OR_COLUMN" && r.major_id < 0);
   const rest = rows.filter((r) => !systemObjects.includes(r));
   const lines = rest.map((r) => `  ${r.principal} ${r.state_desc} ${r.permission_name} on ${r.class_desc}${r.major_id ? ` ${r.major_id}` : ""}`);
-  const counts = Object.entries(Object.groupBy(systemObjects, (r) => `${r.state_desc} ${r.permission_name}`)).map(([k, v]) => `  public ${k} on ${v!.length} system objects`);
+  const byPermission = new Map<string, number>();
+  for (const r of systemObjects) byPermission.set(`${r.state_desc} ${r.permission_name}`, (byPermission.get(`${r.state_desc} ${r.permission_name}`) ?? 0) + 1);
+  const counts = [...byPermission].map(([k, n]) => `  public ${k} on ${n} system objects`);
   console.log(`MEASURED ${label}\n${[...lines, ...counts].join("\n")}`);
 }
 
