@@ -336,7 +336,7 @@
     {
       "id": "S-006",
       "title": "Signing in to an MS SQL Server Deployment on Azure",
-      "status": "specified",
+      "status": "built",
       "traces": [
         "J-001",
         "J-002",
@@ -355,6 +355,11 @@
           "result": "pass",
           "by": "model",
           "at": "2026-11-08T18:02:47+00:00"
+        },
+        "build": {
+          "result": "pass",
+          "by": "script",
+          "at": "2026-11-17T01:53:19+00:00"
         }
       }
     },
@@ -453,7 +458,5 @@
   ],
   "blocked_on": null,
   "open_questions": [],
-  "phase": null,
-  "phase_paused_s": 68295,
-  "waiting_since": "2026-11-11T22:38:59+00:00"
+  "phase": null
 }
