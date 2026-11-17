@@ -336,7 +336,7 @@
     {
       "id": "S-006",
       "title": "Signing in to an MS SQL Server Deployment on Azure",
-      "status": "built",
+      "status": "reviewed",
       "traces": [
         "J-001",
         "J-002",
@@ -362,9 +362,9 @@
           "at": "2026-11-17T01:53:19+00:00"
         },
         "review": {
-          "result": "hold",
+          "result": "pass",
           "by": "model",
-          "at": "2026-11-17T21:59:22+00:00"
+          "at": "2026-11-17T22:07:41+00:00"
         }
       }
     },
@@ -461,7 +461,7 @@
       "size_at_creation": "product"
     }
   ],
-  "blocked_on": "review: review 2: 0 blockers, 2 gaps, 3 nits",
+  "blocked_on": null,
   "open_questions": [],
   "phase": null
 }

@@ -117,3 +117,4 @@
 {"iteration": 1, "phase": "build", "slice": "S-006", "gate": "pass", "duration_s": 258868, "rework_count": 0, "defects_found": 0, "output_bytes": 0}
 {"iteration": 1, "phase": "review", "slice": "S-006", "gate": "hold", "duration_s": null, "rework_count": 0, "defects_found": 7, "output_bytes": 7948}
 {"iteration": 1, "phase": "review", "slice": "S-006", "gate": "hold", "duration_s": null, "rework_count": 0, "defects_found": 2, "output_bytes": 14387}
+{"iteration": 1, "phase": "review", "slice": "S-006", "gate": "pass", "duration_s": null, "rework_count": 0, "defects_found": 0, "output_bytes": 18520}

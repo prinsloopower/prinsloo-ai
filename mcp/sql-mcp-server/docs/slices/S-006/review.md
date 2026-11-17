@@ -138,3 +138,34 @@ The file's convention, for example at Q-046 and Q-047, is an "Answered by D-###.
 Resolved: Q-048 and Q-049 carry "Answered by D-139" and "Answered by D-143".
 
 Verdict: hold (0 blockers, 2 gaps, 3 nits)
+
+## Review 3 (2026-11-17)
+
+Reviewed: commit e121e30 (the whole slice, 8266c65..e121e30, and the rework, a6c4e47..e121e30, both restricted to this directory) against the slice spec and review 2's findings. The two axes ran in separate fresh contexts. The `een/` files are outside this review, as before.
+Tests: `npm test` → 56 files, 358 passed, 0 failed; `npm run typecheck` (`tsc --noEmit`) → no errors, exit 0.
+
+Review 2's findings were checked against the code at HEAD:
+- visibility.md now says a DENY that stops the check reading its catalogs, such as `db_denydatareader`, refuses the account. That matches D-140 and `deniedTheCheck` at src/engine/mssql.ts:128, which turns only a `permission`-class error (229, 230, 262) into `unlisted`.
+- D-139's four steps, the push hold and T-011's paused protection are carried to the deploy in review 2's `Resolved:` line, and that line matches D-139's text.
+- The `catalog()` comment at src/engine/mssql.ts:194 names every visible column with its `granted` flag, filtered by the resolver.
+- development.md starts SQL Server with `npm run db:mssql:seed` alone, which matches test/mssql/seed.ts:7-8 and test/docker-compose.yml:14. Its stop commands are correct: `db:down` has no profile and stops PostgreSQL only, and `--profile mssql down` stops both. Every npm script it names exists in package.json.
+- Q-048 and Q-049 each carry an "Answered by" line, in the file's format.
+
+The rework changed no behaviour. In src it changes one comment. Every other line it touches traces to a review-2 finding or is bookkeeping in .sdlc. No rejected domain alias appears in an added line.
+
+## nit — visibility.md now names only an unreachable Database among the check errors that are not refusals
+Where: docs/security-material/visibility.md:76
+Axis: both (raised separately by spec and scope, and by standards and naming)
+The rework removed "Any error while the check runs refuses the account". The new text covers a DENY that blocks the catalogs and a Database that cannot be reached. In the code, every check error that is not permission-class becomes a Database error with nothing listed. Examples are lock timeout 1222, 40613, and a failed edition probe. A Security reviewer can no longer read off the paragraph that every check error lists nothing. Also, the domain model has a Tool call "end in" a Database error, not "answer with" one. Suggested: "Any other error while the check runs ends the Tool call in a Database error, and nothing is listed."
+
+## nit — development.md's Layout says `scripts/` holds only the smoke checks
+Where: docs/development.md:45
+Axis: spec and scope
+`scripts/` now also holds `mssql-certs.mjs`, the certificate generator behind `db:mssql:certs`, which test/mssql/seed.ts runs. A developer looking for it will not expect it there.
+
+## nit — The seed step's comment line in development.md has lost its verb for the seeding
+Where: docs/development.md:17
+Axis: standards and naming
+The line "starts the container, then the sqlmcp database, its tables and sqlmcp_reader's grants" reads as if the seed starts the database and the grants. It needs "creates" or "seeds". At about 125 characters it is also wider than the rest of the block.
+
+Verdict: pass (0 blockers, 0 gaps, 3 nits)
