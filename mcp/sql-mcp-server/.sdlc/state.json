@@ -364,7 +364,7 @@
         "review": {
           "result": "hold",
           "by": "model",
-          "at": "2026-11-17T02:10:58+00:00"
+          "at": "2026-11-17T21:59:22+00:00"
         }
       }
     },
@@ -461,9 +461,7 @@
       "size_at_creation": "product"
     }
   ],
-  "blocked_on": "review: 0 blockers, 7 gaps, 6 nits; Q-048, Q-049 raised",
+  "blocked_on": "review: review 2: 0 blockers, 2 gaps, 3 nits",
   "open_questions": [],
-  "phase": null,
-  "phase_paused_s": 4185,
-  "waiting_since": "2026-11-17T03:37:26+00:00"
+  "phase": null
 }

@@ -191,7 +191,7 @@ export class MssqlDatabase implements Database {
     }
   }
 
-  /** The account check and the Allow-list in one catalog Server statement. */
+  /** The account check and every visible column with its `granted` flag, in one catalog Server statement; the resolver filters the rows to the Allow-list. */
   async catalog(): Promise<Catalog> {
     const pool = await this.connect();
     const sql = `${await this.checkSql(pool)}\n${CATALOG_SQL}`;

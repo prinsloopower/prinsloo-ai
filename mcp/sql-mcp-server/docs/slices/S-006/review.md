@@ -86,3 +86,55 @@ The fetch guard also refuses `0.0.0.0/8`, `240.0.0.0/4` and `::`. D-131 records 
 Resolved: D-143 (answering Q-049), the product owner's decision. security.md gains the ranges at the next system-spec revision.
 
 Verdict: hold (0 blockers, 7 gaps, 6 nits)
+
+## Review 2 (2026-11-17)
+
+Reviewed: commit a6c4e47 (the whole slice, 8266c65..a6c4e47, and the rework, 064fb6b..a6c4e47, both restricted to this directory) against the slice spec and review 1's findings. The two axes ran in separate fresh contexts. The `een/` files are outside this review, as in review 1.
+Tests: `npm test` → 56 files, 358 passed, 0 failed; `npm run typecheck` (`tsc --noEmit`) → no errors.
+
+Review 1's findings were checked against the code at HEAD:
+- D-140's fix holds. `accountFlags()` and `catalog()` answer only a `permission`-class error from the check statement as `unlisted`. Connect-time failures, edition-probe failures and request-time connection errors such as 40613 are still Database errors.
+- The `unlisted()` test helper no longer catches anything. The 503 test and the `/healthz` test each run a `db_denydatareader` case, and `mssql_check_ignores_deny_rows` still passes the ordinary DENYs.
+- The `Object.groupBy` call, the `bypassesGrants` comment, `CATALOG_SQL`, `value()`, the `MssqlConnection` comment, `HOST`/`PORT`, and `CatalogQueryRow`/`column_type` are each fixed as their `Resolved:` line says. No old name is left in src, test or docs.
+- development.md now covers the SQL Server Database, the image, `server.ts`, the Dockerfile and both new test folders. Every script and path it names exists.
+- D-141, D-142 and D-143 cover the three nits that only needed a record.
+
+The rework added no scope: every changed line traces to a review-1 finding. Two things are still open. The rework changed behaviour that the Security material still describes the old way, and the human decision on the host smoke run (D-139) is recorded only in the decisions register.
+
+## gap — The Security material still says DENY rows never refuse the account, which D-140 has made false
+Where: docs/security-material/visibility.md:76
+Axis: spec and scope
+The line reads "`DENY` rows never refuse the account, because they only narrow what it reads." Since D-140, a permission error from the check statement refuses the account as unlisted. D-140 says so outright: "any `DENY` that stops the check reading what it needs is therefore refused too". An example is a `DENY SELECT` on a catalog view the check reads. The rework did not touch visibility.md. So T-010's material, the document a Security reviewer reads, now contradicts both the shipped behaviour and the decision. An Operator who adds such a DENY will be told by the material that it is harmless, and then find the account refused.
+Resolved: visibility.md says a DENY that stops the check reading its catalogs refuses the account, and that a Database the check cannot reach gives a Database error.
+
+## gap — D-139's manual check before the push is recorded only in the decisions register, not in the tasks the deploy runs from
+Where: docs/slices/S-006/spec.md:161
+Axis: spec and scope
+D-139 is the product owner's decision. It requires four steps against `sql-mcp:local` before the GHCR push:
+1. the host smoke run;
+2. the in-network smoke run;
+3. pausing each antivirus product in turn until the host run reaches 6 of 6;
+4. holding the push if it never does.
+
+It also has T-011 run with that product's protection paused. T-008's and T-011's `Verified by:` lines do not cite D-139, Q-048 does not point to it (see the nit below), and the slice folder holds no deploy note. A deploy that works from the spec's tasks can push the image without the check the product owner made a condition, and T-011's result could again mix up the host with the Server. The deploy phase needs to be pointed at D-139. That could be done by citing it in T-008's and T-011's tasks through the spec's own revision, or by carrying it into the deploy record's plan.
+Resolved: carried to the deploy, which depends on this review. **Before the push to GHCR, the deploy runs D-139's four steps against `sql-mcp:local` and puts their commands and output in the deploy record. If step 4 is reached, the push waits.** T-011 runs with the protection that step 3 names paused or excluded. Q-048 now carries "Answered by D-139". The spec's tasks are not edited, because the spec is gated.
+
+## nit — `catalog()` doc comment still calls the statement's result "the Allow-list"
+Where: src/engine/mssql.ts:194
+Axis: standards and naming
+The comment reads "The account check and the Allow-list in one catalog Server statement". Review 1 had `ALLOW_LIST_SQL` renamed because the statement returns every visible column with a `granted` flag, not the Allow-list. The comment beside the call keeps the old meaning, so a reader may again take `rows` as already filtered.
+Resolved: the comment names every visible column with its `granted` flag, filtered by the resolver.
+
+## nit — development.md starts the SQL Server container and makes the certificates by hand, though `db:mssql:seed` does both
+Where: docs/development.md:17
+Axis: standards and naming
+test/mssql/seed.ts:7-8 makes the certificates if they are missing and runs `docker compose … --profile mssql up -d --wait mssql` itself. The Compose file's comment (test/docker-compose.yml:14) says the container is "started by `npm run db:mssql:seed`". So the doc and the Compose comment describe two different ways to start it, and whoever changes one will not know which is meant to be followed.
+Resolved: development.md starts SQL Server with `npm run db:mssql:seed` alone, as the Compose comment says, and says how to stop it.
+
+## nit — Q-048 and Q-049 carry no "Answered by" line
+Where: .sdlc/questions.md:281
+Axis: spec and scope
+The file's convention, for example at Q-046 and Q-047, is an "Answered by D-###." line under each answered question. Q-048 (answered by D-139) and Q-049 (answered by D-143) have none. Q-048's "Blocks: T-011" line therefore still reads as open, and the next phase may treat T-011 as blocked or ask the question again.
+Resolved: Q-048 and Q-049 carry "Answered by D-139" and "Answered by D-143".
+
+Verdict: hold (0 blockers, 2 gaps, 3 nits)

@@ -12,11 +12,9 @@ How to run the Server and its tests on your own machine. To deploy it, see [depl
 
 ```
 npm ci
-npm run db:mssql:certs                 # a test CA and server certificate in test/mssql/certs/, once
 npm run db:up                          # PostgreSQL 17 on localhost:55432
-docker compose -f test/docker-compose.yml --profile mssql up -d --wait
-                                       # SQL Server 2022 on localhost:51433, encrypted with the test certificate
-npm run db:mssql:seed                  # the sqlmcp database, its test tables and sqlmcp_reader's grants
+npm run db:mssql:seed                  # SQL Server 2022 on localhost:51433: makes the test certificates if missing,
+                                       # starts the container, then the sqlmcp database, its tables and sqlmcp_reader's grants
 npm test                               # unit, MCP-in-workerd, Node adapter and both Databases' integration tests
 npm run typecheck
 cp .dev.vars.example .dev.vars         # then fill SERVER_SECRET, and the IDP_* values for Sign-in
@@ -24,7 +22,7 @@ npm run dev                            # wrangler dev on http://localhost:8787
 npm run smoke -- http://localhost:8787
 ```
 
-`npm run db:down` stops the Docker Databases. `wrangler dev` connects through the `localConnectionString` in `wrangler.jsonc` to the PostgreSQL Docker Database, never to a remote one. `.dev.vars` holds local secrets and is gitignored. The test certificates are gitignored too, and the MS SQL Server tests trust the test CA through `test/mssql/trust-ca.ts`.
+`npm run db:down` stops the PostgreSQL Docker Database, and `docker compose -f test/docker-compose.yml --profile mssql down` stops both. `wrangler dev` connects through the `localConnectionString` in `wrangler.jsonc` to the PostgreSQL Docker Database, never to a remote one. `.dev.vars` holds local secrets and is gitignored. The test certificates are gitignored too, and the MS SQL Server tests trust the test CA through `test/mssql/trust-ca.ts`.
 
 On Windows, if Docker cannot bind port 51433, the port is in a range Windows has reserved (`netsh int ipv4 show excludedportrange protocol=tcp`). Running `net stop winnat` and then `net start winnat` in an elevated shell releases it.
 

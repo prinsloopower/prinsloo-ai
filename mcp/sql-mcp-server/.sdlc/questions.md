@@ -281,7 +281,9 @@ Answered by D-137.
 ## Q-048 — The container's smoke run failed from the Windows host, and T-011 runs from that host
 Raised by: review (S-006) | Blocks: T-011 (the live check), if the cause is not the host
 T-008 asks for `npm run smoke -- http://localhost:8080` against the running image. Commit 8079db5 records 4 of 6 checks passing from the Windows host, with every response on a path ending in `/mcp` cut off (curl exit 56). All 6 passed from a container on the Server's network. The build put it down to the host's antivirus, which nobody has confirmed. T-011 has Claude Code on that host call `http://localhost:8080/mcp`. Is the host-side failure accepted as environmental, and how will T-011 tell it apart from a Server defect?
+Answered by D-139: the deploy runs D-139's four-step check against `sql-mcp:local` before the push to GHCR, and T-011 runs with the antivirus protection that step 3 names paused or excluded.
 
 ## Q-049 — security.md's Fetches rule does not list the ranges D-131 added to the fetch guard
 Raised by: review (S-006) | Blocks: nothing
 D-131 has the container's fetch guard also refuse `0.0.0.0/8`, `240.0.0.0/4` and `::`, and the shipped Security material now states the wider list. security.md's Fetches rule still lists only loopback, RFC 1918, link-local, CGNAT, ULA and multicast. Should the system spec be amended to match, as Q-043 asks for TLS?
+Answered by D-143: yes, at the system spec's next revision.
