@@ -75,7 +75,7 @@ Then it works through these steps, stopping at the first failure with what faile
 4. **Creates the Hyperdrive config** with `POST /accounts/<account>/hyperdrive/configs`, with query caching disabled. A rerun updates it with `PATCH /accounts/<account>/hyperdrive/configs/<id>`. The password goes only in that request's body. Wrangler's own Hyperdrive commands would put it on a command line, so setup does not use them.
 5. **Writes `wrangler.<worker>.jsonc`** in this folder. A first version is written at step 3, before the SQL is shown, so a rerun after a stop there finds it. That file holds this Deployment's own settings: its name, account, Hyperdrive config id, Database account and `vars`. It holds no secret. **Keep a backup of it.** It is gitignored, so it stays on this machine. Section 9 says what to do if it is lost.
 6. **Sets `SERVER_SECRET`,** the secret every key derives from: 32 random bytes, through `wrangler secret put` on standard input. A rerun keeps the one already set: the Worker's settings from step 2 list its secrets by name.
-7. **Deploys.** It merges [wrangler.template.jsonc](wrangler.template.jsonc), the settings every Deployment shares, with your file, then runs `wrangler deploy -c` on the result and deletes it.
+7. **Deploys.** It merges [wrangler.template.jsonc](wrangler.template.jsonc), the settings every Deployment shares, with your file, then runs `wrangler deploy -c` on the result and deletes it. The shared settings include the `VERSION_METADATA` binding, through which `initialize` reports the deployed version, so you never set it.
 8. **Runs the smoke checks** (section 4), retrying for up to two minutes while a new hostname starts resolving.
 9. **Prints** the Deployment's URL and the redirect URI for section 5.
 

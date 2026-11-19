@@ -1,7 +1,7 @@
 import type { Deps } from "./app.js";
 import type { RuntimeVariables } from "./config.js";
 import type { QueryEngine } from "./engine/database.js";
-import { PostgresDatabase } from "./engine/postgres.js";
+import { classifyPostgresError, PostgresDatabase } from "./engine/postgres.js";
 
 /** What the Cloudflare runtime hands the Worker. */
 export interface WorkerEnv {
@@ -18,6 +18,7 @@ export function workerDeps(env: WorkerEnv, queryEngine: () => Promise<QueryEngin
     database,
     queryEngine,
     connectionSetting: "HYPERDRIVE",
+    classify: classifyPostgresError,
     ...(env.VERSION_METADATA ? { serverVersion: env.VERSION_METADATA.id } : {}),
     env: env as unknown as RuntimeVariables,
   };

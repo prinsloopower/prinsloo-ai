@@ -37,7 +37,8 @@ export const GOOGLE_ISSUER = "https://accounts.google.com";
 /** The largest Row limit an Operator may set. */
 export const ROW_LIMIT_MAX = 10_000;
 
-function value(env: RuntimeVariables, name: string): string | undefined {
+/** A setting as both runtimes read it: trimmed, with an empty value as unset. */
+export function value(env: RuntimeVariables, name: string): string | undefined {
   const v = env[name];
   return typeof v === "string" && v.trim() !== "" ? v.trim() : undefined;
 }

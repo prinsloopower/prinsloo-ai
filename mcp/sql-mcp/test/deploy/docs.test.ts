@@ -73,7 +73,9 @@ describe("the Deployment kit's docs", () => {
       const name = signal!.replace(/`/g, "").toLowerCase();
       const entry = entries.find((l) => l.toLowerCase().replace(/`/g, "").startsWith(`- **${name}`));
       expect(entry, name).toBeDefined();
-      expect(entry, `${name}: ${threshold}`).toContain(`Call a human at ${threshold}.`);
+      // A threshold given per Host platform is Cloudflare's part here.
+      const cloudflare = threshold!.match(/^Cloudflare: (.*?)\. Azure: /)?.[1] ?? threshold;
+      expect(entry, `${name}: ${cloudflare}`).toContain(`Call a human at ${cloudflare}.`);
       // Workers Logs entries filter on the Server's own lines, so another Worker's lines never match.
       if (/Audit records|operational lines/.test(rows.find((r) => r[0] === signal)![1]!)) expect(entry, name).toContain("`$metadata.type` equals `cf-worker`");
     }
