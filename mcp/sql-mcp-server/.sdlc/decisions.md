@@ -1084,7 +1084,7 @@ Rationale: the product owner's answer to S-006's gate-8 hold, "Mount a CA in Doc
 Alternatives rejected: honouring `TrustServerCertificate=true` only for `localhost` and `host.docker.internal`; honouring it anywhere, with a warning in the documentation.
 ﻿
 ## D-130 — Choices made building S-006's Node adapter settings
-Decided by: model | Date: 2026-11-08 | Phase: build (S-006, T-001)
+Decided by: model | Date: 2026-11-08 | Confirmed: proposed by model, confirmed by the product owner at S-006's verification gate on 2026-11-18 ("Confirmed") | Phase: build (S-006, T-001)
 Rationale: choices the spec leaves open:
 - **`DATABASE_URL` is read with `mssql`'s own parser,** so the adapter and the driver cannot disagree about the server, the database or the credentials. The TLS rule reads the raw `Encrypt` and `TrustServerCertificate` values through `@tediousjs/connection-string`, the parser `mssql` itself uses. `mssql` reads any value but `false`, `no` or empty as true, so `TrustServerCertificate=banana` would trust. The adapter therefore refuses any `Encrypt` outside `true`, `yes`, `mandatory` and `strict`, and any `TrustServerCertificate` but `false` or `no`. Whatever the string says, the pool is given `encrypt: true` and `trustServerCertificate: false`. `@tediousjs/connection-string` is declared in `dependencies`, beside the three packages the spec names, because the adapter imports it directly.
 - **`ENGINE` must be exactly `mssql` after trimming,** so `MSSQL` is refused, as the spec's "exactly" reads.
@@ -1098,7 +1098,7 @@ Rationale: security.md's Fetches rule lists loopback, RFC 1918, link-local, CGNA
 Alternatives rejected: the spec's list alone, which would let `https://0.0.0.0/` reach the container's own ports.
 
 ## D-132 — How SQL Server in Docker is started and trusted for S-006's tests
-Decided by: model | Date: 2026-11-08 | Phase: build (S-006)
+Decided by: model | Date: 2026-11-08 | Confirmed: proposed by model, confirmed by the product owner at S-006's verification gate on 2026-11-18 ("Confirmed") | Phase: build (S-006)
 Rationale: choices the spec's Data section leaves open:
 - **The `mssql` Compose service is under its own profile.** `npm run db:up` still starts PostgreSQL alone, as environments.md's sequence says. `npm run db:mssql:seed` makes the test CA if it is missing, starts SQL Server, and seeds it. A developer working only on PostgreSQL needs neither `openssl` nor the SQL Server image.
 - **The test CA is made with its own minimal OpenSSL config,** so a machine's `OPENSSL_CONF` cannot break or change it. A second CA that signs nothing is made beside it for the untrusted-certificate test.
@@ -1139,7 +1139,7 @@ Rationale: Q-047. The tests that read the pipeline's documents stay here, as `te
 Alternatives rejected: shipping the tests with the list moved into a document the clean copy ships, which needs a security.md amendment and either two copies of the list or security.md citing the shipped one.
 
 ## D-138 — T-010's material names its rules in the commit, not in the shipped text
-Decided by: model | Date: 2026-11-12 | Phase: build (S-006, T-010)
+Decided by: model | Date: 2026-11-12 | Confirmed: proposed by model, confirmed by the product owner at S-006's verification gate on 2026-11-18 ("Confirmed") | Phase: build (S-006, T-010)
 Rationale: T-010's check asks that each point in `docs/security-material/visibility.md` name its rule or decision. The clean copy ships that folder, and the export refuses register IDs and the system spec's file names in any shipped file, so the material cannot carry them. Each point is mapped to its rule or decision in T-010's commit message instead, where the manual check is recorded. The material is written for a Security reviewer, who has neither register nor spec.
 Alternatives rejected: citing IDs in the text and leaving the folder out of the clean copy, which drops the Security material from what Operators receive; an export exception for this one file.
 
@@ -1159,12 +1159,12 @@ Rationale: review 1's second gap. `db_denydatareader` denies the catalog views t
 Alternatives rejected: a separate refusal message for an account the check cannot read for, which the spec does not name and the next engine would need too; leaving the permission error, which tells the Operator the database is unreachable when the account is the fault.
 
 ## D-141 — MS SQL Server's edition is probed once, by its own statement, and cached until close
-Decided by: model | Date: 2026-11-16 | Phase: review (S-006)
+Decided by: model | Date: 2026-11-16 | Confirmed: proposed by model, confirmed by the product owner at S-006's verification gate on 2026-11-18 ("Confirmed") | Phase: review (S-006)
 Rationale: review 1's nit on the edition probe. The first account check runs `SELECT SERVERPROPERTY('EngineEdition')` and keeps the check statement it chose until `close()`. A failed probe is not kept. A Server's edition cannot change while it runs, and a separate probe keeps each edition's statement whole, so the one printed by `npm run print:check-sql` is exactly what runs on Azure SQL Database (T-012's SHA-256). S-007's query path reads the same cached choice rather than making its own.
 Alternatives rejected: branching on the edition inside one statement, which cannot be printed and hashed as the Azure statement alone, and whose server-level branch would still have to compile on Azure SQL Database.
 
 ## D-142 — The suite's default test timeout is 30 seconds
-Decided by: model | Date: 2026-11-16 | Phase: review (S-006)
+Decided by: model | Date: 2026-11-16 | Confirmed: proposed by model, confirmed by the product owner at S-006's verification gate on 2026-11-18 ("Confirmed") | Phase: review (S-006)
 Rationale: review 1's nit on `testTimeout`. Tests that start Node or tsx child processes, such as `node_adapter_exits_on_invalid_port`, ran past Vitest's 5-second default while `npm run build:image` bundled alongside them in the same run. The integration tests already pass their own longer timeouts. A hang in a later test shows after 30 seconds, not 5.
 Alternatives rejected: per-test timeouts on each child-process test, which every later test that starts a child would have to remember; running the image's bundle test alone, which puts the build in a separate step.
 

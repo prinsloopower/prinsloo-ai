@@ -336,7 +336,7 @@
     {
       "id": "S-006",
       "title": "Signing in to an MS SQL Server Deployment on Azure",
-      "status": "deployed",
+      "status": "verified",
       "traces": [
         "J-001",
         "J-002",
@@ -370,6 +370,12 @@
           "result": "pass",
           "by": "script",
           "at": "2026-11-18T03:07:20+00:00"
+        },
+        "verify": {
+          "result": "pass",
+          "by": "human",
+          "at": "2026-11-19T03:03:21+00:00",
+          "quote": "Yes"
         }
       }
     },
